@@ -3,8 +3,8 @@ import { ipcMain, BrowserWindow } from 'electron';
 import { ChatService } from '../services/ChatService';
 
 export function setupChatIPC(chatService: ChatService): void {
-  ipcMain.handle('chat:send', async (_event, conversationId: string, message: string, messageId: string) => {
-    const win = BrowserWindow.getAllWindows()[0];
+  ipcMain.handle('chat:send', async (event, conversationId: string, message: string, messageId: string) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
     if (!win) return;
 
     await chatService.sendMessage(
@@ -17,8 +17,8 @@ export function setupChatIPC(chatService: ChatService): void {
     );
   });
 
-  ipcMain.handle('chat:stop', async (_event, conversationId: string, messageId: string) => {
-    const win = BrowserWindow.getAllWindows()[0];
+  ipcMain.handle('chat:stop', async (event, conversationId: string, messageId: string) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
     if (!win) return;
 
     await chatService.cancelMessage(
@@ -26,5 +26,13 @@ export function setupChatIPC(chatService: ChatService): void {
       messageId,
       (msgId) => win.webContents.send('chat:done', msgId),
     );
+  });
+
+  ipcMain.handle('chat:newConversation', async (_event, conversationId: string) => {
+    const controller = chatService.getAbortController(conversationId);
+    if (controller) {
+      controller.abort();
+    }
+    await chatService.destroySession(conversationId);
   });
 }

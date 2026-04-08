@@ -4,7 +4,7 @@ import { useAgentStatus } from '../../hooks/useAgentStatus';
 import { cn } from '../../lib/utils';
 
 export function Sidebar() {
-  const { agentStatus } = useAppState();
+  const { agentStatus, conversationId } = useAppState();
   const dispatch = useAppDispatch();
   const { selectMindDirectory } = useAgentStatus();
 
@@ -44,7 +44,10 @@ export function Sidebar() {
       {/* Actions */}
       <div className="flex-1 px-3 py-3 space-y-1">
         <button
-          onClick={() => dispatch({ type: 'NEW_CONVERSATION' })}
+          onClick={async () => {
+            await window.electronAPI.chat.newConversation(conversationId);
+            dispatch({ type: 'NEW_CONVERSATION' });
+          }}
           className="w-full text-left px-3 py-2 rounded-md text-sm hover:bg-accent transition-colors flex items-center gap-2"
         >
           <span className="text-muted-foreground">+</span>

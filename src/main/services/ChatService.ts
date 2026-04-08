@@ -61,6 +61,9 @@ export class ChatService {
     const abortController = new AbortController();
     this.abortControllers.set(conversationId, abortController);
 
+    let unsubAll: (() => void) | null = null;
+    let unsubDelta: (() => void) | null = null;
+
     try {
       console.log('[ChatService] Creating/getting session for', conversationId);
       const session = await this.getOrCreateSession(conversationId);
@@ -68,11 +71,11 @@ export class ChatService {
       let receivedChunks = false;
 
       // Log ALL events for debugging
-      const unsubAll = session.on((event) => {
+      unsubAll = session.on((event) => {
         console.log('[ChatService] Event:', event.type, JSON.stringify(event.data ?? {}).slice(0, 300));
       });
 
-      const unsubDelta = session.on('assistant.message_delta', (event) => {
+      unsubDelta = session.on('assistant.message_delta', (event) => {
         if (abortController.signal.aborted) return;
         receivedChunks = true;
         onChunk(messageId, event.data.deltaContent);
@@ -84,9 +87,6 @@ export class ChatService {
         300_000, // 5 min timeout
       );
       console.log('[ChatService] sendAndWait resolved');
-
-      unsubDelta();
-      unsubAll();
 
       if (abortController.signal.aborted) return;
 
@@ -101,6 +101,8 @@ export class ChatService {
       const message = err instanceof Error ? err.message : String(err);
       onError(messageId, message);
     } finally {
+      unsubDelta?.();
+      unsubAll?.();
       this.abortControllers.delete(conversationId);
     }
   }
@@ -120,6 +122,10 @@ export class ChatService {
       await session.abort().catch(() => {});
     }
     onDone(messageId);
+  }
+
+  getAbortController(conversationId: string): AbortController | undefined {
+    return this.abortControllers.get(conversationId);
   }
 
   async destroySession(conversationId: string): Promise<void> {

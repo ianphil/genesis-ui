@@ -25,6 +25,7 @@ export interface ElectronAPI {
   chat: {
     send: (conversationId: string, message: string, messageId: string) => Promise<void>;
     stop: (conversationId: string, messageId: string) => Promise<void>;
+    newConversation: (conversationId: string) => Promise<void>;
     onChunk: (callback: (messageId: string, content: string) => void) => () => void;
     onDone: (callback: (messageId: string, fullContent?: string) => void) => () => void;
     onError: (callback: (messageId: string, error: string) => void) => () => void;

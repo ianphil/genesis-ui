@@ -35,8 +35,8 @@ export function setupAgentIPC(chatService: ChatService): void {
     };
   });
 
-  ipcMain.handle('agent:selectMindDirectory', async () => {
-    const win = BrowserWindow.getAllWindows()[0];
+  ipcMain.handle('agent:selectMindDirectory', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
     if (!win) return null;
 
     const result = await dialog.showOpenDialog(win, {

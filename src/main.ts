@@ -11,9 +11,11 @@ if (started) {
 }
 
 const chatService = new ChatService();
+let mainWindow: BrowserWindow | null = null;
+let isQuitting = false;
 
 const createWindow = () => {
-  const mainWindow = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     minWidth: 600,
@@ -45,19 +47,21 @@ const createWindow = () => {
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
     mainWindow.webContents.openDevTools({ mode: 'bottom' });
   }
-
-  // Window control IPC
-  ipcMain.on('window:minimize', () => mainWindow.minimize());
-  ipcMain.on('window:maximize', () => {
-    mainWindow.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize();
-  });
-  ipcMain.on('window:close', () => mainWindow.close());
 };
 
 app.on('ready', () => {
   restoreConfig(chatService);
   setupChatIPC(chatService);
   setupAgentIPC(chatService);
+
+  // Window control IPC — registered once, not per-window
+  ipcMain.on('window:minimize', () => mainWindow?.minimize());
+  ipcMain.on('window:maximize', () => {
+    if (mainWindow?.isMaximized()) mainWindow.unmaximize();
+    else mainWindow?.maximize();
+  });
+  ipcMain.on('window:close', () => mainWindow?.close());
+
   createWindow();
 });
 
@@ -73,8 +77,16 @@ app.on('activate', () => {
   }
 });
 
-app.on('before-quit', async () => {
-  await chatService.stop();
-  await stopSharedClient();
+app.on('before-quit', (e) => {
+  if (isQuitting) return;
+  e.preventDefault();
+  isQuitting = true;
+
+  Promise.all([
+    chatService.stop(),
+    stopSharedClient(),
+  ])
+    .catch(() => {})
+    .finally(() => app.quit());
 });
 
