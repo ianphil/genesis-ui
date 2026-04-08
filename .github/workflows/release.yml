@@ -1,0 +1,174 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      force_release:
+        description: 'Force release even for patch versions'
+        required: false
+        default: 'true'
+        type: boolean
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.check.outputs.should_release }}
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for major/minor version change
+        id: check
+        run: |
+          CURRENT_VERSION=$(jq -r '.version' package.json)
+          echo "Current version: $CURRENT_VERSION"
+
+          CURRENT_MAJOR_MINOR=$(echo "$CURRENT_VERSION" | cut -d. -f1,2)
+          echo "Current major.minor: $CURRENT_MAJOR_MINOR"
+
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          echo "Latest tag: $LATEST_TAG"
+
+          if [ -z "$LATEST_TAG" ]; then
+            echo "No previous tags found - this will be the first release"
+            echo "should_release=true" >> $GITHUB_OUTPUT
+            echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          else
+            PREVIOUS_VERSION=${LATEST_TAG#v}
+            echo "Previous version: $PREVIOUS_VERSION"
+
+            PREVIOUS_MAJOR_MINOR=$(echo "$PREVIOUS_VERSION" | cut -d. -f1,2)
+            echo "Previous major.minor: $PREVIOUS_MAJOR_MINOR"
+
+            if [ "$CURRENT_MAJOR_MINOR" != "$PREVIOUS_MAJOR_MINOR" ]; then
+              echo "Major or minor version changed - triggering release"
+              echo "should_release=true" >> $GITHUB_OUTPUT
+              echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+            elif [ "${{ github.event.inputs.force_release }}" == "true" ]; then
+              echo "Manual trigger with force_release - triggering release"
+              echo "should_release=true" >> $GITHUB_OUTPUT
+              echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+            else
+              echo "Only patch version changed - skipping release"
+              echo "should_release=false" >> $GITHUB_OUTPUT
+              echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+  build:
+    needs: check-version
+    if: needs.check-version.outputs.should_release == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows
+          - os: macos-latest
+            platform: macos
+          - os: ubuntu-latest
+            platform: linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Import Apple code-signing certs (macOS)
+        if: matrix.platform == 'macos'
+        id: macos-certs
+        uses: apple-actions/import-codesign-certs@v3
+        continue-on-error: true
+        with:
+          p12-file-base64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          p12-password: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+
+      - name: Build and package (macOS signed + notarized)
+        if: matrix.platform == 'macos' && steps.macos-certs.outcome == 'success'
+        run: npm run make
+        env:
+          ENABLE_MACOS_SIGNING: 'true'
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Build and package (macOS unsigned)
+        if: matrix.platform == 'macos' && steps.macos-certs.outcome != 'success'
+        run: npm run make
+
+      - name: Build and package (non-macOS)
+        if: matrix.platform != 'macos'
+        run: npm run make
+
+      - name: List output files
+        shell: bash
+        run: find out/make -type f 2>/dev/null || dir out\make /s /b
+
+      - name: Stage artifacts (Unix)
+        if: matrix.platform != 'windows'
+        shell: bash
+        run: |
+          mkdir -p staged
+          find out/make -type f \( -name "*.zip" -o -name "*.dmg" -o -name "*.deb" -o -name "*.rpm" \) -exec cp {} staged/ \;
+
+      - name: Stage artifacts (Windows)
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path staged
+          Get-ChildItem -Path out/make -Recurse -Include *.exe,*.nupkg | Copy-Item -Destination staged/
+          Get-ChildItem -Path out/make -Recurse -Filter "RELEASES" | Copy-Item -Destination staged/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.platform }}
+          path: staged/*
+          if-no-files-found: error
+
+  release:
+    needs: [check-version, build]
+    if: needs.check-version.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Display downloaded files
+        run: find artifacts -type f
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.check-version.outputs.version }}
+          name: Release v${{ needs.check-version.outputs.version }}
+          generate_release_notes: true
+          files: artifacts/**/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

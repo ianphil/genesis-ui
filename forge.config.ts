@@ -2,20 +2,57 @@ import type { ForgeConfig } from '@electron-forge/shared-types';
 import { MakerSquirrel } from '@electron-forge/maker-squirrel';
 import { MakerZIP } from '@electron-forge/maker-zip';
 import { MakerDeb } from '@electron-forge/maker-deb';
-import { MakerRpm } from '@electron-forge/maker-rpm';
 import { VitePlugin } from '@electron-forge/plugin-vite';
 import { FusesPlugin } from '@electron-forge/plugin-fuses';
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
 
+const enableMacOSSigning = process.platform === 'darwin' && process.env.ENABLE_MACOS_SIGNING === 'true';
+const enableMacOSNotarization =
+  enableMacOSSigning &&
+  Boolean(process.env.APPLE_ID) &&
+  Boolean(process.env.APPLE_ID_PASSWORD) &&
+  Boolean(process.env.APPLE_TEAM_ID);
+
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
+    executableName: 'genesis-ui',
+    extraResource: ['./resources/node'],
+    ...(enableMacOSSigning
+      ? {
+          osxSign: {},
+          ...(enableMacOSNotarization
+            ? {
+                osxNotarize: {
+                  appleId: process.env.APPLE_ID!,
+                  appleIdPassword: process.env.APPLE_ID_PASSWORD!,
+                  teamId: process.env.APPLE_TEAM_ID!,
+                },
+              }
+            : {}),
+        }
+      : {}),
   },
+  publishers: [
+    {
+      name: '@electron-forge/publisher-github',
+      config: {
+        repository: {
+          owner: 'ianphil',
+          name: 'genesis-ui',
+        },
+        prerelease: false,
+        draft: false,
+      },
+    },
+  ],
   rebuildConfig: {},
   makers: [
-    new MakerSquirrel({}),
-    new MakerZIP({}, ['darwin']),
-    new MakerRpm({}),
+    new MakerSquirrel({
+      name: 'genesis-ui',
+      shortcutName: 'Genesis UI',
+    }),
+    new MakerZIP({}, ['darwin', 'linux']),
     new MakerDeb({}),
   ],
   plugins: [

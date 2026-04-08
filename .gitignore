@@ -90,3 +90,6 @@ typings/
 
 # Electron-Forge
 out/
+
+# Bundled Node runtime (downloaded by scripts/prepare-node-runtime.js)
+resources/node/
