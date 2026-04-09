@@ -58,11 +58,11 @@ export function SidePanel() {
       <div className="px-4 py-4 border-b border-border">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-genesis flex items-center justify-center text-sm font-bold text-primary-foreground">
-            G
+            B
           </div>
           <div>
-            <h1 className="text-sm font-semibold">Genesis</h1>
-            <p className="text-xs text-muted-foreground">Mind Interface</p>
+            <h1 className="text-sm font-semibold">Blotter</h1>
+            <p className="text-xs text-muted-foreground">Agent Surface</p>
           </div>
         </div>
       </div>

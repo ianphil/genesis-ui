@@ -44,7 +44,7 @@ export function MessageList() {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-sm font-medium">
-                  {message.role === 'user' ? 'You' : 'Genesis'}
+                  {message.role === 'user' ? 'You' : 'Blotter'}
                 </span>
                 <span className="text-xs text-muted-foreground">
                   {formatTime(message.timestamp)}

@@ -16,7 +16,7 @@ const enableMacOSNotarization =
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
-    executableName: 'genesis-ui',
+    executableName: 'blotter',
     extraResource: ['./resources/node', './src/main/assets'],
     ...(enableMacOSSigning
       ? {
@@ -39,7 +39,7 @@ const config: ForgeConfig = {
       config: {
         repository: {
           owner: 'ianphil',
-          name: 'genesis-ui',
+          name: 'blotter',
         },
         prerelease: false,
         draft: false,
@@ -49,8 +49,8 @@ const config: ForgeConfig = {
   rebuildConfig: {},
   makers: [
     new MakerSquirrel({
-      name: 'genesis-ui',
-      shortcutName: 'Genesis UI',
+      name: 'blotter',
+      shortcutName: 'Blotter',
     }),
     new MakerZIP({}, ['darwin', 'linux']),
     new MakerDeb({}),

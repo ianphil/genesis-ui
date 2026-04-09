@@ -39,7 +39,7 @@ const initialState: AppState = {
     extensions: [],
   },
   availableModels: [],
-  selectedModel: localStorage.getItem('genesis-ui:selectedModel'),
+  selectedModel: localStorage.getItem('blotter:selectedModel'),
   activeView: 'chat',
   discoveredViews: [],
 };
@@ -195,9 +195,9 @@ function appReducer(state: AppState, action: AppAction): AppState {
 
     case 'SET_SELECTED_MODEL':
       if (action.payload) {
-        localStorage.setItem('genesis-ui:selectedModel', action.payload);
+        localStorage.setItem('blotter:selectedModel', action.payload);
       } else {
-        localStorage.removeItem('genesis-ui:selectedModel');
+        localStorage.removeItem('blotter:selectedModel');
       }
       return { ...state, selectedModel: action.payload };
 

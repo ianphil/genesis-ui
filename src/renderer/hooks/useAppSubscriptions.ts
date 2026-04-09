@@ -42,7 +42,7 @@ export function useAppSubscriptions() {
           dispatch({ type: 'SET_AVAILABLE_MODELS', payload: models });
           modelsLoaded.current = true;
 
-          const persisted = localStorage.getItem('genesis-ui:selectedModel');
+          const persisted = localStorage.getItem('blotter:selectedModel');
           const valid = persisted && models.some(m => m.id === persisted);
           if (!valid && models.length > 0) {
             dispatch({ type: 'SET_SELECTED_MODEL', payload: models[0].id });

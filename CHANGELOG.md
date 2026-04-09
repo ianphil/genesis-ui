@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.9.0 (2026-04-09)
+
+- **Renamed to Blotter** — "Your AI command surface"
+- Repo renamed from genesis-ui to blotter
+- All UI strings, config paths, branding updated
+- Config dir now `~/.blotter/`
+
 ## v0.8.1 (2026-04-09)
 
 - **Four new Lens view types:** detail, status-board, timeline, editor

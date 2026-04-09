@@ -1,11 +1,11 @@
 ---
 name: lens
-description: Create and manage Lens views — declarative UI panels that appear in the Genesis UI activity bar. Use when the user asks to "create a view", "show me X in the UI", "add a dashboard", "make a panel for", or wants to visualize data, config, or status in the desktop app.
+description: Create and manage Lens views — declarative UI panels that appear in the Blotter activity bar. Use when the user asks to "create a view", "show me X in the UI", "add a dashboard", "make a panel for", or wants to visualize data, config, or status in the desktop app.
 ---
 
 # Lens — Declarative UI Views
 
-Create `view.json` manifests in `.github/lens/<view-name>/` to add views to the Genesis UI activity bar.
+Create `view.json` manifests in `.github/lens/<view-name>/` to add views to the Blotter activity bar.
 
 ## Creating a View
 

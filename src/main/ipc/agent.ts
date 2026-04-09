@@ -7,7 +7,7 @@ import { ChatService } from '../services/ChatService';
 import { ViewDiscovery } from '../services/ViewDiscovery';
 import type { AgentStatus, AppConfig } from '../../shared/types';
 
-const CONFIG_DIR = path.join(os.homedir(), '.genesis-ui');
+const CONFIG_DIR = path.join(os.homedir(), '.blotter');
 const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');
 
 function loadConfig(): AppConfig {

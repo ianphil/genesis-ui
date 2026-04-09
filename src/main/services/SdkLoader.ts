@@ -85,7 +85,7 @@ async function runNpmInstall(): Promise<void> {
   const nodePath = getBundledNodePath();
   const npmCliPath = getBundledNpmCliPath();
   if (!nodePath || !npmCliPath) {
-    throw new Error('Bundled Node runtime not found. Please reinstall genesis-ui.');
+    throw new Error('Bundled Node runtime not found. Please reinstall Blotter.');
   }
 
   const prefixDir = getBootstrapDir();
@@ -354,7 +354,7 @@ export async function getSharedClient(): Promise<CopilotClientType> {
 
     console.log('[SdkLoader] CLI path:', cliPath);
 
-    const logDir = path.join(os.homedir(), '.genesis-ui', 'logs');
+    const logDir = path.join(os.homedir(), '.blotter', 'logs');
     fs.mkdirSync(logDir, { recursive: true });
 
     let resolvedCliPath = cliPath;

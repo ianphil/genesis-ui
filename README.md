@@ -1,4 +1,4 @@
-# Genesis UI
+# Blotter
 
 Desktop chat interface for [Genesis](https://github.com/ianphil/genesis) minds.
 
@@ -15,8 +15,8 @@ Built with Electron, React, Tailwind CSS, and the GitHub Copilot SDK.
 **Run:**
 
 ```bash
-git clone https://github.com/ianphil/genesis-ui
-cd genesis-ui
+git clone https://github.com/ianphil/blotter
+cd blotter
 npm install
 npm start
 ```

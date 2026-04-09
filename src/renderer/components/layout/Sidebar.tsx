@@ -17,7 +17,7 @@ export function Sidebar() {
             G
           </div>
           <div>
-            <h1 className="text-sm font-semibold">Genesis</h1>
+            <h1 className="text-sm font-semibold">Blotter</h1>
             <p className="text-xs text-muted-foreground">Mind Interface</p>
           </div>
         </div>
