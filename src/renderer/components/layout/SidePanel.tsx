@@ -61,8 +61,8 @@ export function SidePanel() {
             B
           </div>
           <div>
-            <h1 className="text-sm font-semibold">Blotter</h1>
-            <p className="text-xs text-muted-foreground">Agent Surface</p>
+            <h1 className="text-sm font-semibold">Chamber</h1>
+            <p className="text-xs text-muted-foreground">Genesis Chamber</p>
           </div>
         </div>
       </div>

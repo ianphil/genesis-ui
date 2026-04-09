@@ -16,7 +16,7 @@ const enableMacOSNotarization =
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
-    executableName: 'blotter',
+    executableName: 'chamber',
     extraResource: ['./resources/node', './src/main/assets'],
     ...(enableMacOSSigning
       ? {
@@ -39,7 +39,7 @@ const config: ForgeConfig = {
       config: {
         repository: {
           owner: 'ianphil',
-          name: 'blotter',
+          name: 'chamber',
         },
         prerelease: false,
         draft: false,
@@ -49,8 +49,8 @@ const config: ForgeConfig = {
   rebuildConfig: {},
   makers: [
     new MakerSquirrel({
-      name: 'blotter',
-      shortcutName: 'Blotter',
+      name: 'chamber',
+      shortcutName: 'Chamber',
     }),
     new MakerZIP({}, ['darwin', 'linux']),
     new MakerDeb({}),

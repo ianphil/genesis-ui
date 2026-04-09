@@ -40,7 +40,7 @@ const initialState: AppState = {
     extensions: [],
   },
   availableModels: [],
-  selectedModel: localStorage.getItem('blotter:selectedModel'),
+  selectedModel: localStorage.getItem('chamber:selectedModel'),
   activeView: 'chat',
   discoveredViews: [],
 };
@@ -196,9 +196,9 @@ function appReducer(state: AppState, action: AppAction): AppState {
 
     case 'SET_SELECTED_MODEL':
       if (action.payload) {
-        localStorage.setItem('blotter:selectedModel', action.payload);
+        localStorage.setItem('chamber:selectedModel', action.payload);
       } else {
-        localStorage.removeItem('blotter:selectedModel');
+        localStorage.removeItem('chamber:selectedModel');
       }
       return { ...state, selectedModel: action.payload };
 

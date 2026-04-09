@@ -1,18 +1,18 @@
-# Blotter
+# Chamber
 
-Your AI command surface. Sit down and your Chief of Staff has already prepared your world.
+The Genesis Chamber. Where AI agents are born and operate.
 
-Blotter is a desktop app for AI agents that act as your Chief of Staff — managing priorities, surfacing context, and keeping operations moving. Connect a mind (an agent with memory, skills, and personality) and the agent extends the UI itself: drop a `view.json` into the mind and a new panel appears. No code changes, no deploys.
+Chamber is a desktop app for AI agents that act as your Chief of Staff — managing priorities, surfacing context, and keeping operations moving. Connect a mind (an agent with memory, skills, and personality) and the agent extends the UI itself: drop a `view.json` into the mind and a new panel appears. No code changes, no deploys.
 
 Built with Electron, React, Tailwind CSS, and the GitHub Copilot SDK. Minds are created with [Genesis](https://github.com/ianphil/genesis).
 
 ## The Idea
 
-Before computers, a Chief of Staff had a desk blotter — the working surface where today's papers landed. The briefing book, the Rolodex, the inbox tray, the intercom to the team. Everything that mattered was within arm's reach.
+In Kryptonian mythology, the Genesis Chamber was where beings were created — each designed for a purpose. We broke tradition. Our agents aren't pre-programmed. The user chooses who they become.
 
-Blotter is the digital version. Your agent is the Chief of Staff who prepared the desk before you arrived.
+Chamber is the place where that happens. Your agent wakes up, finds its voice, and prepares your world.
 
-| The old world | Blotter |
+| The old world | Chamber |
 |---------------|---------|
 | Briefing book | Newspaper — prompt-driven daily briefing |
 | Rolodex | Contacts — table view |
@@ -30,13 +30,13 @@ Blotter is the digital version. Your agent is the Chief of Staff who prepared th
 - **Activity bar** — VS Code-style icon strip. Icons appear as views are discovered.
 - **Streaming chat** — real-time responses with markdown, tool calls, and reasoning blocks.
 - **Model picker** — choose your model, persisted across sessions.
-- **Agent identity** — chat shows the agent's name, not "Blotter." This is their desk.
+- **Agent identity** — chat shows the agent's name. This is their chamber.
 
 ## Quick Start
 
 ```bash
-git clone https://github.com/ianphil/blotter
-cd blotter
+git clone https://github.com/ianphil/chamber
+cd chamber
 npm install
 npm start
 ```

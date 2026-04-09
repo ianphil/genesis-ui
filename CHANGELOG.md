@@ -1,11 +1,10 @@
 # Changelog
 
-## v0.9.0 (2026-04-09)
+## v1.0.0 (2026-04-09)
 
-- **Renamed to Blotter** — "Your AI command surface"
-- Repo renamed from genesis-ui to blotter
-- All UI strings, config paths, branding updated
-- Config dir now `~/.blotter/`
+- **Renamed to Chamber** — The Genesis Chamber
+- Repo renamed from blotter to chamber
+- Config dir now `~/.chamber/`
 
 ## v0.8.1 (2026-04-09)
 

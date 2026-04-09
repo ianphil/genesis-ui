@@ -18,12 +18,12 @@ export function WelcomeScreen({ onSendMessage, connected }: Props) {
   return (
     <div className="flex-1 flex flex-col items-center justify-center px-4">
       <div className="max-w-lg text-center">
-        {/* Blotter logo */}
+        {/* Chamber logo */}
         <div className="w-16 h-16 rounded-2xl bg-genesis flex items-center justify-center text-2xl font-bold text-primary-foreground mx-auto mb-6">
-          B
+          C
         </div>
 
-        <h2 className="text-2xl font-semibold mb-2">Blotter</h2>
+        <h2 className="text-2xl font-semibold mb-2">Chamber</h2>
         <p className="text-muted-foreground mb-8">
           {connected
             ? 'How can I help you today?'

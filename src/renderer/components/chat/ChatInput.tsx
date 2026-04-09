@@ -61,7 +61,7 @@ export function ChatInput({ onSend, onStop, isStreaming, disabled, availableMode
             value={input}
             onChange={handleInput}
             onKeyDown={handleKeyDown}
-            placeholder={disabled ? 'Select a mind directory to start…' : 'Message Blotter…'}
+            placeholder={disabled ? 'Select a mind directory to start…' : 'Message your agent…'}
             disabled={disabled}
             rows={1}
             className="flex-1 bg-transparent text-sm resize-none outline-none placeholder:text-muted-foreground disabled:opacity-50 max-h-[200px]"
@@ -118,7 +118,7 @@ export function ChatInput({ onSend, onStop, isStreaming, disabled, availableMode
         </div>
 
         <p className="text-xs text-muted-foreground text-center mt-2">
-          Blotter can make mistakes. Verify important information.
+          AI agents can make mistakes. Verify important information.
         </p>
       </div>
     </div>
