@@ -1,5 +1,8 @@
 // AuthService — GitHub device flow + Windows Credential Manager storage.
 // Stores token where copilot CLI expects it — one login, everything works.
+// IMPORTANT: The CLI reads credentials via keytar, which interprets the
+// CredentialBlob as UTF-8. We must write UTF-8 bytes — NOT cmdkey, which
+// writes UTF-16LE and produces null-byte-riddled tokens when keytar reads them.
 
 import * as https from 'https';
 import { execFileSync } from 'child_process';
@@ -9,6 +12,77 @@ const DEVICE_CODE_URL = 'https://github.com/login/device/code';
 const ACCESS_TOKEN_URL = 'https://github.com/login/oauth/access_token';
 const AUTH_SCOPE = 'read:user,read:org,repo,gist';
 const CREDENTIAL_TARGET_PREFIX = 'copilot-cli/https://github.com';
+
+// Win32 Credential Manager — write UTF-8 blobs compatible with keytar
+const credentialNative = (() => {
+  // PowerShell script that calls CredWriteW with a UTF-8 encoded blob.
+  // cmdkey stores UTF-16LE; keytar reads UTF-8. This bridges the gap.
+  const writeScript = (target: string, user: string, token: string) => `
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+
+public class CredWriter {
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    public struct CREDENTIAL {
+        public int Flags;
+        public int Type;
+        public string TargetName;
+        public string Comment;
+        public long LastWritten;
+        public int CredentialBlobSize;
+        public IntPtr CredentialBlob;
+        public int Persist;
+        public int AttributeCount;
+        public IntPtr Attributes;
+        public string TargetAlias;
+        public string UserName;
+    }
+
+    [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    public static extern bool CredWrite(ref CREDENTIAL credential, int flags);
+
+    [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    public static extern bool CredDelete(string target, int type, int flags);
+
+    public static bool Write(string target, string user, string password) {
+        byte[] passwordBytes = Encoding.UTF8.GetBytes(password);
+        IntPtr blob = Marshal.AllocHGlobal(passwordBytes.Length);
+        Marshal.Copy(passwordBytes, 0, blob, passwordBytes.Length);
+
+        CREDENTIAL cred = new CREDENTIAL();
+        cred.Type = 1; // CRED_TYPE_GENERIC
+        cred.TargetName = target;
+        cred.UserName = user;
+        cred.CredentialBlob = blob;
+        cred.CredentialBlobSize = passwordBytes.Length;
+        cred.Persist = 2; // CRED_PERSIST_LOCAL_MACHINE
+
+        bool result = CredWrite(ref cred, 0);
+        Marshal.FreeHGlobal(blob);
+        return result;
+    }
+}
+"@
+[CredWriter]::Write('${target.replace(/'/g, "''")}', '${user.replace(/'/g, "''")}', '${token.replace(/'/g, "''")}')
+`;
+
+  return {
+    write(target: string, user: string, token: string): boolean {
+      try {
+        const result = execFileSync('powershell', [
+          '-NoProfile', '-NonInteractive', '-Command',
+          writeScript(target, user, token),
+        ], { encoding: 'utf-8', timeout: 10_000 }).trim();
+        return result === 'True';
+      } catch (err) {
+        console.error('[Auth] CredWrite failed:', err);
+        return false;
+      }
+    },
+  };
+})();
 
 export interface AuthProgress {
   step: 'device_code' | 'polling' | 'authenticated' | 'error';
@@ -101,19 +175,19 @@ export class AuthService {
     return null;
   }
 
-  /** Store token in Windows Credential Manager where copilot CLI expects it.
-   *  Uses execFileSync to bypass cmd.exe shell interpretation — tokens with
-   *  special characters (%, ^, &, !) would be mangled by execSync. */
+  /** Store token in Windows Credential Manager as UTF-8 blob.
+   *  The CLI reads credentials via keytar which interprets blobs as UTF-8.
+   *  cmdkey writes UTF-16LE, causing null-byte corruption when keytar reads. */
   private storeCredential(login: string, token: string): void {
     const target = `${CREDENTIAL_TARGET_PREFIX}:${login}`;
     const user = `https://github.com:${login}`;
     try {
-      execFileSync('cmdkey', [
-        `/generic:${target}`,
-        `/user:${user}`,
-        `/pass:${token}`,
-      ], { stdio: 'ignore' });
-      console.log(`[Auth] Stored credential for ${login}`);
+      const ok = credentialNative.write(target, user, token);
+      if (ok) {
+        console.log(`[Auth] Stored credential for ${login} (UTF-8 blob)`);
+      } else {
+        console.error('[Auth] CredWrite returned false');
+      }
     } catch (err) {
       console.error('[Auth] Failed to store credential:', err);
     }
