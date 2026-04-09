@@ -24,7 +24,8 @@ export function BootScreen({ name, role, onComplete, onError }: Props) {
     let i = 0;
     const interval = setInterval(() => {
       if (i < initialLines.length) {
-        setLines(prev => [...prev, initialLines[i]]);
+        const line = initialLines[i];
+        setLines(prev => [...prev, line]);
         i++;
         setProgress(p => Math.min(p + 10, 30));
       } else {
@@ -79,7 +80,7 @@ export function BootScreen({ name, role, onComplete, onError }: Props) {
             key={i}
             className={
               line === '> genesis complete.' ? 'text-green-400 font-bold mt-2' :
-              line.startsWith('> ERROR:') ? 'text-red-400 mt-2' :
+              line?.startsWith('> ERROR:') ? 'text-red-400 mt-2' :
               line === '> genesis failed.' ? 'text-red-500 font-bold' :
               ''
             }
