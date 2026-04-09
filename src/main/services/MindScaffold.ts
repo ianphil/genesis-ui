@@ -11,6 +11,9 @@ type CopilotSessionType = import('@github/copilot-sdk').CopilotSession;
 const IDEA_FOLDERS = ['inbox', 'domains', 'expertise', 'initiatives', 'Archive'];
 const WORKING_MEMORY_FILES = ['memory.md', 'rules.md', 'log.md'];
 
+const GENESIS_SOURCE = 'ianphil/genesis';
+const GENESIS_CHANNEL = 'main';
+
 export interface GenesisConfig {
   name: string;
   role: string;
@@ -65,6 +68,15 @@ export class MindScaffold {
     // 4. Git init
     this.emit('git', 'Initializing...');
     this.initGit(mindPath);
+
+    // 5. Bootstrap capabilities (best-effort — mind works without them)
+    this.emit('capabilities', 'Installing capabilities...');
+    try {
+      this.bootstrapCapabilities(mindPath);
+    } catch (err) {
+      console.warn('[MindScaffold] Capability bootstrap failed (non-fatal):', err);
+      this.emit('capabilities', 'Capabilities install failed — run "upgrade from genesis" later.');
+    }
 
     this.emit('complete', 'Genesis complete.');
     return mindPath;
@@ -226,6 +238,117 @@ Write all six files now.`;
     } catch (err) {
       console.error('[MindScaffold] Git init failed:', err);
     }
+  }
+
+  private bootstrapCapabilities(mindPath: string): void {
+    // 1. Seed registry.json
+    this.emit('capabilities', 'Seeding registry...');
+    const registryPath = path.join(mindPath, '.github', 'registry.json');
+    const seedRegistry = {
+      version: '0.0.0',
+      source: GENESIS_SOURCE,
+      channel: GENESIS_CHANNEL,
+      extensions: {},
+      skills: {},
+      prompts: {},
+      packages: [],
+    };
+    fs.writeFileSync(registryPath, JSON.stringify(seedRegistry, null, 2) + '\n');
+
+    // 2. Pull upgrade skill (the bootloader)
+    this.emit('capabilities', 'Pulling upgrade skill...');
+    this.pullUpgradeSkill(mindPath);
+
+    // 3. Run upgrade --all to pull remaining capabilities
+    this.emit('capabilities', 'Installing extensions and skills...');
+    const upgradeScript = path.join(mindPath, '.github', 'skills', 'upgrade', 'upgrade.js');
+    const result = execSync(`node "${upgradeScript}" install --all`, {
+      cwd: mindPath,
+      encoding: 'utf8',
+      timeout: 300_000, // 5 minute timeout
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+
+    // Parse result to check for errors
+    try {
+      const parsed = JSON.parse(result);
+      const installed = parsed.installed?.length || 0;
+      const updated = parsed.updated?.length || 0;
+      const errors = parsed.errors?.length || 0;
+      console.log(`[MindScaffold] Capabilities: ${installed} installed, ${updated} updated, ${errors} errors`);
+      if (errors > 0) {
+        console.warn('[MindScaffold] Capability errors:', parsed.errors);
+      }
+    } catch {
+      // upgrade.js output wasn't valid JSON — non-fatal
+    }
+
+    // 4. Commit the capabilities
+    try {
+      execSync('git add -A', { cwd: mindPath, stdio: 'ignore' });
+      execSync('git commit -m "feat: bootstrap capabilities from genesis"', {
+        cwd: mindPath,
+        stdio: 'ignore',
+      });
+    } catch {
+      // Nothing to commit (unlikely but harmless)
+    }
+  }
+
+  private pullUpgradeSkill(mindPath: string): void {
+    const [owner, repo] = GENESIS_SOURCE.split('/');
+    const upgradePrefix = '.github/skills/upgrade/';
+
+    // Fetch the genesis tree
+    const treeRaw = execSync(
+      `gh api /repos/${owner}/${repo}/git/trees/${GENESIS_CHANNEL}?recursive=1`,
+      { encoding: 'utf8', timeout: 30_000 }
+    );
+    const tree = JSON.parse(treeRaw);
+
+    // Find upgrade skill files
+    const upgradeFiles: { path: string; sha: string }[] = [];
+    for (const entry of tree.tree) {
+      if (entry.type === 'blob' && entry.path.startsWith(upgradePrefix)) {
+        upgradeFiles.push({ path: entry.path, sha: entry.sha });
+      }
+    }
+
+    if (upgradeFiles.length === 0) {
+      throw new Error('Upgrade skill not found in genesis repo');
+    }
+
+    // Download and write each file
+    for (const file of upgradeFiles) {
+      const blobRaw = execSync(
+        `gh api /repos/${owner}/${repo}/git/blobs/${file.sha}`,
+        { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 }
+      );
+      const blob = JSON.parse(blobRaw);
+      const content = Buffer.from(blob.content, 'base64');
+      const localPath = path.join(mindPath, file.path);
+      fs.mkdirSync(path.dirname(localPath), { recursive: true });
+      fs.writeFileSync(localPath, content);
+    }
+
+    // Fetch remote registry to get upgrade version info
+    const regRaw = execSync(
+      `gh api /repos/${owner}/${repo}/contents/.github/registry.json?ref=${GENESIS_CHANNEL}`,
+      { encoding: 'utf8' }
+    );
+    const regContent = JSON.parse(regRaw);
+    const remoteRegistry = JSON.parse(Buffer.from(regContent.content, 'base64').toString('utf8'));
+    const upgradeInfo = remoteRegistry.skills?.upgrade;
+
+    // Update local registry with upgrade skill
+    const localRegPath = path.join(mindPath, '.github', 'registry.json');
+    const localReg = JSON.parse(fs.readFileSync(localRegPath, 'utf8'));
+    localReg.skills.upgrade = {
+      version: upgradeInfo?.version || '0.0.0',
+      path: '.github/skills/upgrade',
+      description: upgradeInfo?.description || 'Pull updates from genesis template registry',
+    };
+    fs.writeFileSync(localRegPath, JSON.stringify(localReg, null, 2) + '\n');
   }
 
   validate(mindPath: string): { ok: boolean; missing: string[] } {
