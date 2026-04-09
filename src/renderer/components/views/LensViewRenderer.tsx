@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import type { LensViewManifest } from '../../../shared/types';
 import { RefreshCw } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { LensBriefing } from './LensBriefing';
+import { LensTable } from './LensTable';
 
 interface Props {
   view: LensViewManifest;
@@ -73,7 +75,7 @@ export function LensViewRenderer({ view }: Props) {
 
         {/* Content */}
         {data ? (
-          <LensFormContent data={data} schema={view.schema} />
+          <LensViewContent view={view} data={data} />
         ) : (
           <div className="rounded-xl border border-border bg-card p-8 text-center">
             <p className="text-muted-foreground text-sm">
@@ -84,6 +86,18 @@ export function LensViewRenderer({ view }: Props) {
       </div>
     </div>
   );
+}
+
+function LensViewContent({ view, data }: { view: LensViewManifest; data: Record<string, unknown> }) {
+  switch (view.view) {
+    case 'briefing':
+      return <LensBriefing data={data} schema={view.schema} />;
+    case 'table':
+      return <LensTable data={data} schema={view.schema} />;
+    case 'form':
+    default:
+      return <LensFormContent data={data} schema={view.schema} />;
+  }
 }
 
 function LensFormContent({ data, schema }: { data: Record<string, unknown>; schema?: Record<string, unknown> }) {
