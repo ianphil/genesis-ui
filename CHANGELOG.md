@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.13.0 (2026-04-09)
+
+### Auth & Credential Fixes
+- **Fix OAuth client ID** — switch from deprecated `Iv1.b507a08c87ecfe98` to current CLI client ID `Ov23ctDVkRmgkPke0Mmm` with correct scopes (`read:user,read:org,repo,gist`)
+- **Fix UTF-16/UTF-8 credential encoding** — cmdkey stores blobs as UTF-16LE but the CLI reads via keytar (UTF-8). Now uses Win32 `CredWriteW` directly with UTF-8 encoding via a compiled helper
+- **Fix PowerShell Add-Type timeout** — replaced slow JIT compilation with a precompiled `CredWrite.exe` via `csc.exe` (cached on first run)
+
+### Agent Identity & Personality
+- **Agent identity injection** — ChatService loads SOUL.md + `.github/agents/*.agent.md` and injects them into the session via `systemMessage` customize mode
+- **Replace SDK identity section** — agent's SOUL replaces the default "You are GitHub Copilot CLI" identity while preserving all tool instructions, safety, and environment context
+- **Remove SDK tone override** — the "100 words or less" tone section was suppressing agent personality; removed so SOUL.md's Vibe section controls voice
+
+### Genesis & Boot
+- **Surface genesis errors** — boot screen now shows red error text with actionable hint instead of spinning forever on failure
+- **Fix BootScreen crash** — React strict mode double-fired useEffect corrupting interval index; fixed with optional chaining and value capture
+
+## v0.12.0 (2026-04-09)
+
+- **Auth gate** — GitHub device flow login, Windows Credential Manager storage
+
 ## v0.11.0 (2026-04-09)
 
 - **The Genesis Moment** — full cinematic new-mind onboarding
