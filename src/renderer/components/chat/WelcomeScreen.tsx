@@ -4,7 +4,9 @@ const STARTER_PROMPTS = [
   { emoji: '📋', label: 'Daily briefing', prompt: 'Give me my daily report' },
   { emoji: '🔍', label: 'Explore the mind', prompt: 'What do you know about? List your domains and expertise areas.' },
   { emoji: '📝', label: 'Check initiatives', prompt: 'What active initiatives are you tracking? Give me a status update.' },
+  { emoji: '🔮', label: 'Create a Lens', prompt: 'Create a new Lens view for me. What data would you like to visualize? Suggest some options based on what you know about this mind.' },
   { emoji: '💡', label: 'What can you do?', prompt: 'What skills and capabilities do you have? How can you help me?' },
+  { emoji: '🆕', label: 'What\'s new?', prompt: 'Tell me about the Lens view framework. What view types are available? How do I create a new view? What can I do with the action bar on each view?' },
 ];
 
 interface Props {
@@ -29,7 +31,7 @@ export function WelcomeScreen({ onSendMessage, connected }: Props) {
         </p>
 
         {connected && (
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3 max-w-xl">
             {STARTER_PROMPTS.map((item) => (
               <button
                 key={item.label}
