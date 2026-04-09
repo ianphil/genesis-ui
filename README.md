@@ -1,25 +1,25 @@
 # Blotter
 
-Your AI command surface. Sit down and your agent has already prepared your world.
+Your AI command surface. Sit down and your Chief of Staff has already prepared your world.
 
-Blotter is a desktop app that connects to [Genesis](https://github.com/ianphil/genesis) minds — AI agents with memory, skills, and personality. The agent extends the UI itself: drop a `view.json` into the mind and a new panel appears. No code changes, no deploys.
+Blotter is a desktop app for AI agents that act as your Chief of Staff — managing priorities, surfacing context, and keeping operations moving. Connect a mind (an agent with memory, skills, and personality) and the agent extends the UI itself: drop a `view.json` into the mind and a new panel appears. No code changes, no deploys.
 
-Built with Electron, React, Tailwind CSS, and the GitHub Copilot SDK.
+Built with Electron, React, Tailwind CSS, and the GitHub Copilot SDK. Minds are created with [Genesis](https://github.com/ianphil/genesis).
 
 ## The Idea
 
 Before computers, a Chief of Staff had a desk blotter — the working surface where today's papers landed. The briefing book, the Rolodex, the inbox tray, the intercom to the team. Everything that mattered was within arm's reach.
 
-Blotter is the digital version. Your agent is the assistant who prepared the desk before you arrived.
+Blotter is the digital version. Your agent is the Chief of Staff who prepared the desk before you arrived.
 
 | The old world | Blotter |
 |---------------|---------|
 | Briefing book | Newspaper — prompt-driven daily briefing |
-| Rolodex | Contacts — Lens table view |
-| Inbox tray | Inbox — Lens list view |
+| Rolodex | Contacts — table view |
+| Inbox tray | Inbox — list view |
 | Intercom | Chat — streaming conversation with your agent |
-| Filing cabinets | Mind directories (domains, expertise, archives) |
-| The assistant | The Genesis agent |
+| Filing cabinets | Domains, expertise, archives |
+| The Chief of Staff | The agent |
 
 ## Features
 
@@ -30,7 +30,7 @@ Blotter is the digital version. Your agent is the assistant who prepared the des
 - **Activity bar** — VS Code-style icon strip. Icons appear as views are discovered.
 - **Streaming chat** — real-time responses with markdown, tool calls, and reasoning blocks.
 - **Model picker** — choose your model, persisted across sessions.
-- **Agent identity** — chat shows the agent's name from SOUL.md, not "Blotter."
+- **Agent identity** — chat shows the agent's name, not "Blotter." This is their desk.
 
 ## Quick Start
 
@@ -41,7 +41,7 @@ npm install
 npm start
 ```
 
-Select a Genesis mind directory from the sidebar. The agent connects, views appear, and you're ready.
+Select a mind directory from the sidebar. The agent connects, views appear, and you're ready.
 
 ## Architecture
 
