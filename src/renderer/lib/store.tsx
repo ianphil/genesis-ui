@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useReducer, type Dispatch } from 'react';
 import type { ChatMessage, ChatEvent, AgentStatus, ModelInfo, ContentBlock } from '../../shared/types';
 
+export type LensView = 'chat' | 'hello';
+
 interface AppState {
   messages: ChatMessage[];
   conversationId: string;
@@ -8,6 +10,7 @@ interface AppState {
   agentStatus: AgentStatus;
   availableModels: ModelInfo[];
   selectedModel: string | null;
+  activeView: LensView;
 }
 
 type AppAction =
@@ -17,6 +20,7 @@ type AppAction =
   | { type: 'SET_AGENT_STATUS'; payload: AgentStatus }
   | { type: 'SET_AVAILABLE_MODELS'; payload: ModelInfo[] }
   | { type: 'SET_SELECTED_MODEL'; payload: string | null }
+  | { type: 'SET_ACTIVE_VIEW'; payload: LensView }
   | { type: 'CLEAR_MESSAGES' }
   | { type: 'NEW_CONVERSATION' };
 
@@ -34,6 +38,7 @@ const initialState: AppState = {
   },
   availableModels: [],
   selectedModel: localStorage.getItem('genesis-ui:selectedModel'),
+  activeView: 'chat',
 };
 
 /** Extract plain text from content blocks (for search, accessibility, etc.) */
@@ -192,6 +197,9 @@ function appReducer(state: AppState, action: AppAction): AppState {
         localStorage.removeItem('genesis-ui:selectedModel');
       }
       return { ...state, selectedModel: action.payload };
+
+    case 'SET_ACTIVE_VIEW':
+      return { ...state, activeView: action.payload };
 
     case 'CLEAR_MESSAGES':
       return { ...state, messages: [] };

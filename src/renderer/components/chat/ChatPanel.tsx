@@ -11,7 +11,7 @@ export function ChatPanel() {
   const { sendMessage, stopStreaming, isStreaming } = useChatStreaming();
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 pt-9">
+    <div className="flex-1 flex flex-col min-h-0">
       {messages.length === 0 ? (
         <WelcomeScreen
           onSendMessage={sendMessage}
