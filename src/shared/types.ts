@@ -79,7 +79,7 @@ export interface LensViewManifest {
   id: string;
   name: string;
   icon: string;
-  view: 'form' | 'table' | 'briefing' | 'status-board' | 'list' | 'monitor';
+  view: 'form' | 'table' | 'briefing' | 'status-board' | 'list' | 'monitor' | 'detail' | 'timeline' | 'editor';
   source: string;
   schema?: Record<string, unknown>;
   prompt?: string;

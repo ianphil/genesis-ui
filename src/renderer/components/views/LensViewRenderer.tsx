@@ -4,6 +4,10 @@ import { RefreshCw, Send } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { LensBriefing } from './LensBriefing';
 import { LensTable } from './LensTable';
+import { LensDetail } from './LensDetail';
+import { LensStatusBoard } from './LensStatusBoard';
+import { LensTimeline } from './LensTimeline';
+import { LensEditor } from './LensEditor';
 
 interface Props {
   view: LensViewManifest;
@@ -90,7 +94,17 @@ export function LensViewRenderer({ view }: Props) {
 
         {/* Content */}
         {data ? (
-          <LensViewContent view={view} data={data} />
+          <LensViewContent view={view} data={data} onAction={async (action) => {
+            setLoading(true);
+            try {
+              const result = await window.electronAPI.lens.sendAction(view.id, action);
+              setData(result);
+            } catch (err) {
+              setError(err instanceof Error ? err.message : 'Action failed');
+            } finally {
+              setLoading(false);
+            }
+          }} />
         ) : (
           <div className="rounded-xl border border-border bg-card p-8 text-center">
             <p className="text-muted-foreground text-sm">
@@ -130,12 +144,32 @@ export function LensViewRenderer({ view }: Props) {
   );
 }
 
-function LensViewContent({ view, data }: { view: LensViewManifest; data: Record<string, unknown> }) {
+function LensViewContent({ view, data, onAction }: { view: LensViewManifest; data: Record<string, unknown>; onAction: (action: string) => Promise<void> }) {
   switch (view.view) {
     case 'briefing':
       return <LensBriefing data={data} schema={view.schema} />;
     case 'table':
       return <LensTable data={data} schema={view.schema} />;
+    case 'detail':
+      return <LensDetail data={data} schema={view.schema} />;
+    case 'status-board':
+      return <LensStatusBoard data={data} schema={view.schema} />;
+    case 'timeline':
+      return <LensTimeline data={data} schema={view.schema} />;
+    case 'editor':
+      return (
+        <LensEditor
+          data={data}
+          schema={view.schema}
+          onSave={(updates) => {
+            const changes = Object.entries(updates)
+              .filter(([k, v]) => String(v) !== String(data[k]))
+              .map(([k, v]) => `${k}: ${JSON.stringify(v)}`)
+              .join(', ');
+            if (changes) onAction(`Update the following fields: ${changes}`);
+          }}
+        />
+      );
     case 'form':
     default:
       return <LensFormContent data={data} schema={view.schema} />;

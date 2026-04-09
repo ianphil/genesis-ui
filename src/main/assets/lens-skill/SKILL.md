@@ -75,6 +75,44 @@ For table column headers, use `schema.items.properties`:
 }
 ```
 
+### `detail` — Single Item Detail Card
+Data: flat JSON object. `name`/`title` becomes heading, `description` becomes body, `status` becomes badge.
+```json
+{ "name": "Lens Framework", "status": "Active", "description": "Declarative UI views", "phase": 4 }
+```
+
+### `status-board` — Status Cards with Indicators
+Data: JSON array with `name` and `status` fields. Shows 🟢🟡🔴 based on status text (ok/running = green, error/fail = red, warn/pending = yellow).
+```json
+[
+  { "name": "daily-report", "status": "ok", "last_run": "2h ago" },
+  { "name": "sync-contacts", "status": "error", "last_run": "failed" }
+]
+```
+
+### `timeline` — Chronological Feed
+Data: JSON array. Auto-extracts `title`, `time`/`timestamp`, `description`.
+```json
+[
+  { "title": "Deployed v0.8.0", "time": "3:25 AM", "description": "Lens Phase 4 shipped" },
+  { "title": "Created newspaper view", "time": "3:12 AM" }
+]
+```
+
+### `editor` — Editable Form
+Data: flat JSON object. Schema `properties` define field types. Supports `string`, `number`, `boolean`, and `enum` (dropdown). Save button sends changes back through the agent.
+```json
+{
+  "schema": {
+    "properties": {
+      "name": { "type": "string", "title": "Name" },
+      "enabled": { "type": "boolean", "title": "Enabled" },
+      "level": { "type": "string", "title": "Level", "enum": ["low", "medium", "high"] }
+    }
+  }
+}
+```
+
 ## Prompt-Driven Views
 
 When `prompt` is set, the UI sends the prompt to you with the output path appended. You gather data and write ONLY valid JSON to that path. No markdown, no explanation — just the JSON.
