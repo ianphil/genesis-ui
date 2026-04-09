@@ -21,8 +21,7 @@ export class ViewDiscovery {
     this.views = [];
 
     const searchDirs = [
-      path.join(mindPath, '.github', 'extensions'),
-      path.join(mindPath, '.github', 'skills'),
+      path.join(mindPath, '.github', 'lens'),
     ];
 
     for (const dir of searchDirs) {
@@ -93,8 +92,7 @@ export class ViewDiscovery {
     if (!this.mindPath) return;
 
     const searchDirs = [
-      path.join(this.mindPath, '.github', 'extensions'),
-      path.join(this.mindPath, '.github', 'skills'),
+      path.join(this.mindPath, '.github', 'lens'),
     ];
 
     for (const dir of searchDirs) {
