@@ -25,6 +25,9 @@ export class ViewDiscovery {
     // Seed default hello-world view if .github/lens/ is empty or missing
     this.seedDefaults(lensDir);
 
+    // Auto-install Lens skill if missing
+    this.installLensSkill(mindPath);
+
     if (fs.existsSync(lensDir)) {
       const entries = fs.readdirSync(lensDir, { withFileTypes: true });
       for (const entry of entries) {
@@ -78,10 +81,25 @@ export class ViewDiscovery {
 
     try {
       await this.chatService.sendBackgroundPrompt(fullPrompt);
-      // Agent has completed — re-read the data file
       return this.getViewData(viewId);
     } catch (err) {
       console.error(`[ViewDiscovery] Refresh failed for ${viewId}:`, err);
+      return this.getViewData(viewId);
+    }
+  }
+
+  async sendAction(viewId: string, action: string): Promise<Record<string, unknown> | null> {
+    const view = this.views.find(v => v.id === viewId);
+    if (!view || !view._basePath) return this.getViewData(viewId);
+
+    const dataPath = path.join(view._basePath, view.source);
+    const fullPrompt = `The user is viewing "${view.name}" (source: ${dataPath}).\n\nAction requested: ${action}\n\nMake the requested change and write the updated JSON to: ${dataPath}`;
+
+    try {
+      await this.chatService.sendBackgroundPrompt(fullPrompt);
+      return this.getViewData(viewId);
+    } catch (err) {
+      console.error(`[ViewDiscovery] Action failed for ${viewId}:`, err);
       return this.getViewData(viewId);
     }
   }
@@ -113,6 +131,37 @@ export class ViewDiscovery {
         },
       },
     }, null, 2));
+  }
+
+  private installLensSkill(mindPath: string): void {
+    const skillDir = path.join(mindPath, '.github', 'skills', 'lens');
+    const skillPath = path.join(skillDir, 'SKILL.md');
+
+    if (fs.existsSync(skillPath)) return;
+
+    // Read bundled SKILL.md — check packaged, built, and dev paths
+    const candidates = [
+      path.join(process.resourcesPath ?? '', 'assets', 'lens-skill', 'SKILL.md'),
+      path.join(__dirname, '..', 'assets', 'lens-skill', 'SKILL.md'),
+      path.join(__dirname, '..', '..', 'src', 'main', 'assets', 'lens-skill', 'SKILL.md'),
+    ];
+
+    let content: string | null = null;
+    for (const p of candidates) {
+      if (fs.existsSync(p)) {
+        content = fs.readFileSync(p, 'utf-8');
+        break;
+      }
+    }
+
+    if (!content) {
+      console.warn('[ViewDiscovery] Lens skill asset not found, skipping install');
+      return;
+    }
+
+    console.log('[ViewDiscovery] Installing Lens skill into mind');
+    fs.mkdirSync(skillDir, { recursive: true });
+    fs.writeFileSync(skillPath, content);
   }
 
   startWatching(onChanged: () => void): void {

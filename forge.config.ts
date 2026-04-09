@@ -17,7 +17,7 @@ const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
     executableName: 'genesis-ui',
-    extraResource: ['./resources/node'],
+    extraResource: ['./resources/node', './src/main/assets'],
     ...(enableMacOSSigning
       ? {
           osxSign: {},

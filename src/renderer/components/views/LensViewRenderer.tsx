@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import type { LensViewManifest } from '../../../shared/types';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, Send } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { LensBriefing } from './LensBriefing';
 import { LensTable } from './LensTable';
@@ -13,8 +13,8 @@ export function LensViewRenderer({ view }: Props) {
   const [data, setData] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [actionInput, setActionInput] = useState('');
 
-  // Load data on mount
   useEffect(() => {
     const load = async () => {
       try {
@@ -40,6 +40,21 @@ export function LensViewRenderer({ view }: Props) {
       setLoading(false);
     }
   }, [view.id, loading]);
+
+  const handleAction = useCallback(async () => {
+    if (loading || !actionInput.trim()) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await window.electronAPI.lens.sendAction(view.id, actionInput.trim());
+      setData(result);
+      setActionInput('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Action failed');
+    } finally {
+      setLoading(false);
+    }
+  }, [view.id, actionInput, loading]);
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-y-auto p-6">
@@ -81,6 +96,33 @@ export function LensViewRenderer({ view }: Props) {
             <p className="text-muted-foreground text-sm">
               {view.prompt ? 'No data yet. Click Refresh to populate.' : 'No data available.'}
             </p>
+          </div>
+        )}
+
+        {/* Action input — write-back via agent */}
+        {data && (
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={actionInput}
+              onChange={(e) => setActionInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleAction(); }}
+              placeholder="Ask the agent to modify this view…"
+              disabled={loading}
+              className="flex-1 bg-secondary rounded-lg px-3 py-2 text-sm outline-none placeholder:text-muted-foreground disabled:opacity-50"
+            />
+            <button
+              onClick={handleAction}
+              disabled={loading || !actionInput.trim()}
+              className={cn(
+                'shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
+                actionInput.trim() && !loading
+                  ? 'bg-primary text-primary-foreground hover:opacity-80'
+                  : 'bg-muted text-muted-foreground'
+              )}
+            >
+              <Send size={14} />
+            </button>
           </div>
         )}
       </div>

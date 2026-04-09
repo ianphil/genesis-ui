@@ -14,4 +14,8 @@ export function setupLensIPC(viewDiscovery: ViewDiscovery): void {
   ipcMain.handle('lens:refreshView', async (_event, viewId: string) => {
     return viewDiscovery.refreshView(viewId);
   });
+
+  ipcMain.handle('lens:sendAction', async (_event, viewId: string, action: string) => {
+    return viewDiscovery.sendAction(viewId, action);
+  });
 }

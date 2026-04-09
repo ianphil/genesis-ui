@@ -1,7 +1,7 @@
 {
   "name": "genesis-ui",
   "productName": "genesis-ui",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "description": "Genesis Mind Interface — desktop chat UI for Genesis agents",
   "main": ".vite/build/main.js",
   "private": true,
