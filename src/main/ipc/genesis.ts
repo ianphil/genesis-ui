@@ -3,10 +3,12 @@ import { ipcMain, dialog, BrowserWindow } from 'electron';
 import { MindScaffold, type GenesisConfig } from '../services/MindScaffold';
 import { ChatService } from '../services/ChatService';
 import { ViewDiscovery } from '../services/ViewDiscovery';
+import { ConfigService } from '../services/ConfigService';
 
 export function setupGenesisIPC(
   chatService: ChatService,
   viewDiscovery: ViewDiscovery,
+  configService: ConfigService,
 ): void {
   const scaffold = new MindScaffold();
 
@@ -51,10 +53,9 @@ export function setupGenesisIPC(
       });
 
       // Save config
-      const { saveConfig, loadConfig } = await import('./agent');
-      const appConfig = loadConfig();
+      const appConfig = configService.load();
       appConfig.mindPath = mindPath;
-      saveConfig(appConfig);
+      configService.save(appConfig);
 
       return { success: true, mindPath };
     } catch (err) {

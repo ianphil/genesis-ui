@@ -1,13 +1,15 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import path from 'node:path';
+import * as fs from 'fs';
 import started from 'electron-squirrel-startup';
 import { ChatService } from './main/services/ChatService';
 import { ExtensionLoader } from './main/services/ExtensionLoader';
+import { ConfigService } from './main/services/ConfigService';
 import { loadCanvasExtension } from './main/services/adapters/canvas';
 import { loadCronExtension } from './main/services/adapters/cron';
 import { loadIdeaExtension } from './main/services/adapters/idea';
 import { setupChatIPC } from './main/ipc/chat';
-import { setupAgentIPC, restoreConfig } from './main/ipc/agent';
+import { setupAgentIPC } from './main/ipc/agent';
 import { setupLensIPC } from './main/ipc/lens';
 import { setupGenesisIPC } from './main/ipc/genesis';
 import { setupAuthIPC } from './main/ipc/auth';
@@ -21,6 +23,7 @@ if (started) {
 const chatService = new ChatService();
 const extensionLoader = new ExtensionLoader();
 const viewDiscovery = new ViewDiscovery(chatService);
+const configService = new ConfigService();
 extensionLoader.registerAdapter('canvas', loadCanvasExtension);
 extensionLoader.registerAdapter('cron', loadCronExtension);
 extensionLoader.registerAdapter('idea', loadIdeaExtension);
@@ -64,11 +67,22 @@ const createWindow = () => {
 };
 
 app.on('ready', () => {
-  restoreConfig(chatService, viewDiscovery);
+  // Restore persisted mind path on startup
+  const config = configService.load();
+  if (config.mindPath && fs.existsSync(config.mindPath)) {
+    chatService.setMindPath(config.mindPath);
+    viewDiscovery.scan(config.mindPath).then(() => {
+      viewDiscovery.startWatching(() => {
+        const win = BrowserWindow.getAllWindows()[0];
+        if (win) win.webContents.send('lens:viewsChanged', viewDiscovery.getViews());
+      });
+    });
+  }
+
   setupChatIPC(chatService);
-  setupAgentIPC(chatService, viewDiscovery);
+  setupAgentIPC(chatService, viewDiscovery, configService);
   setupLensIPC(viewDiscovery);
-  setupGenesisIPC(chatService, viewDiscovery);
+  setupGenesisIPC(chatService, viewDiscovery, configService);
   setupAuthIPC();
 
   // Window control IPC — registered once, not per-window

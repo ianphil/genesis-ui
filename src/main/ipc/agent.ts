@@ -5,26 +5,10 @@ import * as path from 'path';
 import * as os from 'os';
 import { ChatService } from '../services/ChatService';
 import { ViewDiscovery } from '../services/ViewDiscovery';
+import { ConfigService } from '../services/ConfigService';
 import type { AgentStatus, AppConfig } from '../../shared/types';
 
-const CONFIG_DIR = path.join(os.homedir(), '.chamber');
-const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');
-
-export function loadConfig(): AppConfig {
-  try {
-    const data = fs.readFileSync(CONFIG_PATH, 'utf-8');
-    return JSON.parse(data);
-  } catch {
-    return { mindPath: null, theme: 'dark' };
-  }
-}
-
-export function saveConfig(config: AppConfig): void {
-  fs.mkdirSync(CONFIG_DIR, { recursive: true });
-  fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
-}
-
-export function setupAgentIPC(chatService: ChatService, viewDiscovery: ViewDiscovery): void {
+export function setupAgentIPC(chatService: ChatService, viewDiscovery: ViewDiscovery, configService: ConfigService): void {
   ipcMain.handle('agent:getStatus', async (): Promise<AgentStatus> => {
     const mindPath = chatService.getMindPath();
     const loader = chatService.getExtensionLoader();
@@ -77,9 +61,9 @@ export function setupAgentIPC(chatService: ChatService, viewDiscovery: ViewDisco
     }
 
     chatService.setMindPath(selected);
-    const config = loadConfig();
+    const config = configService.load();
     config.mindPath = selected;
-    saveConfig(config);
+    configService.save(config);
 
     // Scan for Lens views and start watching
     const views = await viewDiscovery.scan(selected);
@@ -95,34 +79,17 @@ export function setupAgentIPC(chatService: ChatService, viewDiscovery: ViewDisco
 
   ipcMain.handle('agent:setMindPath', async (_event, mindPath: string) => {
     chatService.setMindPath(mindPath);
-    const config = loadConfig();
+    const config = configService.load();
     config.mindPath = mindPath;
-    saveConfig(config);
+    configService.save(config);
   });
 
   ipcMain.handle('config:load', async (): Promise<AppConfig> => {
-    return loadConfig();
+    return configService.load();
   });
 
   ipcMain.handle('config:save', async (_event, config: AppConfig) => {
-    saveConfig(config);
+    configService.save(config);
   });
 }
 
-/** Restore persisted mind path on startup */
-export function restoreConfig(chatService: ChatService, viewDiscovery?: ViewDiscovery): void {
-  const config = loadConfig();
-  if (config.mindPath && fs.existsSync(config.mindPath)) {
-    chatService.setMindPath(config.mindPath);
-    if (viewDiscovery) {
-      viewDiscovery.scan(config.mindPath).then(() => {
-        viewDiscovery.startWatching(() => {
-          const win = BrowserWindow.getAllWindows()[0];
-          if (win) {
-            win.webContents.send('lens:viewsChanged', viewDiscovery.getViews());
-          }
-        });
-      });
-    }
-  }
-}
