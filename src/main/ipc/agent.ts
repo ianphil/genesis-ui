@@ -6,6 +6,7 @@ import * as os from 'os';
 import { ChatService } from '../services/ChatService';
 import { ViewDiscovery } from '../services/ViewDiscovery';
 import { ConfigService } from '../services/ConfigService';
+import { seedLensDefaults, installLensSkill } from '../services/MindBootstrap';
 import type { AgentStatus, AppConfig } from '../../shared/types';
 
 export function setupAgentIPC(chatService: ChatService, viewDiscovery: ViewDiscovery, configService: ConfigService): void {
@@ -65,7 +66,9 @@ export function setupAgentIPC(chatService: ChatService, viewDiscovery: ViewDisco
     config.mindPath = selected;
     configService.save(config);
 
-    // Scan for Lens views and start watching
+    // Bootstrap and scan for Lens views, then start watching
+    seedLensDefaults(selected);
+    installLensSkill(selected);
     const views = await viewDiscovery.scan(selected);
     viewDiscovery.startWatching(() => {
       const win2 = BrowserWindow.getAllWindows()[0];

@@ -4,6 +4,7 @@ import { MindScaffold, type GenesisConfig } from '../services/MindScaffold';
 import { ChatService } from '../services/ChatService';
 import { ViewDiscovery } from '../services/ViewDiscovery';
 import { ConfigService } from '../services/ConfigService';
+import { seedLensDefaults, installLensSkill } from '../services/MindBootstrap';
 
 export function setupGenesisIPC(
   chatService: ChatService,
@@ -45,6 +46,8 @@ export function setupGenesisIPC(
 
       // Connect the new mind
       chatService.setMindPath(mindPath);
+      seedLensDefaults(mindPath);
+      installLensSkill(mindPath);
       await viewDiscovery.scan(mindPath);
       viewDiscovery.startWatching(() => {
         if (win) {

@@ -8,6 +8,7 @@ import { ConfigService } from './main/services/ConfigService';
 import { AuthService } from './main/services/AuthService';
 import { MindScaffold } from './main/services/MindScaffold';
 import { IdentityLoader } from './main/services/IdentityLoader';
+import { seedLensDefaults, installLensSkill } from './main/services/MindBootstrap';
 import { loadCanvasExtension } from './main/services/adapters/canvas';
 import { loadCronExtension } from './main/services/adapters/cron';
 import { loadIdeaExtension } from './main/services/adapters/idea';
@@ -77,6 +78,8 @@ app.on('ready', () => {
   const config = configService.load();
   if (config.mindPath && fs.existsSync(config.mindPath)) {
     chatService.setMindPath(config.mindPath);
+    seedLensDefaults(config.mindPath);
+    installLensSkill(config.mindPath);
     viewDiscovery.scan(config.mindPath).then(() => {
       viewDiscovery.startWatching(() => {
         const win = BrowserWindow.getAllWindows()[0];

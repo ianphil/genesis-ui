@@ -75,6 +75,13 @@ describe('ViewDiscovery', () => {
       expect(Array.isArray(views)).toBe(true);
     });
 
+    it('scan does not write files', async () => {
+      mockExistsSync.mockReturnValue(false);
+      await discovery.scan('C:\\test\\mind');
+      expect(vi.mocked(fs.writeFileSync)).not.toHaveBeenCalled();
+      expect(vi.mocked(fs.mkdirSync)).not.toHaveBeenCalled();
+    });
+
     it('skips entries with invalid view.json', async () => {
       mockExistsSync.mockImplementation((p: fs.PathLike) => {
         const s = String(p);
