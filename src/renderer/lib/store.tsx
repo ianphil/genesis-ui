@@ -3,7 +3,7 @@ import type { ChatMessage, ChatEvent, AgentStatus, ModelInfo, LensViewManifest, 
 
 export type LensView = 'chat' | string;
 
-interface AppState {
+export interface AppState {
   messages: ChatMessage[];
   conversationId: string;
   isStreaming: boolean;
@@ -15,7 +15,7 @@ interface AppState {
   showLanding: boolean;
 }
 
-type AppAction =
+export type AppAction =
   | { type: 'ADD_USER_MESSAGE'; payload: { id: string; content: string; timestamp: number } }
   | { type: 'ADD_ASSISTANT_MESSAGE'; payload: { id: string; timestamp: number } }
   | { type: 'CHAT_EVENT'; payload: { messageId: string; event: ChatEvent } }
@@ -29,7 +29,7 @@ type AppAction =
   | { type: 'CLEAR_MESSAGES' }
   | { type: 'NEW_CONVERSATION' };
 
-const initialState: AppState = {
+export const initialState: AppState = {
   messages: [],
   conversationId: `conv-${Date.now()}`,
   isStreaming: false,
@@ -57,7 +57,7 @@ export function getPlainContent(message: ChatMessage): string {
     .join('');
 }
 
-function handleChatEvent(messages: ChatMessage[], messageId: string, event: ChatEvent): ChatMessage[] {
+export function handleChatEvent(messages: ChatMessage[], messageId: string, event: ChatEvent): ChatMessage[] {
   return messages.map((m) => {
     if (m.id !== messageId) return m;
 
@@ -155,7 +155,7 @@ function handleChatEvent(messages: ChatMessage[], messageId: string, event: Chat
   });
 }
 
-function appReducer(state: AppState, action: AppAction): AppState {
+export function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
     case 'ADD_USER_MESSAGE':
       return {
