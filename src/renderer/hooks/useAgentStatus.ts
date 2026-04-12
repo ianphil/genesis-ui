@@ -21,6 +21,7 @@ export function useAgentStatus() {
         dispatch({ type: 'SET_MINDS', payload: loadedMinds });
         dispatch({ type: 'SET_ACTIVE_MIND', payload: loadedMinds[0].mindId });
       }
+      dispatch({ type: 'MINDS_CHECKED' });
     });
 
     // Subscribe to mind changes

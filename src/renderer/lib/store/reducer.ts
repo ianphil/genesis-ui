@@ -210,6 +210,9 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     case 'HIDE_LANDING':
       return { ...state, showLanding: false };
 
+    case 'MINDS_CHECKED':
+      return { ...state, mindsChecked: true };
+
     case 'CLEAR_MESSAGES':
       return {
         ...state,

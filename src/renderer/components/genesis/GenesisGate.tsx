@@ -8,9 +8,14 @@ interface Props {
 }
 
 export function GenesisGate({ children }: Props) {
-  const { agentStatus, minds, showLanding } = useAppState();
+  const { agentStatus, minds, showLanding, mindsChecked } = useAppState();
   const dispatch = useAppDispatch();
   const [mode, setMode] = useState<'idle' | 'genesis'>('idle');
+
+  // Don't flash landing screen while initial minds check is pending
+  if (!mindsChecked && !showLanding) {
+    return null;
+  }
 
   const hasMinds = minds.length > 0 || agentStatus.connected;
   const showGate = showLanding || !hasMinds;

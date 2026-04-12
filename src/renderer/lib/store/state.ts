@@ -14,6 +14,7 @@ export interface AppState {
   activeView: LensView;
   discoveredViews: LensViewManifest[];
   showLanding: boolean;
+  mindsChecked: boolean;
 }
 
 export type AppAction =
@@ -31,6 +32,7 @@ export type AppAction =
   | { type: 'SET_DISCOVERED_VIEWS'; payload: LensViewManifest[] }
   | { type: 'SHOW_LANDING' }
   | { type: 'HIDE_LANDING' }
+  | { type: 'MINDS_CHECKED' }
   | { type: 'CLEAR_MESSAGES' }
   | { type: 'NEW_CONVERSATION' };
 
@@ -53,4 +55,5 @@ export const initialState: AppState = {
   activeView: 'chat',
   discoveredViews: [],
   showLanding: false,
+  mindsChecked: false,
 };
