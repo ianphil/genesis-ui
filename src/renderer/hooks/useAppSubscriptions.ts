@@ -13,8 +13,8 @@ export function useAppSubscriptions() {
 
   // Chat event listener — must stay alive regardless of active view
   useEffect(() => {
-    const unsub = window.electronAPI.chat.onEvent((messageId, event) => {
-      dispatch({ type: 'CHAT_EVENT', payload: { messageId, event } });
+    const unsub = window.electronAPI.chat.onEvent((mindId, messageId, event) => {
+      dispatch({ type: 'CHAT_EVENT', payload: { mindId, messageId, event } });
     });
     return () => { unsub(); };
   }, [dispatch]);

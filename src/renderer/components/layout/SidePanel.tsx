@@ -3,14 +3,16 @@ import { useAppState, useAppDispatch } from '../../lib/store';
 import { cn } from '../../lib/utils';
 
 function ChatSideContent() {
-  const { conversationId } = useAppState();
+  const { activeMindId } = useAppState();
   const dispatch = useAppDispatch();
 
   return (
     <div className="px-3 py-3 space-y-1">
       <button
         onClick={async () => {
-          await window.electronAPI.chat.newConversation(conversationId);
+          if (activeMindId) {
+            await window.electronAPI.chat.newConversation(activeMindId);
+          }
           dispatch({ type: 'NEW_CONVERSATION' });
         }}
         className="w-full text-left px-3 py-2 rounded-md text-sm hover:bg-accent transition-colors flex items-center gap-2"
