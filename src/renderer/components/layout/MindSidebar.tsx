@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useAppState, useAppDispatch } from '../../lib/store';
 import { cn } from '../../lib/utils';
-import { Plus, X, Bot, MessageSquarePlus } from 'lucide-react';
+import { Plus, X, Bot, MessageSquarePlus, ExternalLink } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 import type { MindContext } from '../../../shared/types';
 
@@ -32,10 +32,20 @@ export function MindSidebar() {
     dispatch({ type: 'SHOW_LANDING' });
   };
 
-  const handleSwitchMind = (mindId: string) => {
-    window.electronAPI.mind.setActive(mindId);
-    dispatch({ type: 'SET_ACTIVE_MIND', payload: mindId });
-    dispatch({ type: 'SET_ACTIVE_VIEW', payload: 'chat' });
+  const handleSwitchMind = (mind: MindContext) => {
+    if (mind.windowed) {
+      // Focus the popout window instead of switching in main
+      window.electronAPI.mind.openWindow(mind.mindId);
+    } else {
+      window.electronAPI.mind.setActive(mind.mindId);
+      dispatch({ type: 'SET_ACTIVE_MIND', payload: mind.mindId });
+      dispatch({ type: 'SET_ACTIVE_VIEW', payload: 'chat' });
+    }
+  };
+
+  const handlePopout = async (e: React.MouseEvent, mindId: string) => {
+    e.stopPropagation();
+    await window.electronAPI.mind.openWindow(mindId);
   };
 
   const handleRemoveMind = async (e: React.MouseEvent, mindId: string) => {
@@ -87,29 +97,56 @@ export function MindSidebar() {
         {minds.map((mind) => (
           <button
             key={mind.mindId}
-            onClick={() => handleSwitchMind(mind.mindId)}
+            onClick={() => handleSwitchMind(mind)}
             className={cn(
               'w-full px-3 py-2 flex items-center gap-2 text-sm transition-colors group',
-              mind.mindId === activeMindId
-                ? 'bg-accent text-foreground'
-                : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
+              mind.windowed
+                ? 'text-muted-foreground/60 italic'
+                : mind.mindId === activeMindId
+                  ? 'bg-accent text-foreground'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
             )}
           >
             <Bot size={16} className="shrink-0" />
             <div className={cn('w-2 h-2 rounded-full shrink-0', statusColor(mind.status))} />
             <span className="truncate flex-1 text-left">{mind.identity.name}</span>
-            <Tooltip delayDuration={300}>
-              <TooltipTrigger asChild>
-                <span
-                  role="button"
-                  onClick={(e) => handleRemoveMind(e, mind.mindId)}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity hover:text-destructive"
-                >
-                  <X size={14} />
-                </span>
-              </TooltipTrigger>
-              <TooltipContent side="right">Remove agent</TooltipContent>
-            </Tooltip>
+            {mind.windowed ? (
+              <Tooltip delayDuration={300}>
+                <TooltipTrigger asChild>
+                  <span className="text-muted-foreground/50">
+                    <ExternalLink size={12} />
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="right">In separate window</TooltipContent>
+              </Tooltip>
+            ) : (
+              <>
+                <Tooltip delayDuration={300}>
+                  <TooltipTrigger asChild>
+                    <span
+                      role="button"
+                      onClick={(e) => handlePopout(e, mind.mindId)}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity hover:text-foreground"
+                    >
+                      <ExternalLink size={12} />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">Open in window</TooltipContent>
+                </Tooltip>
+                <Tooltip delayDuration={300}>
+                  <TooltipTrigger asChild>
+                    <span
+                      role="button"
+                      onClick={(e) => handleRemoveMind(e, mind.mindId)}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity hover:text-destructive"
+                    >
+                      <X size={14} />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">Remove agent</TooltipContent>
+                </Tooltip>
+              </>
+            )}
           </button>
         ))}
       </div>
