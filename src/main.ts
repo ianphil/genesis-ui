@@ -45,6 +45,18 @@ const viewDiscovery = new ViewDiscovery();
 const mindManager = new MindManager(clientFactory, identityLoader, extensionLoader, configService, viewDiscovery);
 const chatService = new ChatService(mindManager);
 
+// Wire Lens refresh to use the mind's session via ChatService
+viewDiscovery.setRefreshHandler({
+  sendBackgroundPrompt: async (mindPath: string, prompt: string) => {
+    // Find the mind by path and send the prompt
+    const mind = mindManager.listMinds().find(m => m.mindPath === mindPath);
+    if (!mind) return;
+    const context = mindManager.getMind(mind.mindId);
+    if (!context?.session) return;
+    await context.session.send({ prompt });
+  },
+});
+
 let mainWindow: BrowserWindow | null = null;
 let isQuitting = false;
 
