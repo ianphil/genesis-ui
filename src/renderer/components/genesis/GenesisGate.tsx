@@ -13,6 +13,12 @@ export function GenesisGate({ children }: Props) {
   const dispatch = useAppDispatch();
   const [mode, setMode] = useState<'idle' | 'genesis'>('idle');
 
+  // Popout windows skip the gate entirely
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('popout') === 'true') {
+    return <>{children}</>;
+  }
+
   // Show loading screen while initial minds check is pending
   if (!mindsChecked && !showLanding) {
     return <ChamberLoadingScreen />;

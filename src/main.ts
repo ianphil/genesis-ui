@@ -85,6 +85,14 @@ const createWindow = () => {
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
     mainWindow.webContents.openDevTools({ mode: 'bottom' });
   }
+
+  // When main window closes, close all popout windows too
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+    for (const win of BrowserWindow.getAllWindows()) {
+      win.close();
+    }
+  });
 };
 
 app.on('ready', async () => {
