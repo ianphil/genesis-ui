@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAppState, useAppDispatch } from '../../lib/store';
 import { LandingScreen } from './LandingScreen';
 import { GenesisFlow } from './GenesisFlow';
+import { ChamberLoadingScreen } from './ChamberLoadingScreen';
 
 interface Props {
   children: React.ReactNode;
@@ -12,9 +13,9 @@ export function GenesisGate({ children }: Props) {
   const dispatch = useAppDispatch();
   const [mode, setMode] = useState<'idle' | 'genesis'>('idle');
 
-  // Don't flash landing screen while initial minds check is pending
+  // Show loading screen while initial minds check is pending
   if (!mindsChecked && !showLanding) {
-    return null;
+    return <ChamberLoadingScreen />;
   }
 
   const hasMinds = minds.length > 0 || agentStatus.connected;

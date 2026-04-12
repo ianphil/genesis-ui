@@ -106,10 +106,13 @@ app.on('ready', async () => {
   // Create window first (don't block on restore)
   createWindow();
 
-  // Restore minds async (each loads independently, errors don't block others)
-  mindManager.restoreFromConfig().catch((err) => {
+  // Restore minds async — store promise so IPC can await it
+  const restorePromise = mindManager.restoreFromConfig().catch((err) => {
     console.error('[main] Failed to restore minds:', err);
   });
+
+  // Expose restore promise for IPC handlers that need to wait
+  (mindManager as any)._restorePromise = restorePromise;
 });
 
 app.on('window-all-closed', () => {

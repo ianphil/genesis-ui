@@ -14,6 +14,10 @@ export function setupMindIPC(mindManager: MindManager): void {
   });
 
   ipcMain.handle('mind:list', async () => {
+    // Wait for restore to complete before returning the list
+    if ((mindManager as any)._restorePromise) {
+      await (mindManager as any)._restorePromise;
+    }
     return mindManager.listMinds();
   });
 
