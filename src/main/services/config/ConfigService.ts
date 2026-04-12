@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import * as crypto from 'crypto';
+import { generateMindId } from '../mind/generateMindId';
 import type { AppConfig, AppConfigV1, MindRecord } from '../../../shared/types';
 
 const CONFIG_DIR = path.join(os.homedir(), '.chamber');
@@ -10,11 +10,8 @@ const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');
 const DEFAULT_CONFIG: AppConfig = { version: 2, minds: [], activeMindId: null, theme: 'dark' };
 
 export class ConfigService {
-  static generateMindId(mindPath: string): string {
-    const basename = path.basename(mindPath);
-    const suffix = crypto.randomBytes(2).toString('hex');
-    return `${basename}-${suffix}`;
-  }
+  /** @deprecated Use generateMindId() from mind/generateMindId instead */
+  static generateMindId = generateMindId;
 
   load(): AppConfig {
     try {

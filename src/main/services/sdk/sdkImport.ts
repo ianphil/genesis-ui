@@ -1,25 +1,13 @@
 // Extracted SDK dynamic import — isolates the ESM import() hack for testability
 
-import { app } from 'electron';
 import * as path from 'path';
 import { pathToFileURL } from 'url';
-import { getGlobalNodeModules } from './SdkDiscovery';
-import {
-  getLocalNodeModulesDir,
-  isLocalInstallReady,
-  ensureSdkInstalled,
-} from './SdkBootstrap';
+import { resolveNodeModulesDir } from './sdkPaths';
+import { ensureSdkInstalled } from './SdkBootstrap';
 
 type SdkModule = typeof import('@github/copilot-sdk');
 
 let cached: SdkModule | null = null;
-
-function resolveNodeModulesDir(): string {
-  if (app.isPackaged && isLocalInstallReady()) {
-    return getLocalNodeModulesDir();
-  }
-  return getGlobalNodeModules();
-}
 
 export async function loadSdkModule(): Promise<SdkModule> {
   if (cached) return cached;

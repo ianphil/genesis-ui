@@ -5,11 +5,9 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { loadSdkModule } from './sdkImport';
+import { resolveNodeModulesDir } from './sdkPaths';
 import { getCliPathFromModules, getBundledNodePath } from './SdkBootstrap';
-import { getGlobalNodeModules } from './SdkDiscovery';
 import { findSystemNode as findSystemNodeShared } from './nodeResolver';
-import { app } from 'electron';
-import { isLocalInstallReady, getLocalNodeModulesDir } from './SdkBootstrap';
 
 import type { CopilotClient } from '@github/copilot-sdk';
 
@@ -17,13 +15,6 @@ function findSystemNode(): string | null {
   const bundled = getBundledNodePath();
   if (bundled) return bundled;
   return findSystemNodeShared();
-}
-
-function resolveNodeModulesDir(): string {
-  if (app.isPackaged && isLocalInstallReady()) {
-    return getLocalNodeModulesDir();
-  }
-  return getGlobalNodeModules();
 }
 
 export class CopilotClientFactory {

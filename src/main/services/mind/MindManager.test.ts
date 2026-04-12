@@ -45,6 +45,7 @@ const mockExtensionLoader = {
   registerAdapter: vi.fn(),
   discoverExtensions: vi.fn(() => []),
   loadTools: vi.fn(async () => ({ tools: [], loaded: [] })),
+  cleanupExtensions: vi.fn(async () => {}),
 };
 
 const mockConfigService = {

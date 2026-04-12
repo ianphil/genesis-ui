@@ -19,7 +19,7 @@ export interface LoadedExtension {
 
 export type ExtensionAdapter = (extDir: string) => Promise<LoadedExtension>;
 
-export interface LoadResult {
+export interface ExtensionLoadResult {
   tools: ExtensionTool[];
   loaded: LoadedExtension[];
 }
@@ -44,7 +44,7 @@ export class ExtensionLoader {
     }
   }
 
-  async loadTools(mindPath: string): Promise<LoadResult> {
+  async loadTools(mindPath: string): Promise<ExtensionLoadResult> {
     const discovered = this.discoverExtensions(mindPath);
     const allTools: ExtensionTool[] = [];
     const loaded: LoadedExtension[] = [];
@@ -66,6 +66,17 @@ export class ExtensionLoader {
     return { tools: allTools, loaded };
   }
 
+  async cleanupExtensions(loaded: LoadedExtension[]): Promise<void> {
+    for (const ext of loaded) {
+      try {
+        await ext.cleanup();
+      } catch (err) {
+        console.error(`[ExtensionLoader] Cleanup error for '${ext.name}':`, err);
+      }
+    }
+  }
+
+  /** @deprecated Use cleanupExtensions() instance method */
   static async cleanup(loaded: LoadedExtension[]): Promise<void> {
     for (const ext of loaded) {
       try {

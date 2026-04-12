@@ -6,11 +6,11 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { MindContext, AppConfig, MindRecord } from '../../../shared/types';
 import type { InternalMindContext } from './types';
+import { generateMindId } from './generateMindId';
 import type { CopilotClientFactory } from '../sdk/CopilotClientFactory';
 import type { IdentityLoader } from '../chat/IdentityLoader';
-import type { ExtensionLoader, LoadedExtension } from '../extensions/ExtensionLoader';
-import { ExtensionLoader as ExtensionLoaderClass } from '../extensions/ExtensionLoader';
-import { ConfigService } from '../config/ConfigService';
+import type { ExtensionLoader } from '../extensions/ExtensionLoader';
+import type { ConfigService } from '../config/ConfigService';
 import type { ViewDiscovery } from '../lens/ViewDiscovery';
 
 export class MindManager extends EventEmitter {
@@ -33,7 +33,7 @@ export class MindManager extends EventEmitter {
     // Deduplicate — return existing mind
     const existingId = this.pathToId.get(mindPath);
     if (existingId && this.minds.has(existingId)) {
-      return this.toPublic(this.minds.get(existingId)!);
+      return this.toExternalContext(this.minds.get(existingId)!);
     }
 
     // Concurrent guard — return in-flight promise
@@ -54,7 +54,7 @@ export class MindManager extends EventEmitter {
     this.validateMindPath(mindPath);
 
     // Use provided ID or generate a new one
-    const id = mindId ?? ConfigService.generateMindId(mindPath);
+    const id = mindId ?? generateMindId(mindPath);
 
     // Load identity
     const identity = this.identityLoader.load(mindPath);
@@ -102,8 +102,8 @@ export class MindManager extends EventEmitter {
     // Persist
     this.persistConfig();
 
-    this.emit('mind:loaded', this.toPublic(context));
-    return this.toPublic(context);
+    this.emit('mind:loaded', this.toExternalContext(context));
+    return this.toExternalContext(context);
   }
 
   async unloadMind(mindId: string): Promise<void> {
@@ -111,7 +111,7 @@ export class MindManager extends EventEmitter {
     if (!context) return;
 
     // Cleanup extensions
-    await ExtensionLoaderClass.cleanup(context.extensions);
+    await this.extensionLoader.cleanupExtensions(context.extensions);
 
     // Destroy client
     await this.clientFactory.destroyClient(context.client);
@@ -136,7 +136,7 @@ export class MindManager extends EventEmitter {
   }
 
   listMinds(): MindContext[] {
-    return Array.from(this.minds.values()).map(m => this.toPublic(m));
+    return Array.from(this.minds.values()).map(m => this.toExternalContext(m));
   }
 
   getMind(mindId: string): InternalMindContext | undefined {
@@ -208,7 +208,7 @@ export class MindManager extends EventEmitter {
     }
   }
 
-  private toPublic(ctx: InternalMindContext): MindContext {
+  private toExternalContext(ctx: InternalMindContext): MindContext {
     return {
       mindId: ctx.mindId,
       mindPath: ctx.mindPath,
