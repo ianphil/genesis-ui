@@ -69,19 +69,7 @@ export class MindManager extends EventEmitter {
     const { tools, loaded } = await this.extensionLoader.loadTools(mindPath);
 
     // Create session
-    const session = await client.createSession({
-      workingDirectory: mindPath,
-      tools: tools as any[],
-      systemMessage: {
-        mode: 'customize',
-        sectionOverrides: [
-          { section: 'identity', override: { type: 'replace', content: identity.systemMessage } },
-          { section: 'tone', override: { type: 'remove' } },
-        ],
-      },
-      onPermissionRequest: async () => ({ kind: 'approved' }),
-      onUserInputRequest: async () => ({ answer: 'Not available in this context', wasFreeform: true }),
-    } as any);
+    const session = await this.createSessionForMind(client, mindPath, identity.systemMessage, tools);
 
     const context: InternalMindContext = {
       mindId: id,
@@ -90,7 +78,7 @@ export class MindManager extends EventEmitter {
       status: 'ready',
       client,
       session,
-      extensions: loaded as any[],
+      extensions: loaded,
     };
 
     this.minds.set(id, context);
@@ -139,7 +127,7 @@ export class MindManager extends EventEmitter {
     return Array.from(this.minds.values()).map(m => this.toExternalContext(m));
   }
 
-  getMind(mindId: string): InternalMindContext | undefined {
+  getMind(mindId: string): Readonly<InternalMindContext> | undefined {
     return this.minds.get(mindId);
   }
 
@@ -157,21 +145,10 @@ export class MindManager extends EventEmitter {
     const context = this.minds.get(mindId);
     if (!context) throw new Error(`Mind ${mindId} not found`);
 
-    const session = await context.client.createSession({
-      workingDirectory: context.mindPath,
-      tools: (context.extensions as any[]).flatMap((e: any) => e.tools ?? []),
-      systemMessage: {
-        mode: 'customize',
-        sectionOverrides: [
-          { section: 'identity', override: { type: 'replace', content: context.identity.systemMessage } },
-          { section: 'tone', override: { type: 'remove' } },
-        ],
-      },
-      onPermissionRequest: async () => ({ kind: 'approved' }),
-      onUserInputRequest: async () => ({ answer: 'Not available in this context', wasFreeform: true }),
-    } as any);
-
-    context.session = session;
+    const tools = context.extensions.flatMap((e: { tools?: unknown[] }) => e.tools ?? []);
+    context.session = await this.createSessionForMind(
+      context.client, context.mindPath, context.identity.systemMessage, tools,
+    );
   }
 
   async restoreFromConfig(): Promise<void> {
@@ -216,6 +193,40 @@ export class MindManager extends EventEmitter {
       status: ctx.status,
       error: ctx.error,
     };
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private async createSessionForMind(client: any, mindPath: string, systemMessage: string, tools: unknown[]): Promise<any> {
+    return client.createSession({
+      workingDirectory: mindPath,
+      tools,
+      systemMessage: {
+        mode: 'customize',
+        sectionOverrides: [
+          { section: 'identity', override: { type: 'replace', content: systemMessage } },
+          { section: 'tone', override: { type: 'remove' } },
+        ],
+      },
+      onPermissionRequest: async () => ({ kind: 'approved' }),
+      onUserInputRequest: async () => ({ answer: 'Not available in this context', wasFreeform: true }),
+    });
+  }
+
+  async sendBackgroundPrompt(mindPath: string, prompt: string): Promise<void> {
+    const mind = this.listMinds().find(m => m.mindPath === mindPath);
+    if (!mind) return;
+    const context = this.minds.get(mind.mindId);
+    if (!context?.session) return;
+
+    await context.session.send({ prompt });
+    await new Promise<void>((resolve) => {
+      const timeout = setTimeout(resolve, 120_000);
+      const unsub = context.session!.on('session.idle', () => {
+        clearTimeout(timeout);
+        unsub();
+        resolve();
+      });
+    });
   }
 
   private persistConfig(): void {

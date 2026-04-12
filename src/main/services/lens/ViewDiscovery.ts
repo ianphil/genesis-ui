@@ -14,6 +14,10 @@ export class ViewDiscovery {
   private watchersByMind = new Map<string, fs.FSWatcher[]>();
   private refreshHandler: ViewRefreshHandler | null = null;
 
+  constructor(refreshHandler?: ViewRefreshHandler) {
+    this.refreshHandler = refreshHandler ?? null;
+  }
+
   setRefreshHandler(handler: ViewRefreshHandler): void {
     this.refreshHandler = handler;
   }
