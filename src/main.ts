@@ -12,6 +12,8 @@ import { MindScaffold } from './main/services/genesis';
 import { ViewDiscovery } from './main/services/lens';
 import { MindManager } from './main/services/mind/MindManager';
 import { ChatService } from './main/services/chat/ChatService';
+import { TurnQueue } from './main/services/chat/TurnQueue';
+import { AgentCardRegistry, MessageRouter, buildSessionTools } from './main/services/a2a';
 import { loadCanvasExtension } from './main/services/extensions/adapters/canvas';
 import { loadCronExtension } from './main/services/extensions/adapters/cron';
 import { loadIdeaExtension } from './main/services/extensions/adapters/idea';
@@ -22,6 +24,9 @@ import { setupMindIPC } from './main/ipc/mind';
 import { setupLensIPC } from './main/ipc/lens';
 import { setupGenesisIPC } from './main/ipc/genesis';
 import { setupAuthIPC } from './main/ipc/auth';
+import { setupA2AIPC } from './main/ipc/a2a';
+
+import { EventEmitter } from 'events';
 
 if (started) {
   app.quit();
@@ -42,8 +47,24 @@ const viewDiscovery = new ViewDiscovery();
 
 // --- Services (business rules, all dependencies injected) ---
 
-const mindManager = new MindManager(clientFactory, identityLoader, extensionLoader, configService, viewDiscovery);
-const chatService = new ChatService(mindManager);
+// A2A services — declared first, assigned after MindManager (avoids circular dep)
+let messageRouter: MessageRouter;
+let agentCardRegistry: AgentCardRegistry;
+
+// A2A IPC event bus — shared between MessageRouter (emits) and IPC adapter (listens)
+const a2aEventBus = new EventEmitter();
+
+// ToolBuilder callback — closes over A2A services, assigned before minds load
+const toolBuilder = (mindId: string, extensionTools: unknown[]) =>
+  buildSessionTools(mindId, extensionTools as any, messageRouter, agentCardRegistry);
+
+const mindManager = new MindManager(clientFactory, identityLoader, extensionLoader, configService, viewDiscovery, toolBuilder);
+const turnQueue = new TurnQueue();
+const chatService = new ChatService(mindManager, turnQueue);
+
+// Now wire A2A
+agentCardRegistry = new AgentCardRegistry(mindManager);
+messageRouter = new MessageRouter(chatService, agentCardRegistry, a2aEventBus);
 
 // Wire Lens refresh to use the mind's session
 viewDiscovery.setRefreshHandler({
@@ -106,6 +127,7 @@ app.on('ready', async () => {
   setupLensIPC(viewDiscovery, mindManager);
   setupGenesisIPC(mindManager, scaffold);
   setupAuthIPC(authService);
+  setupA2AIPC(a2aEventBus, agentCardRegistry);
 
   // Window controls
   ipcMain.on('window:minimize', () => mainWindow?.minimize());
