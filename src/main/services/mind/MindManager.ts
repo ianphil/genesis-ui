@@ -169,10 +169,17 @@ export class MindManager extends EventEmitter {
   }
 
   async shutdown(): Promise<void> {
-    const ids = Array.from(this.minds.keys());
-    for (const id of ids) {
-      await this.unloadMind(id);
+    // Save config BEFORE destroying anything — preserve mind list for next launch
+    this.persistConfig();
+
+    // Clean up resources without persisting (don't call unloadMind which clears config)
+    for (const [, context] of this.minds) {
+      await this.extensionLoader.cleanupExtensions(context.extensions);
+      await this.clientFactory.destroyClient(context.client);
+      this.viewDiscovery.removeMind(context.mindPath);
     }
+    this.minds.clear();
+    this.pathToId.clear();
   }
 
   // --- Private helpers ---
