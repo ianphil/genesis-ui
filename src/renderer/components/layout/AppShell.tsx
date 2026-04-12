@@ -11,9 +11,6 @@ export function AppShell() {
   return (
     <TooltipProvider>
       <div className="flex flex-col h-screen w-screen bg-background text-foreground">
-        {/* Titlebar drag region */}
-        <div className="titlebar-drag h-9 shrink-0" />
-
         {/* Main layout: activity bar | mind sidebar | content */}
         <div className="flex flex-1 min-h-0">
           <ActivityBar />
