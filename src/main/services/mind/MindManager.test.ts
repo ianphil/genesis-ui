@@ -264,8 +264,34 @@ describe('MindManager', () => {
     it('creates separate sessions for different minds', async () => {
       await manager.loadMind('C:\\agents\\q');
       await manager.loadMind('C:\\agents\\fox');
-      // Each mind gets its own createSession call
       expect(mockCreateSession).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('restoreFromConfig ID preservation', () => {
+    it('uses persisted IDs instead of generating new ones', async () => {
+      mockConfigService.load.mockReturnValue({
+        version: 2,
+        minds: [{ id: 'my-stable-id', path: 'C:\\agents\\q' }],
+        activeMindId: 'my-stable-id',
+        theme: 'dark',
+      });
+
+      await manager.restoreFromConfig();
+      const minds = manager.listMinds();
+      expect(minds).toHaveLength(1);
+      expect(minds[0].mindId).toBe('my-stable-id');
+    });
+  });
+
+  describe('concurrent loadMind guard', () => {
+    it('returns same promise for concurrent calls with same path', async () => {
+      const promise1 = manager.loadMind('C:\\agents\\q');
+      const promise2 = manager.loadMind('C:\\agents\\q');
+      const [mind1, mind2] = await Promise.all([promise1, promise2]);
+      expect(mind1.mindId).toBe(mind2.mindId);
+      // Only one client created despite two concurrent calls
+      expect(mockClientFactory.createClient).toHaveBeenCalledTimes(1);
     });
   });
 });
