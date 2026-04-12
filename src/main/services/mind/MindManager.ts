@@ -16,6 +16,7 @@ import type { ViewDiscovery } from '../lens/ViewDiscovery';
 export class MindManager extends EventEmitter {
   private minds = new Map<string, InternalMindContext>();
   private pathToId = new Map<string, string>();
+  private loading = new Map<string, Promise<MindContext>>();
   private activeMindId: string | null = null;
 
   constructor(
@@ -29,12 +30,26 @@ export class MindManager extends EventEmitter {
   }
 
   async loadMind(mindPath: string, mindId?: string): Promise<MindContext> {
-    // Deduplicate
+    // Deduplicate — return existing mind
     const existingId = this.pathToId.get(mindPath);
     if (existingId && this.minds.has(existingId)) {
       return this.toPublic(this.minds.get(existingId)!);
     }
 
+    // Concurrent guard — return in-flight promise
+    const inflight = this.loading.get(mindPath);
+    if (inflight) return inflight;
+
+    const promise = this.doLoadMind(mindPath, mindId);
+    this.loading.set(mindPath, promise);
+    try {
+      return await promise;
+    } finally {
+      this.loading.delete(mindPath);
+    }
+  }
+
+  private async doLoadMind(mindPath: string, mindId?: string): Promise<MindContext> {
     // Validate
     this.validateMindPath(mindPath);
 

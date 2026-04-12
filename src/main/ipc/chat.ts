@@ -20,8 +20,10 @@ export function setupChatIPC(chatService: ChatService, mindManager: MindManager)
     return chatService.listModels(id);
   });
 
-  ipcMain.handle('chat:stop', async (_event, mindId: string, messageId: string) => {
+  ipcMain.handle('chat:stop', async (event, mindId: string, messageId: string) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
     await chatService.cancelMessage(mindId, messageId);
+    if (win) win.webContents.send('chat:event', mindId, messageId, { type: 'done' });
   });
 
   ipcMain.handle('chat:newConversation', async (_event, mindId: string) => {

@@ -58,7 +58,6 @@ export function MindSidebar() {
 
     const onMouseUp = () => {
       isResizing.current = false;
-      localStorage.setItem(STORAGE_KEY, String(width));
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mouseup', onMouseUp);
     };
