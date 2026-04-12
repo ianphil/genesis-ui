@@ -40,7 +40,10 @@ export class IdentityLoader {
 
   private extractName(content: string, mindPath: string): string {
     const match = content.match(H1_RE);
-    if (match) return match[1].trim();
+    if (match) {
+      // Strip common suffixes like "— Soul", "- Soul"
+      return match[1].trim().replace(/\s*[—–-]\s*Soul$/i, '').trim();
+    }
     return path.basename(mindPath);
   }
 }

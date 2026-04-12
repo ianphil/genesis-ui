@@ -43,6 +43,13 @@ describe('IdentityLoader', () => {
       expect(loader.load('C:\\agents\\fox')?.name).toBe('fox');
     });
 
+    it('strips "— Soul" suffix from name', () => {
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue('# The Dude — Soul\nContent');
+      vi.mocked(fs.readdirSync).mockReturnValue([]);
+      expect(loader.load('C:\\agents\\dude')?.name).toBe('The Dude');
+    });
+
     it('includes agent file content in systemMessage', () => {
       vi.mocked(fs.existsSync).mockReturnValue(true);
       vi.mocked(fs.readFileSync)
