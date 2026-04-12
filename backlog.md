@@ -13,7 +13,7 @@
 
 ## Next
 
-- [ ] **Chat history** `ux` — conversations are lost on new conversation or restart. Show past conversations per-mind — either a list in the sidebar panel or a history view. SDK may support `resumeSession` for reloading context. *(Ian, 2026-04-12)*
+- [ ] **Chat history** `ux` — conversations are lost on new conversation or restart. Show past conversations per-mind in MindSidebar, indented under each agent. Data already in `~/.copilot/session-state/`. See [[conversation-history]] for spec. *(Ian, 2026-04-12)*
 - [ ] **Boot screen activity log** `ux` — spinner too passive during genesis/startup; surface log output so user sees real-time progress. *(Kent feedback 2026-04-09)*
 - [ ] **"Open Existing" defaults to ~/agents/** `ux` — folder picker should open to `$HOME/agents/` by default (where `MindScaffold.getDefaultBasePath()` creates minds).
 - [ ] **Surface agent questions in chat** `ux` — #13, `onUserInputRequest` returns "Not available" — agent questions never reach the user.
