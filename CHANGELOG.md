@@ -1,5 +1,62 @@
 # Changelog
 
+## v0.18.0 (2026-04-13)
+
+### A2A Tasks (Phase 4)
+- **TaskManager service** — full A2A 8-state lifecycle (submitted → working → completed/failed/canceled/input-required/rejected/auth-required)
+- **Isolated sessions per task** — `MindManager.createTaskSession()` creates independent conversation contexts
+- **4 new agent tools** — `a2a_send_task`, `a2a_get_task`, `a2a_list_tasks`, `a2a_cancel_task`
+- **Artifact extraction** — agent responses become A2A Artifacts with artifactId, name, parts[]
+- **input-required flow** — SDK `onUserInputRequest` callback maps to A2A interrupted state, `resumeTask()` resumes
+- **TaskPanel UI** — tasks grouped by agent, status badges, expand for artifacts, cancel button
+- **Real-time IPC events** — `task:status-update` and `task:artifact-update` streamed to renderer
+- **A2A conformity** — ListTasksResponse wrapper, required contextId, Artifact.extensions, AgentCard.iconUrl, AgentExtension type, historyLength semantics
+
+### Fixes
+- **Boot screen version** — pulls from package.json dynamically (was hardcoded 0.15.0)
+- **TaskSessionFactory interface** — TaskManager depends on interface, not MindManager (DIP)
+- **Typed IPC boundary** — ElectronAPI.a2a methods use real types, not `any`
+- **Defensive copies** — all public TaskManager methods return snapshots
+- **Task eviction** — MAX_COMPLETED_TASKS=100 prevents unbounded memory growth
+- **Terminal-state guards** — assistant.message events don't mutate canceled tasks
+- **Response accumulation** — multiple assistant messages accumulate in artifact text
+
+## v0.17.0 (2026-04-13)
+
+### A2A Messages (Phase 3)
+- **MessageRouter** — in-process A2A routing mirroring SendMessage RPC
+- **AgentCardRegistry** — A2A-conformant AgentCards from mind metadata
+- **TurnQueue** — per-mind turn serialization preventing session.send() races
+- **2 agent tools** — `a2a_send_message` (fire-and-forget), `a2a_list_agents`
+- **Sender attribution** — SenderBadge component shows "↪ from Agent A" on incoming messages
+- **XML prompt serialization** — structured envelope for model injection
+- **Hop-count loop protection** — per-contextId tracking, MAX_HOPS=5
+- **Per-mind streaming state** — A2A on one mind doesn't block another's UI
+
+## v0.16.0 (2026-04-12)
+
+### Agent Windowing (Phase 2)
+- **Pop-out windows** — right-click agent in sidebar → "Open in New Window"
+- **Window management** — `MindManager.attachWindow()`/`detachWindow()`
+- **Independent renderers** — each window gets its own chat panel
+- **Closing popout** doesn't unload the mind
+
+## v0.15.0 (2026-04-12)
+
+### Multi-Mind Runtime (Phase 1)
+- **MindManager** — aggregate root with `Map<mindId, InternalMindContext>`
+- **CopilotClientFactory** — instance-based, one CopilotClient per mind
+- **IdentityLoader** — SOUL.md parsing for agent identity
+- **ExtensionLoader** — canvas, cron, IDEA adapters per mind
+- **ConfigService** — persists `openMinds[]`, `activeMindId`, migration from v1
+- **Sidebar** — agent list, click to switch, add/remove minds
+- **IPC adapters** — thin one-liner handlers for chat, mind, lens, genesis, auth
+
+## v0.14.0 (2026-04-10)
+
+- **Packaging** — `npm run package` produces installable Electron app
+- **Bundled Node runtime** — `scripts/prepare-node-runtime.js` for SDK in packaged builds
+
 ## v0.13.0 (2026-04-09)
 
 ### Auth & Credential Fixes
