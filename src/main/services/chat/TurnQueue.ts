@@ -5,7 +5,9 @@ export class TurnQueue {
   enqueue<T>(mindId: string, fn: () => Promise<T>): Promise<T> {
     const previous = this.chains.get(mindId) ?? Promise.resolve();
 
-    const { promise, resolve, reject } = Promise.withResolvers<T>();
+    let resolve!: (value: T) => void;
+    let reject!: (reason?: unknown) => void;
+    const promise = new Promise<T>((res, rej) => { resolve = res; reject = rej; });
 
     const next = previous.then(async () => {
       this.active.add(mindId);

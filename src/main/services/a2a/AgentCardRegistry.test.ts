@@ -14,6 +14,7 @@ vi.mock('fs', async () => {
 });
 
 import * as fs from 'fs';
+import * as path from 'path';
 import { AgentCardRegistry } from './AgentCardRegistry';
 
 function makeMindContext(overrides: Partial<MindContext> = {}): MindContext {
@@ -107,14 +108,14 @@ describe('AgentCardRegistry', () => {
 
     vi.mocked(fs.existsSync).mockImplementation((p: fs.PathLike) => {
       const s = String(p);
-      if (s.endsWith('.github\\skills')) return true;
-      if (s.endsWith('commit\\SKILL.md')) return true;
-      if (s.endsWith('teams\\SKILL.md')) return true;
+      if (s.includes(path.join('.github', 'skills'))) return true;
+      if (s.endsWith(path.join('commit', 'SKILL.md'))) return true;
+      if (s.endsWith(path.join('teams', 'SKILL.md'))) return true;
       return false;
     });
 
     vi.mocked(fs.readdirSync).mockImplementation(((p: string) => {
-      if (String(p).endsWith('.github\\skills')) {
+      if (String(p).includes(path.join('.github', 'skills'))) {
         return [
           { name: 'commit', isDirectory: () => true },
           { name: 'teams', isDirectory: () => true },
@@ -124,8 +125,8 @@ describe('AgentCardRegistry', () => {
     }) as typeof fs.readdirSync);
 
     vi.mocked(fs.readFileSync).mockImplementation(((p: string) => {
-      if (String(p).endsWith('commit\\SKILL.md')) return '# Commit\nCommits changes to git.';
-      if (String(p).endsWith('teams\\SKILL.md')) return '# Teams\nSend messages via Teams.';
+      if (String(p).endsWith(path.join('commit', 'SKILL.md'))) return '# Commit\nCommits changes to git.';
+      if (String(p).endsWith(path.join('teams', 'SKILL.md'))) return '# Teams\nSend messages via Teams.';
       return '';
     }) as typeof fs.readFileSync);
 
