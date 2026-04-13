@@ -16,6 +16,7 @@
 
 ## Next
 
+- [ ] **@mention targeting in chatroom** `ux` — `@AgentName` in a chatroom message should route only to that agent (not broadcast). Parse @mentions from input, filter broadcast participants to only the mentioned agent(s). That agent responds and does work; others stay silent. *(Ian, 2026-04-13)*
 - [ ] **Chat history** `ux` — conversations are lost on new conversation or restart. Show past conversations per-mind in MindSidebar, indented under each agent. Data already in `~/.copilot/session-state/`. See [[conversation-history]] for spec. *(Ian, 2026-04-12)*
 - [ ] **Boot screen activity log** `ux` — spinner too passive during genesis/startup; surface log output so user sees real-time progress. *(Kent feedback 2026-04-09)*
 - [ ] **"Open Existing" defaults to ~/agents/** `ux` — folder picker should open to `$HOME/agents/` by default (where `MindScaffold.getDefaultBasePath()` creates minds).

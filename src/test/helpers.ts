@@ -149,13 +149,6 @@ export function mockElectronAPI(): ElectronAPI {
       listTasks: vi.fn().mockResolvedValue([]),
       cancelTask: vi.fn().mockResolvedValue(undefined),
     },
-    chatroom: {
-      send: vi.fn().mockResolvedValue(undefined),
-      history: vi.fn().mockResolvedValue([]),
-      clear: vi.fn().mockResolvedValue(undefined),
-      stop: vi.fn().mockResolvedValue(undefined),
-      onEvent: vi.fn().mockReturnValue(() => {}),
-    },
     window: {
       minimize: vi.fn(),
       maximize: vi.fn(),
