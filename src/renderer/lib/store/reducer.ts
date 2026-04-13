@@ -84,9 +84,9 @@ export function handleChatEvent(messages: ChatMessage[], messageId: string, even
       }
 
       case 'message_final': {
-        // Reconciliation: if no text blocks exist yet, create one
-        const hasText = blocks.some(b => b.type === 'text');
-        if (!hasText && event.content) {
+        // Reconciliation: add text if this sdkMessageId hasn't been streamed via chunks
+        const hasThisMessage = blocks.some(b => b.type === 'text' && b.sdkMessageId === event.sdkMessageId);
+        if (!hasThisMessage && event.content) {
           blocks.push({ type: 'text', sdkMessageId: event.sdkMessageId, content: event.content });
           return { ...m, blocks };
         }

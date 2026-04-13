@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.19.5 (2026-04-13)
+
+### Final Message Drop Fix
+- **Reducer `message_final` handler** — was checking `blocks.some(b => b.type === 'text')` which silently dropped final message content when any earlier text block existed. Now checks `b.sdkMessageId === event.sdkMessageId` so the agent's final response after tool calls is correctly added as a new TextBlock.
+
 ## v0.19.4 (2026-04-13)
 
 ### Session Timeout Recovery

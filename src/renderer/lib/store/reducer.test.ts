@@ -144,11 +144,18 @@ describe('handleChatEvent', () => {
       expect(msgs[0].blocks[0]).toMatchObject({ type: 'text', content: 'Final' });
     });
 
-    it('is a no-op when text blocks already exist', () => {
-      const initial = [makeMessage([makeTextBlock('existing')], { id: 'msg-1' })];
+    it('is a no-op when same sdkMessageId text already exists', () => {
+      const initial = [makeMessage([makeTextBlock('existing', 'sdk-1')], { id: 'msg-1' })];
       const msgs = handleChatEvent(initial, 'msg-1', makeChatEvent('message_final', { sdkMessageId: 'sdk-1', content: 'Final' }));
       expect(msgs[0].blocks).toHaveLength(1);
       expect(msgs[0].blocks[0]).toMatchObject({ content: 'existing' });
+    });
+
+    it('adds text block when message_final has a different sdkMessageId than existing text', () => {
+      const initial = [makeMessage([makeTextBlock('first turn', 'sdk-1'), makeToolCallBlock()], { id: 'msg-1' })];
+      const msgs = handleChatEvent(initial, 'msg-1', makeChatEvent('message_final', { sdkMessageId: 'sdk-2', content: 'Final response after tools' }));
+      expect(msgs[0].blocks).toHaveLength(3);
+      expect(msgs[0].blocks[2]).toMatchObject({ type: 'text', content: 'Final response after tools', sdkMessageId: 'sdk-2' });
     });
   });
 
