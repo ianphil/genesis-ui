@@ -1,4 +1,5 @@
 import type { ChatMessage, ChatEvent, AgentStatus, ModelInfo, LensViewManifest, MindContext, ContentBlock } from '../../../shared/types';
+import type { Message } from '../../../shared/a2a-types';
 
 export type LensView = 'chat' | string;
 
@@ -36,7 +37,7 @@ export type AppAction =
   | { type: 'MINDS_CHECKED' }
   | { type: 'CLEAR_MESSAGES' }
   | { type: 'NEW_CONVERSATION' }
-  | { type: 'A2A_INCOMING'; payload: { targetMindId: string; message: any; replyMessageId: string } };
+  | { type: 'A2A_INCOMING'; payload: { targetMindId: string; message: Message; replyMessageId: string } };
 
 export const initialState: AppState = {
   minds: [],

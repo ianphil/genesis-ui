@@ -18,7 +18,7 @@ export function buildSessionTools(
   const sendMessage: SessionTool = {
     name: 'a2a_send_message',
     description:
-      'Send an A2A message to another agent loaded in Chamber. The message is delivered asynchronously — you will not receive the response. Use a2a_list_agents first to discover available agents.',
+      'Send a message to another agent in this workspace. Messages are delivered to the other agent\'s conversation. Call a2a_list_agents first if you don\'t know the recipient\'s ID.',
     parameters: {
       type: 'object',
       properties: {
@@ -39,7 +39,6 @@ export function buildSessionTools(
       };
       const a2aMessage = createTextMessage(mindId, text, {
         contextId: context_id,
-        hopCount: 0,
       });
       const response = await messageRouter.sendMessage({
         recipient,
@@ -53,7 +52,7 @@ export function buildSessionTools(
   const listAgents: SessionTool = {
     name: 'a2a_list_agents',
     description:
-      'List all available agents loaded in Chamber that you can communicate with via a2a_send_message, including their capabilities and skills.',
+      'List other agents in this workspace that you can talk to. Returns their names, descriptions, and skills. Use this when the user asks about other agents or wants to send a message to one.',
     parameters: { type: 'object', properties: {} },
     handler: async () => {
       return agentCardRegistry.getCards().filter((c) => c.mindId !== mindId);

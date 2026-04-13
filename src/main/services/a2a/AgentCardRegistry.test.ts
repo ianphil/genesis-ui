@@ -37,14 +37,14 @@ describe('AgentCardRegistry', () => {
   });
 
   it('registers card when mind:loaded fires', () => {
-    emitter.emit('mind:loaded', makeMindContext());
+    registry.register(makeMindContext());
     const card = registry.getCard('q-123');
     expect(card).not.toBeNull();
     expect(card!.name).toBe('Q');
   });
 
   it('AgentCard has all required A2A fields', () => {
-    emitter.emit('mind:loaded', makeMindContext());
+    registry.register(makeMindContext());
     const card = registry.getCard('q-123')!;
 
     expect(card.name).toBe('Q');
@@ -59,7 +59,7 @@ describe('AgentCardRegistry', () => {
   });
 
   it('supportedInterfaces uses IN_PROCESS binding', () => {
-    emitter.emit('mind:loaded', makeMindContext());
+    registry.register(makeMindContext());
     const iface = registry.getCard('q-123')!.supportedInterfaces[0];
 
     expect(iface.protocolBinding).toBe('IN_PROCESS');
@@ -67,23 +67,23 @@ describe('AgentCardRegistry', () => {
   });
 
   it('removes card when mind:unloaded fires', () => {
-    emitter.emit('mind:loaded', makeMindContext());
+    registry.register(makeMindContext());
     expect(registry.getCard('q-123')).not.toBeNull();
 
-    emitter.emit('mind:unloaded', 'q-123');
+    registry.unregister('q-123');
     expect(registry.getCard('q-123')).toBeNull();
   });
 
   it('getCards() returns all registered cards', () => {
-    emitter.emit('mind:loaded', makeMindContext({ mindId: 'a', identity: { name: 'A', systemMessage: '' } }));
-    emitter.emit('mind:loaded', makeMindContext({ mindId: 'b', identity: { name: 'B', systemMessage: '' } }));
-    emitter.emit('mind:loaded', makeMindContext({ mindId: 'c', identity: { name: 'C', systemMessage: '' } }));
+    registry.register(makeMindContext({ mindId: 'a', identity: { name: 'A', systemMessage: '' } }));
+    registry.register(makeMindContext({ mindId: 'b', identity: { name: 'B', systemMessage: '' } }));
+    registry.register(makeMindContext({ mindId: 'c', identity: { name: 'C', systemMessage: '' } }));
 
     expect(registry.getCards()).toHaveLength(3);
   });
 
   it('getCardByName() resolves by identity name', () => {
-    emitter.emit('mind:loaded', makeMindContext({ mindId: 'q-123', identity: { name: 'Q', systemMessage: '' } }));
+    registry.register(makeMindContext({ mindId: 'q-123', identity: { name: 'Q', systemMessage: '' } }));
     const card = registry.getCardByName('Q');
 
     expect(card).not.toBeNull();
@@ -91,8 +91,8 @@ describe('AgentCardRegistry', () => {
   });
 
   it('getCardByName() returns null for ambiguous names', () => {
-    emitter.emit('mind:loaded', makeMindContext({ mindId: 'q-1', identity: { name: 'Q', systemMessage: '' } }));
-    emitter.emit('mind:loaded', makeMindContext({ mindId: 'q-2', identity: { name: 'Q', systemMessage: '' } }));
+    registry.register(makeMindContext({ mindId: 'q-1', identity: { name: 'Q', systemMessage: '' } }));
+    registry.register(makeMindContext({ mindId: 'q-2', identity: { name: 'Q', systemMessage: '' } }));
 
     expect(registry.getCardByName('Q')).toBeNull();
   });
@@ -125,7 +125,7 @@ describe('AgentCardRegistry', () => {
       return '';
     }) as typeof fs.readFileSync);
 
-    emitter.emit('mind:loaded', makeMindContext({ mindPath }));
+    registry.register(makeMindContext({ mindPath }));
     const card = registry.getCard('q-123')!;
 
     expect(card.skills).toHaveLength(2);
@@ -141,3 +141,4 @@ describe('AgentCardRegistry', () => {
     expect(teams.tags).toContain('teams');
   });
 });
+

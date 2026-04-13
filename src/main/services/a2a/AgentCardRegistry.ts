@@ -1,4 +1,3 @@
-import { EventEmitter } from 'events';
 import * as fs from 'fs';
 import * as path from 'path';
 import type { AgentCard, AgentSkill } from './types';
@@ -6,11 +5,6 @@ import type { MindContext } from '../../../shared/types';
 
 export class AgentCardRegistry {
   private cards = new Map<string, AgentCard>();
-
-  constructor(mindManager: EventEmitter) {
-    mindManager.on('mind:loaded', (ctx: MindContext) => this.register(ctx));
-    mindManager.on('mind:unloaded', (mindId: string) => this.unregister(mindId));
-  }
 
   getCard(mindId: string): AgentCard | null {
     return this.cards.get(mindId) ?? null;
@@ -25,7 +19,7 @@ export class AgentCardRegistry {
     return matches.length === 1 ? matches[0] : null;
   }
 
-  private register(ctx: MindContext): void {
+  register(ctx: MindContext): void {
     const skills = this.discoverSkills(ctx.mindPath);
     const description = this.extractDescription(ctx.identity.systemMessage, ctx.identity.name);
 
@@ -45,7 +39,7 @@ export class AgentCardRegistry {
     this.cards.set(ctx.mindId, card);
   }
 
-  private unregister(mindId: string): void {
+  unregister(mindId: string): void {
     this.cards.delete(mindId);
   }
 

@@ -47,24 +47,21 @@ const viewDiscovery = new ViewDiscovery();
 
 // --- Services (business rules, all dependencies injected) ---
 
-// A2A services — declared first, assigned after MindManager (avoids circular dep)
-let messageRouter: MessageRouter;
-let agentCardRegistry: AgentCardRegistry;
-
-// A2A IPC event bus — shared between MessageRouter (emits) and IPC adapter (listens)
 const a2aEventBus = new EventEmitter();
+const agentCardRegistry = new AgentCardRegistry();
+const turnQueue = new TurnQueue();
 
-// ToolBuilder callback — closes over A2A services, assigned before minds load
+// ToolBuilder callback — closes over services created below
 const toolBuilder = (mindId: string, extensionTools: unknown[]) =>
   buildSessionTools(mindId, extensionTools as any, messageRouter, agentCardRegistry);
 
 const mindManager = new MindManager(clientFactory, identityLoader, extensionLoader, configService, viewDiscovery, toolBuilder);
-const turnQueue = new TurnQueue();
 const chatService = new ChatService(mindManager, turnQueue);
+const messageRouter = new MessageRouter(chatService, agentCardRegistry, a2aEventBus);
 
-// Now wire A2A
-agentCardRegistry = new AgentCardRegistry(mindManager);
-messageRouter = new MessageRouter(chatService, agentCardRegistry, a2aEventBus);
+// Wire AgentCardRegistry to MindManager lifecycle (registry doesn't know about MindManager)
+mindManager.on('mind:loaded', (ctx: any) => agentCardRegistry.register(ctx));
+mindManager.on('mind:unloaded', (mindId: string) => agentCardRegistry.unregister(mindId));
 
 // Wire Lens refresh to use the mind's session
 viewDiscovery.setRefreshHandler({

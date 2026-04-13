@@ -10,7 +10,7 @@ export class ChatService {
 
   constructor(
     private readonly mindManager: MindManager,
-    private readonly turnQueue: TurnQueue = new TurnQueue(),
+    private readonly turnQueue: TurnQueue,
   ) {}
 
   async sendMessage(

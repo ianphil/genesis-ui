@@ -1,19 +1,19 @@
-import { EventEmitter } from 'events';
 import type { SendMessageRequest, SendMessageResponse, Message } from './types';
 import type { AgentCardRegistry } from './AgentCardRegistry';
 import type { ChatService } from '../chat/ChatService';
+import type { EventEmitter } from 'events';
 import { generateMessageId, generateContextId, serializeMessageToXml } from './helpers';
 
 const MAX_HOPS = 5;
 
-export class MessageRouter extends EventEmitter {
+export class MessageRouter {
+  private contextHops = new Map<string, number>();
+
   constructor(
     private readonly chatService: ChatService,
     private readonly registry: AgentCardRegistry,
     private readonly ipcEmitter: EventEmitter,
-  ) {
-    super();
-  }
+  ) {}
 
   async sendMessage(request: SendMessageRequest): Promise<SendMessageResponse> {
     // 1. Resolve recipient — try by mindId first, then by name
@@ -23,22 +23,24 @@ export class MessageRouter extends EventEmitter {
     }
     const targetMindId = card.mindId;
 
-    // 2. Validate hop count
-    const hopCount = (request.message.metadata?.hopCount as number) ?? 0;
-    if (hopCount > MAX_HOPS) {
-      throw new Error(`Message exceeded maximum hop count (${MAX_HOPS})`);
-    }
-
-    // 3. Assign/preserve contextId
+    // 2. Assign/preserve contextId
     const contextId = request.message.contextId || generateContextId();
 
-    // 4. Build the delivery message (with incremented hop count)
+    // 3. Resolve hop count from context tracking (not message metadata)
+    const currentHops = this.contextHops.get(contextId) ?? 0;
+    if (currentHops >= MAX_HOPS) {
+      throw new Error(`Message exceeded maximum hop count (${MAX_HOPS})`);
+    }
+    const nextHops = currentHops + 1;
+    this.contextHops.set(contextId, nextHops);
+
+    // 4. Build the delivery message
     const deliveryMessage: Message = {
       ...request.message,
       contextId,
       metadata: {
         ...request.message.metadata,
-        hopCount: hopCount + 1,
+        hopCount: nextHops,
       },
     };
 
@@ -70,6 +72,10 @@ export class MessageRouter extends EventEmitter {
 
     if (!returnImmediately) {
       await deliveryPromise;
+    } else {
+      deliveryPromise.catch((err) => {
+        console.error(`[MessageRouter] Delivery failed for ${targetMindId}:`, err);
+      });
     }
 
     // 8. Return response

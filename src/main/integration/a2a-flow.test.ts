@@ -63,9 +63,13 @@ describe('A2A Integration', () => {
     mindManager = makeMockMindManager();
     turnQueue = new TurnQueue();
     chatService = new ChatService(mindManager as any, turnQueue);
-    agentCardRegistry = new AgentCardRegistry(mindManager as any);
+    agentCardRegistry = new AgentCardRegistry();
     a2aEventBus = new EventEmitter();
     messageRouter = new MessageRouter(chatService, agentCardRegistry, a2aEventBus);
+
+    // Wire registry to mind lifecycle (mirrors main.ts)
+    mindManager.on('mind:loaded', (ctx: any) => agentCardRegistry.register(ctx));
+    mindManager.on('mind:unloaded', (mindId: string) => agentCardRegistry.unregister(mindId));
 
     // Load two minds
     mindManager._addMind('agent-a', 'Agent A', 'C:\\agents\\a');
@@ -170,16 +174,33 @@ describe('A2A Integration', () => {
   });
 
   it('end-to-end: hop count prevents message loop', async () => {
-    const request: SendMessageRequest = {
+    const contextId = 'ctx-loop-test';
+
+    // Send MAX_HOPS messages on the same contextId — each increments the counter
+    for (let i = 0; i < 5; i++) {
+      await messageRouter.sendMessage({
+        recipient: 'agent-b',
+        message: {
+          messageId: `msg-loop-${i}`,
+          role: 'user',
+          parts: [{ text: `Loop ${i}` }],
+          contextId,
+          metadata: { fromId: 'agent-a', fromName: 'Agent A' },
+        },
+        configuration: { returnImmediately: true },
+      });
+    }
+
+    // The 6th message should be rejected (contextHops is now 5, which exceeds MAX_HOPS)
+    await expect(messageRouter.sendMessage({
       recipient: 'agent-b',
       message: {
-        messageId: 'msg-loop',
+        messageId: 'msg-loop-6',
         role: 'user',
-        parts: [{ text: 'Loop' }],
-        metadata: { fromId: 'agent-a', fromName: 'Agent A', hopCount: 6 },
+        parts: [{ text: 'Loop 6' }],
+        contextId,
+        metadata: { fromId: 'agent-a', fromName: 'Agent A' },
       },
-    };
-
-    await expect(messageRouter.sendMessage(request)).rejects.toThrow(/hop count/i);
+    })).rejects.toThrow(/hop count/i);
   });
 });

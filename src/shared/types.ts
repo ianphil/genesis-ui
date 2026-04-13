@@ -1,3 +1,5 @@
+import type { Message, AgentCard } from './a2a-types';
+
 // Shared types across main, preload, and renderer processes
 
 // ---------------------------------------------------------------------------
@@ -172,8 +174,8 @@ export interface ElectronAPI {
     save: (config: AppConfig) => Promise<void>;
   };
   a2a: {
-    onIncoming: (callback: (payload: { targetMindId: string; message: any; replyMessageId: string }) => void) => () => void;
-    listAgents: () => Promise<any[]>;
+    onIncoming: (callback: (payload: { targetMindId: string; message: Message; replyMessageId: string }) => void) => () => void;
+    listAgents: () => Promise<AgentCard[]>;
   };
   window: {
     minimize: () => void;

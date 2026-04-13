@@ -246,14 +246,14 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       const senderMessage: ChatMessage = {
         id: message.messageId ?? `a2a-${Date.now()}`,
         role: 'user',
-        blocks: (message.parts ?? []).map((p: any) => ({
+        blocks: (message.parts ?? []).map((p) => ({
           type: 'text' as const,
           content: p.text ?? '',
         })),
         timestamp: Date.now(),
         sender: {
-          mindId: message.metadata?.fromId ?? targetMindId,
-          name: message.metadata?.fromName ?? 'Unknown Agent',
+          mindId: (message.metadata?.fromId as string) ?? 'unknown',
+          name: (message.metadata?.fromName as string) ?? 'Unknown Agent',
         },
       };
       const replyPlaceholder: ChatMessage = {

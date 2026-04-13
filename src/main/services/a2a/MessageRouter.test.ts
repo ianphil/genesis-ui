@@ -93,32 +93,38 @@ describe('MessageRouter', () => {
     expect(res.message!.contextId).toBe('ctx-123');
   });
 
-  it('sendMessage() rejects when hopCount exceeds MAX_HOPS', async () => {
+  it('sendMessage() rejects when context hops exceed MAX_HOPS', async () => {
     mockRegistry.getCard.mockReturnValue(makeCard({ mindId: 'target-1', name: 'Target' }));
-    const req = makeRequest('target-1', 'loop', {
-      message: {
-        messageId: 'msg-loop',
-        role: 'user',
-        parts: [{ text: 'loop' }],
-        metadata: { fromId: 'a', fromName: 'A', hopCount: 6 },
-      },
-    });
-    await expect(router.sendMessage(req)).rejects.toThrow(/hop count/i);
+    const contextId = 'ctx-loop';
+
+    // Send 5 messages — each increments the context hop counter
+    for (let i = 0; i < 5; i++) {
+      await router.sendMessage(makeRequest('target-1', `msg-${i}`, {
+        message: { messageId: `msg-${i}`, role: 'user', parts: [{ text: `msg-${i}` }], contextId, metadata: { fromId: 'a', fromName: 'A' } },
+      }));
+    }
+
+    // 6th should be rejected (contextHops is now 5, exceeds MAX_HOPS)
+    await expect(router.sendMessage(makeRequest('target-1', 'too many', {
+      message: { messageId: 'msg-6', role: 'user', parts: [{ text: 'too many' }], contextId, metadata: { fromId: 'a', fromName: 'A' } },
+    }))).rejects.toThrow(/hop count/i);
   });
 
-  it('sendMessage() increments hopCount before delivery', async () => {
+  it('sendMessage() increments hop count per contextId', async () => {
     mockRegistry.getCard.mockReturnValue(makeCard({ mindId: 'target-1', name: 'Target' }));
-    const req = makeRequest('target-1', 'ping', {
-      message: {
-        messageId: 'msg-hop',
-        role: 'user',
-        parts: [{ text: 'ping' }],
-        metadata: { fromId: 'a', fromName: 'A', hopCount: 2 },
-      },
-    });
-    await router.sendMessage(req);
-    const xmlPrompt = mockChatService.sendMessage.mock.calls[0][1] as string;
-    expect(xmlPrompt).toContain('hop-count="3"');
+    const contextId = 'ctx-hop-track';
+
+    await router.sendMessage(makeRequest('target-1', 'first', {
+      message: { messageId: 'msg-1', role: 'user', parts: [{ text: 'first' }], contextId, metadata: { fromId: 'a', fromName: 'A' } },
+    }));
+    // First message: hopCount should be 1
+    expect(mockChatService.sendMessage.mock.calls[0][1]).toContain('hop-count="1"');
+
+    await router.sendMessage(makeRequest('target-1', 'second', {
+      message: { messageId: 'msg-2', role: 'user', parts: [{ text: 'second' }], contextId, metadata: { fromId: 'a', fromName: 'A' } },
+    }));
+    // Second message: hopCount should be 2
+    expect(mockChatService.sendMessage.mock.calls[1][1]).toContain('hop-count="2"');
   });
 
   it('sendMessage() emits a2a:incoming before delivery', async () => {
