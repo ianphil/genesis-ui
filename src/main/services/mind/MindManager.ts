@@ -5,7 +5,7 @@ import { EventEmitter } from 'events';
 import * as fs from 'fs';
 import * as path from 'path';
 import type { MindContext, AppConfig, MindRecord } from '../../../shared/types';
-import type { InternalMindContext } from './types';
+import type { InternalMindContext, CopilotSession } from './types';
 import { generateMindId } from './generateMindId';
 import type { CopilotClientFactory } from '../sdk/CopilotClientFactory';
 import type { IdentityLoader } from '../chat/IdentityLoader';
@@ -231,8 +231,34 @@ export class MindManager extends EventEmitter {
     };
   }
 
+  async createTaskSession(
+    mindId: string,
+    taskId: string,
+    onUserInputRequest?: (prompt: string) => Promise<{ answer: string; wasFreeform: boolean }>,
+  ): Promise<CopilotSession> {
+    const context = this.minds.get(mindId);
+    if (!context) throw new Error(`Mind ${mindId} not found`);
+
+    const tools = context.extensions.flatMap((e: { tools?: unknown[] }) => e.tools ?? []);
+    const sessionTools = this.toolBuilder ? this.toolBuilder(mindId, tools) : tools;
+
+    return this.createSessionForMind(
+      context.client,
+      context.mindPath,
+      context.identity.systemMessage,
+      sessionTools,
+      onUserInputRequest,
+    );
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private async createSessionForMind(client: any, mindPath: string, systemMessage: string, tools: unknown[]): Promise<any> {
+  private async createSessionForMind(
+    client: any,
+    mindPath: string,
+    systemMessage: string,
+    tools: unknown[],
+    onUserInputRequest?: (prompt: string) => Promise<{ answer: string; wasFreeform: boolean }>,
+  ): Promise<any> {
     return client.createSession({
       workingDirectory: mindPath,
       tools,
@@ -244,7 +270,7 @@ export class MindManager extends EventEmitter {
         ],
       },
       onPermissionRequest: async () => ({ kind: 'approved' }),
-      onUserInputRequest: async () => ({ answer: 'Not available in this context', wasFreeform: true }),
+      onUserInputRequest: onUserInputRequest ?? (async () => ({ answer: 'Not available in this context', wasFreeform: true })),
     });
   }
 

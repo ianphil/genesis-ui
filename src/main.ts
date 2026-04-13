@@ -13,7 +13,7 @@ import { ViewDiscovery } from './main/services/lens';
 import { MindManager } from './main/services/mind/MindManager';
 import { ChatService } from './main/services/chat/ChatService';
 import { TurnQueue } from './main/services/chat/TurnQueue';
-import { AgentCardRegistry, MessageRouter, buildSessionTools } from './main/services/a2a';
+import { AgentCardRegistry, MessageRouter, TaskManager, buildSessionTools } from './main/services/a2a';
 import { loadCanvasExtension } from './main/services/extensions/adapters/canvas';
 import { loadCronExtension } from './main/services/extensions/adapters/cron';
 import { loadIdeaExtension } from './main/services/extensions/adapters/idea';
@@ -52,16 +52,23 @@ const agentCardRegistry = new AgentCardRegistry();
 const turnQueue = new TurnQueue();
 
 // ToolBuilder callback — closes over services created below
+// Uses late-bound taskManager reference to break circular dependency
+let taskManager: TaskManager;
 const toolBuilder = (mindId: string, extensionTools: unknown[]) =>
-  buildSessionTools(mindId, extensionTools as any, messageRouter, agentCardRegistry);
+  buildSessionTools(mindId, extensionTools as any, messageRouter, agentCardRegistry, taskManager);
 
 const mindManager = new MindManager(clientFactory, identityLoader, extensionLoader, configService, viewDiscovery, toolBuilder);
+taskManager = new TaskManager(mindManager, agentCardRegistry);
 const chatService = new ChatService(mindManager, turnQueue);
 const messageRouter = new MessageRouter(chatService, agentCardRegistry, a2aEventBus);
 
 // Wire AgentCardRegistry to MindManager lifecycle (registry doesn't know about MindManager)
 mindManager.on('mind:loaded', (ctx: any) => agentCardRegistry.register(ctx));
 mindManager.on('mind:unloaded', (mindId: string) => agentCardRegistry.unregister(mindId));
+
+// Wire TaskManager events to IPC bus (TaskManager doesn't know about IPC)
+taskManager.on('task:status-update', (event) => a2aEventBus.emit('task:status-update', event));
+taskManager.on('task:artifact-update', (event) => a2aEventBus.emit('task:artifact-update', event));
 
 // Wire Lens refresh to use the mind's session
 viewDiscovery.setRefreshHandler({
@@ -124,7 +131,7 @@ app.on('ready', async () => {
   setupLensIPC(viewDiscovery, mindManager);
   setupGenesisIPC(mindManager, scaffold);
   setupAuthIPC(authService);
-  setupA2AIPC(a2aEventBus, agentCardRegistry);
+  setupA2AIPC(a2aEventBus, agentCardRegistry, taskManager);
 
   // Window controls
   ipcMain.on('window:minimize', () => mainWindow?.minimize());

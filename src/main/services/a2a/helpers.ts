@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import type { Message } from './types';
+import type { Message, TaskState, TaskStatus, Artifact } from './types';
 
 export function generateMessageId(): string {
   return `msg-${randomUUID()}`;
@@ -45,4 +45,24 @@ export function serializeMessageToXml(message: Message): string {
   return `<agent-message from-id="${escapeXml(fromId)}" from-name="${escapeXml(fromName)}" message-id="${escapeXml(message.messageId)}" context-id="${escapeXml(message.contextId ?? '')}" hop-count="${hopCount}" role="${message.role}">
   <content>${escapeXml(textContent)}</content>
 </agent-message>`;
+}
+
+export function generateTaskId(): string {
+  return `task-${randomUUID()}`;
+}
+
+export function createTaskStatus(state: TaskState, message?: Message): TaskStatus {
+  return {
+    state,
+    message,
+    timestamp: new Date().toISOString(),
+  };
+}
+
+export function createArtifact(name: string, text: string): Artifact {
+  return {
+    artifactId: `artifact-${randomUUID()}`,
+    name,
+    parts: [{ text, mediaType: 'text/plain' }],
+  };
 }

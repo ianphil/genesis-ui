@@ -284,6 +284,84 @@ describe('MindManager', () => {
     });
   });
 
+  describe('createTaskSession', () => {
+    it('returns a session object', async () => {
+      const mind = await manager.loadMind('C:\\agents\\q');
+      const session = await manager.createTaskSession(mind.mindId, 'task-1');
+      expect(session).toBeDefined();
+      expect(session).toHaveProperty('send');
+    });
+
+    it('uses same client as primary session (createSession called on same client)', async () => {
+      const mind = await manager.loadMind('C:\\agents\\q');
+      mockCreateSession.mockClear();
+      await manager.createTaskSession(mind.mindId, 'task-1');
+      // createSession is on the same mock client — called once more for the task session
+      expect(mockCreateSession).toHaveBeenCalledTimes(1);
+    });
+
+    it('throws for unknown mindId', async () => {
+      await expect(manager.createTaskSession('nonexistent', 'task-1')).rejects.toThrow(
+        'Mind nonexistent not found',
+      );
+    });
+
+    it('calls createSession with correct identity (systemMessage matches)', async () => {
+      const mind = await manager.loadMind('C:\\agents\\q');
+      mockCreateSession.mockClear();
+      await manager.createTaskSession(mind.mindId, 'task-1');
+      expect(mockCreateSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          systemMessage: expect.objectContaining({
+            sectionOverrides: expect.arrayContaining([
+              expect.objectContaining({
+                section: 'identity',
+                override: { type: 'replace', content: 'Identity for C:\\agents\\q' },
+              }),
+            ]),
+          }),
+        }),
+      );
+    });
+
+    it('applies toolBuilder to session tools', async () => {
+      const a2aTool = { name: 'send_message' };
+      const toolBuilder = vi.fn((_mindId: string, extTools: unknown[]) => [...extTools, a2aTool]);
+      const mgr = new MindManager(
+        mockClientFactory as any,
+        mockIdentityLoader as any,
+        mockExtensionLoader as any,
+        mockConfigService as any,
+        mockViewDiscovery as any,
+        toolBuilder,
+      );
+
+      const mind = await mgr.loadMind('C:\\agents\\q');
+      mockCreateSession.mockClear();
+      toolBuilder.mockClear();
+
+      await mgr.createTaskSession(mind.mindId, 'task-1');
+
+      expect(toolBuilder).toHaveBeenCalledWith(mind.mindId, expect.any(Array));
+      expect(mockCreateSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tools: expect.arrayContaining([a2aTool]),
+        }),
+      );
+    });
+
+    it('accepts custom onUserInputRequest callback', async () => {
+      const mind = await manager.loadMind('C:\\agents\\q');
+      const customCallback = vi.fn(async () => ({ answer: 'custom', wasFreeform: false }));
+      mockCreateSession.mockClear();
+
+      await manager.createTaskSession(mind.mindId, 'task-1', customCallback);
+
+      const callArg = mockCreateSession.mock.calls[0][0];
+      expect(callArg.onUserInputRequest).toBe(customCallback);
+    });
+  });
+
   describe('concurrent loadMind guard', () => {
     it('returns same promise for concurrent calls with same path', async () => {
       const promise1 = manager.loadMind('C:\\agents\\q');

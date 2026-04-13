@@ -1,9 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import type { Part, Message } from './types';
+import type {
+  Message,
+} from './types';
 import {
   generateMessageId,
   generateContextId,
+  generateTaskId,
   createTextMessage,
+  createTaskStatus,
+  createArtifact,
   serializeMessageToXml,
 } from './helpers';
 
@@ -29,20 +34,6 @@ describe('A2A Types', () => {
     it('includes hopCount in metadata defaulting to 0', () => {
       const msg = createTextMessage('sender-1', 'Hello');
       expect(msg.metadata?.hopCount).toBe(0);
-    });
-  });
-
-  describe('Part', () => {
-    it('supports text content', () => {
-      const part: Part = { text: 'hello', mediaType: 'text/plain' };
-      expect(part.text).toBe('hello');
-      expect(part.mediaType).toBe('text/plain');
-    });
-
-    it('supports data content', () => {
-      const part: Part = { data: { key: 'value' }, mediaType: 'application/json' };
-      expect(part.data).toEqual({ key: 'value' });
-      expect(part.mediaType).toBe('application/json');
     });
   });
 
@@ -90,5 +81,62 @@ describe('A2A Types', () => {
       const id = generateContextId();
       expect(id.startsWith('ctx-')).toBe(true);
     });
+  });
+
+  describe('generateTaskId', () => {
+    it('format — task- prefix and uniqueness', () => {
+      const id1 = generateTaskId();
+      const id2 = generateTaskId();
+      expect(id1.startsWith('task-')).toBe(true);
+      expect(id1).not.toBe(id2);
+    });
+  });
+
+  describe('createTaskStatus', () => {
+    it('sets state correctly', () => {
+      const status = createTaskStatus('working');
+      expect(status.state).toBe('working');
+    });
+
+    it('includes ISO timestamp', () => {
+      const status = createTaskStatus('submitted');
+      expect(status.timestamp).toBeDefined();
+      expect(() => new Date(status.timestamp!)).not.toThrow();
+      expect(new Date(status.timestamp!).toISOString()).toBe(status.timestamp);
+    });
+
+    it('attaches optional message as full Message object', () => {
+      const msg: Message = {
+        messageId: 'msg-1',
+        role: 'agent',
+        parts: [{ text: 'done' }],
+      };
+      const status = createTaskStatus('completed', msg);
+      expect(status.message).toBe(msg);
+      expect(status.message?.messageId).toBe('msg-1');
+      expect(status.message?.parts[0].text).toBe('done');
+    });
+  });
+
+  describe('createArtifact', () => {
+    it('creates valid Artifact with parts', () => {
+      const artifact = createArtifact('report', 'Hello world');
+      expect(artifact.name).toBe('report');
+      expect(artifact.parts).toHaveLength(1);
+      expect(artifact.parts[0].text).toBe('Hello world');
+    });
+
+    it('generates unique artifactId', () => {
+      const a1 = createArtifact('a', 'x');
+      const a2 = createArtifact('b', 'y');
+      expect(a1.artifactId).not.toBe(a2.artifactId);
+      expect(a1.artifactId.startsWith('artifact-')).toBe(true);
+    });
+
+    it('sets mediaType text/plain for text', () => {
+      const artifact = createArtifact('doc', 'content');
+      expect(artifact.parts[0].mediaType).toBe('text/plain');
+    });
+
   });
 });

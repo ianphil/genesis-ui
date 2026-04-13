@@ -1,4 +1,4 @@
-import type { Message, AgentCard } from './a2a-types';
+import type { Message, AgentCard, Task, TaskStatusUpdateEvent, TaskArtifactUpdateEvent, ListTasksResponse } from './a2a-types';
 
 // Shared types across main, preload, and renderer processes
 
@@ -176,6 +176,11 @@ export interface ElectronAPI {
   a2a: {
     onIncoming: (callback: (payload: { targetMindId: string; message: Message; replyMessageId: string }) => void) => () => void;
     listAgents: () => Promise<AgentCard[]>;
+    onTaskStatusUpdate: (callback: (payload: TaskStatusUpdateEvent & { targetMindId: string }) => void) => () => void;
+    onTaskArtifactUpdate: (callback: (payload: TaskArtifactUpdateEvent & { targetMindId: string }) => void) => () => void;
+    getTask: (taskId: string, historyLength?: number) => Promise<Task | null>;
+    listTasks: (filter?: { contextId?: string; status?: string }) => Promise<ListTasksResponse>;
+    cancelTask: (taskId: string) => Promise<Task | { error: string }>;
   };
   window: {
     minimize: () => void;

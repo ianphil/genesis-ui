@@ -175,6 +175,11 @@ export function mockElectronAPI(): ElectronAPI {
     a2a: {
       onIncoming: vi.fn().mockReturnValue(() => {}),
       listAgents: vi.fn().mockResolvedValue([]),
+      onTaskStatusUpdate: vi.fn().mockReturnValue(() => {}),
+      onTaskArtifactUpdate: vi.fn().mockReturnValue(() => {}),
+      getTask: vi.fn().mockResolvedValue(null),
+      listTasks: vi.fn().mockResolvedValue([]),
+      cancelTask: vi.fn().mockResolvedValue(undefined),
     },
     window: {
       minimize: vi.fn(),

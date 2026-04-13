@@ -81,4 +81,20 @@ export function useAppSubscriptions() {
     });
     return () => { unsub(); };
   }, [dispatch]);
+
+  // A2A task status update listener
+  useEffect(() => {
+    const unsub = window.electronAPI.a2a.onTaskStatusUpdate((payload) => {
+      dispatch({ type: 'TASK_STATUS_UPDATE', payload });
+    });
+    return () => { unsub(); };
+  }, [dispatch]);
+
+  // A2A task artifact update listener
+  useEffect(() => {
+    const unsub = window.electronAPI.a2a.onTaskArtifactUpdate((payload) => {
+      dispatch({ type: 'TASK_ARTIFACT_UPDATE', payload });
+    });
+    return () => { unsub(); };
+  }, [dispatch]);
 }
