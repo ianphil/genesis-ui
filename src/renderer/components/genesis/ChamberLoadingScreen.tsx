@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { version } from '../../../../package.json';
 
 const BOOT_LINES = [
-  '> chamber v0.15.0',
+  `> chamber v${version}`,
   '> initializing runtime...',
   '> scanning mind registry...',
 ];
