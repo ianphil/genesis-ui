@@ -38,3 +38,11 @@ describe('MindScaffold.getDefaultBasePath', () => {
     expect(MindScaffold.getDefaultBasePath()).toBe(path.join(os.homedir(), 'agents'));
   });
 });
+
+describe('MindScaffold constructor', () => {
+  it('accepts an injected CopilotClientFactory', () => {
+    const fakeFactory = { createClient: async () => ({}), destroyClient: async () => {} } as any;
+    const scaffold = new MindScaffold(undefined, fakeFactory);
+    expect(scaffold).toBeDefined();
+  });
+});

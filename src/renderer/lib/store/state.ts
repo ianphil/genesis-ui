@@ -1,4 +1,4 @@
-import type { ChatMessage, ChatEvent, AgentStatus, ModelInfo, LensViewManifest, MindContext, ContentBlock } from '../../../shared/types';
+import type { ChatMessage, ChatEvent, ModelInfo, LensViewManifest, MindContext, ContentBlock } from '../../../shared/types';
 import type { Message, Task, TaskStatusUpdateEvent, TaskArtifactUpdateEvent } from '../../../shared/a2a-types';
 
 export type LensView = 'chat' | string;
@@ -9,8 +9,6 @@ export interface AppState {
   messagesByMind: Record<string, ChatMessage[]>;
   isStreaming: boolean;
   streamingByMind: Record<string, boolean>;
-  /** @deprecated Use minds array instead */
-  agentStatus: AgentStatus;
   availableModels: ModelInfo[];
   selectedModel: string | null;
   activeView: LensView;
@@ -28,7 +26,6 @@ export type AppAction =
   | { type: 'SET_ACTIVE_MIND'; payload: string | null }
   | { type: 'ADD_MIND'; payload: MindContext }
   | { type: 'REMOVE_MIND'; payload: string }
-  | { type: 'SET_AGENT_STATUS'; payload: AgentStatus }
   | { type: 'SET_AVAILABLE_MODELS'; payload: ModelInfo[] }
   | { type: 'SET_SELECTED_MODEL'; payload: string | null }
   | { type: 'SET_ACTIVE_VIEW'; payload: LensView }
@@ -48,15 +45,6 @@ export const initialState: AppState = {
   messagesByMind: {},
   isStreaming: false,
   streamingByMind: {},
-  agentStatus: {
-    connected: false,
-    mindPath: null,
-    agentName: null,
-    sessionActive: false,
-    uptime: null,
-    error: null,
-    extensions: [],
-  },
   availableModels: [],
   selectedModel: localStorage.getItem('chamber:selectedModel'),
   activeView: 'chat',

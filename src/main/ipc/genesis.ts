@@ -1,7 +1,7 @@
 // Genesis IPC handlers — wire MindScaffold to renderer
 import { ipcMain, dialog, BrowserWindow } from 'electron';
 import { MindScaffold, type GenesisConfig } from '../services/genesis';
-import type { MindManager } from '../services/mind/MindManager';
+import type { MindManager } from '../services/mind';
 import { seedLensDefaults, installLensSkill } from '../services/lens';
 
 export function setupGenesisIPC(

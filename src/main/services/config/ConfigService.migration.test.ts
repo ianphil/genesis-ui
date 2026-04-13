@@ -8,13 +8,13 @@ vi.mock('fs', () => ({
 }));
 
 import * as fs from 'fs';
-import { ConfigService } from '../services/config';
+import { ConfigService } from './ConfigService';
 
 const mockReadFileSync = vi.mocked(fs.readFileSync);
 const mockWriteFileSync = vi.mocked(fs.writeFileSync);
 const mockMkdirSync = vi.mocked(fs.mkdirSync);
 
-describe('ConfigService (via agent.test migration)', () => {
+describe('ConfigService (v1→v2 migration)', () => {
   let svc: ConfigService;
   beforeEach(() => {
     svc = new ConfigService();

@@ -1,7 +1,7 @@
 // Lens IPC handlers — thin adapters for ViewDiscovery
 import { ipcMain } from 'electron';
 import type { ViewDiscovery } from '../services/lens';
-import type { MindManager } from '../services/mind/MindManager';
+import type { MindManager } from '../services/mind';
 
 export function setupLensIPC(viewDiscovery: ViewDiscovery, mindManager: MindManager): void {
   const resolveMindPath = (mindId?: string): string | undefined => {

@@ -22,12 +22,6 @@ const electronAPI: ElectronAPI = {
     openWindow: (mindId) => ipcRenderer.invoke('mind:openWindow', mindId),
     onMindChanged: (callback) => createIpcListener(ipcRenderer, 'mind:changed', callback),
   },
-  agent: {
-    getStatus: () => ipcRenderer.invoke('agent:getStatus'),
-    selectMindDirectory: () => ipcRenderer.invoke('agent:selectMindDirectory'),
-    setMindPath: (mindPath) => ipcRenderer.invoke('agent:setMindPath', mindPath),
-    onStatusChanged: (callback) => createIpcListener(ipcRenderer, 'agent:statusChanged', callback),
-  },
   lens: {
     getViews: (mindId?) => ipcRenderer.invoke('lens:getViews', mindId),
     getViewData: (viewId, mindId?) => ipcRenderer.invoke('lens:getViewData', viewId, mindId),
@@ -48,10 +42,6 @@ const electronAPI: ElectronAPI = {
     create: (config) => ipcRenderer.invoke('genesis:create', config),
     onProgress: (callback) =>
       createIpcListener(ipcRenderer, 'genesis:progress', callback),
-  },
-  config: {
-    load: () => ipcRenderer.invoke('config:load'),
-    save: (config) => ipcRenderer.invoke('config:save', config),
   },
   a2a: {
     onIncoming: (callback: (payload: any) => void) => createIpcListener(ipcRenderer, 'a2a:incoming', callback),

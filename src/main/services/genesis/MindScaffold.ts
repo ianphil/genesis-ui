@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { execSync } from 'child_process';
-import { getSharedClient } from '../sdk/SdkLoader';
+import { CopilotClientFactory } from '../sdk/CopilotClientFactory';
 import { buildGenesisPrompt } from './genesisPrompt';
 import { GitHubRegistryClient } from './GitHubRegistryClient';
 
@@ -32,9 +32,11 @@ export interface GenesisProgress {
 export class MindScaffold {
   private onProgress?: (progress: GenesisProgress) => void;
   private registryClient: GitHubRegistryClient;
+  private clientFactory: CopilotClientFactory;
 
-  constructor(registryClient = new GitHubRegistryClient()) {
+  constructor(registryClient = new GitHubRegistryClient(), clientFactory = new CopilotClientFactory()) {
     this.registryClient = registryClient;
+    this.clientFactory = clientFactory;
   }
 
   setProgressHandler(handler: (progress: GenesisProgress) => void): void {
@@ -114,7 +116,7 @@ export class MindScaffold {
   }
 
   private async generateSoul(mindPath: string, config: GenesisConfig, slug: string): Promise<void> {
-    const client = await getSharedClient();
+    const client = await this.clientFactory.createClient(mindPath);
 
     const soulPath = path.join(mindPath, 'SOUL.md');
     const agentPath = path.join(mindPath, '.github', 'agents', `${slug}.agent.md`);
@@ -159,6 +161,7 @@ export class MindScaffold {
       });
     } finally {
       await session.destroy().catch(() => {});
+      await this.clientFactory.destroyClient(client);
     }
   }
 

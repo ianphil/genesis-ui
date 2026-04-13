@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { generateMindId } from '../mind/generateMindId';
+import { generateMindId } from '../mind';
 import type { AppConfig, AppConfigV1, MindRecord } from '../../../shared/types';
 
 const CONFIG_DIR = path.join(os.homedir(), '.chamber');

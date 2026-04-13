@@ -7,7 +7,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { GenesisGate } from './GenesisGate';
 import { AppStateProvider } from '../../lib/store';
 import { useAgentStatus } from '../../hooks/useAgentStatus';
-import { installElectronAPI, mockElectronAPI, connectedAgentStatus } from '../../../test/helpers';
+import { installElectronAPI, mockElectronAPI } from '../../../test/helpers';
 
 function TestWrapper({ children }: { children: React.ReactNode }) {
   useAgentStatus();
@@ -36,8 +36,12 @@ describe('GenesisGate', () => {
     expect(screen.queryByText('App')).toBeNull();
   });
 
-  it('clicking Open Existing triggers file dialog', async () => {
-    (api.agent.selectMindDirectory as ReturnType<typeof vi.fn>).mockResolvedValue('C:\\test\\mind');
+  it('clicking Open Existing triggers file dialog via mind.selectDirectory', async () => {
+    (api.mind.selectDirectory as ReturnType<typeof vi.fn>).mockResolvedValue('C:\\test\\mind');
+    (api.mind.add as ReturnType<typeof vi.fn>).mockResolvedValue({
+      mindId: 'test-1234', mindPath: 'C:\\test\\mind',
+      identity: { name: 'Test', systemMessage: '' }, status: 'ready',
+    });
     // After dialog, mind.list returns the newly added mind
     let callCount = 0;
     (api.mind.list as ReturnType<typeof vi.fn>).mockImplementation(async () => {
@@ -55,7 +59,7 @@ describe('GenesisGate', () => {
     fireEvent.click(screen.getByText('Open Existing', { exact: false }));
 
     await waitFor(() => {
-      expect(api.agent.selectMindDirectory).toHaveBeenCalled();
+      expect(api.mind.selectDirectory).toHaveBeenCalled();
     });
   });
 });

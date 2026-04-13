@@ -192,9 +192,6 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       };
     }
 
-    case 'SET_AGENT_STATUS':
-      return { ...state, agentStatus: action.payload };
-
     case 'SET_AVAILABLE_MODELS':
       return { ...state, availableModels: action.payload };
 

@@ -3,17 +3,8 @@
  */
 import { describe, it, expect } from 'vitest';
 import { getPlainContent } from '.';
-import type { ChatMessage, ChatEvent, ContentBlock } from '../../../shared/types';
-
-function makeMessage(blocks: ContentBlock[], overrides?: Partial<ChatMessage>): ChatMessage {
-  return {
-    id: 'msg-1',
-    role: 'assistant',
-    blocks,
-    timestamp: Date.now(),
-    ...overrides,
-  };
-}
+import { makeMessage } from '../../../test/helpers';
+import type { ChatEvent, ContentBlock } from '../../../shared/types';
 
 describe('getPlainContent', () => {
   it('extracts text from text blocks', () => {

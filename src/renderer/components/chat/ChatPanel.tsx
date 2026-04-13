@@ -6,9 +6,9 @@ import { ChatInput } from './ChatInput';
 import { WelcomeScreen } from './WelcomeScreen';
 
 export function ChatPanel() {
-  const { messagesByMind, activeMindId, minds, agentStatus, availableModels, selectedModel } = useAppState();
+  const { messagesByMind, activeMindId, minds, availableModels, selectedModel } = useAppState();
   const messages = activeMindId ? (messagesByMind[activeMindId] ?? []) : [];
-  const connected = minds.length > 0 || agentStatus.connected;
+  const connected = minds.length > 0;
   const dispatch = useAppDispatch();
   const { sendMessage, stopStreaming, isStreaming } = useChatStreaming();
 

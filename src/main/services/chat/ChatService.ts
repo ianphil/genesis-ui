@@ -1,7 +1,7 @@
 // ChatService — thin message streaming layer.
 // Gets sessions from MindManager, streams SDK events via callback.
 
-import type { MindManager } from '../mind/MindManager';
+import type { MindManager } from '../mind';
 import type { ChatEvent, ModelInfo } from '../../../shared/types';
 import { TurnQueue } from './TurnQueue';
 

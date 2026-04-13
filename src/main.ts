@@ -10,7 +10,7 @@ import { ConfigService } from './main/services/config';
 import { AuthService } from './main/services/auth';
 import { MindScaffold } from './main/services/genesis';
 import { ViewDiscovery } from './main/services/lens';
-import { MindManager } from './main/services/mind/MindManager';
+import { MindManager } from './main/services/mind';
 import { ChatService } from './main/services/chat/ChatService';
 import { TurnQueue } from './main/services/chat/TurnQueue';
 import { AgentCardRegistry, MessageRouter, TaskManager, buildSessionTools } from './main/services/a2a';
@@ -27,6 +27,7 @@ import { setupAuthIPC } from './main/ipc/auth';
 import { setupA2AIPC } from './main/ipc/a2a';
 
 import { EventEmitter } from 'events';
+import { wireLifecycleEvents } from './main/wireLifecycleEvents';
 
 if (started) {
   app.quit();
@@ -62,13 +63,7 @@ taskManager = new TaskManager(mindManager, agentCardRegistry);
 const chatService = new ChatService(mindManager, turnQueue);
 const messageRouter = new MessageRouter(chatService, agentCardRegistry, a2aEventBus);
 
-// Wire AgentCardRegistry to MindManager lifecycle (registry doesn't know about MindManager)
-mindManager.on('mind:loaded', (ctx: any) => agentCardRegistry.register(ctx));
-mindManager.on('mind:unloaded', (mindId: string) => agentCardRegistry.unregister(mindId));
-
-// Wire TaskManager events to IPC bus (TaskManager doesn't know about IPC)
-taskManager.on('task:status-update', (event) => a2aEventBus.emit('task:status-update', event));
-taskManager.on('task:artifact-update', (event) => a2aEventBus.emit('task:artifact-update', event));
+wireLifecycleEvents({ mindManager, agentCardRegistry, taskManager, a2aEventBus });
 
 // Wire Lens refresh to use the mind's session
 viewDiscovery.setRefreshHandler({
@@ -144,13 +139,10 @@ app.on('ready', async () => {
   // Create window first (don't block on restore)
   createWindow();
 
-  // Restore minds async — store promise so IPC can await it
-  const restorePromise = mindManager.restoreFromConfig().catch((err) => {
+  // Restore minds async — awaitRestore() lets IPC handlers wait for completion
+  mindManager.restoreFromConfig().catch((err) => {
     console.error('[main] Failed to restore minds:', err);
   });
-
-  // Expose restore promise for IPC handlers that need to wait
-  (mindManager as any)._restorePromise = restorePromise;
 });
 
 app.on('window-all-closed', () => {

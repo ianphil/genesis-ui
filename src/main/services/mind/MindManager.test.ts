@@ -268,6 +268,43 @@ describe('MindManager', () => {
     });
   });
 
+  describe('awaitRestore', () => {
+    it('resolves after restoreFromConfig completes', async () => {
+      mockConfigService.load.mockReturnValue({
+        version: 2,
+        minds: [{ id: 'q-a1b2', path: 'C:\\agents\\q' }],
+        activeMindId: 'q-a1b2',
+        theme: 'dark',
+      });
+
+      // Start restore (don't await it yet)
+      const restorePromise = manager.restoreFromConfig();
+      // awaitRestore should resolve once restore finishes
+      await manager.awaitRestore();
+      await restorePromise;
+      expect(manager.listMinds()).toHaveLength(1);
+    });
+
+    it('resolves immediately when called before restoreFromConfig', async () => {
+      // No restoreFromConfig called — should resolve without error
+      await expect(manager.awaitRestore()).resolves.toBeUndefined();
+    });
+
+    it('can be called multiple times', async () => {
+      mockConfigService.load.mockReturnValue({
+        version: 2,
+        minds: [{ id: 'q-a1b2', path: 'C:\\agents\\q' }],
+        activeMindId: 'q-a1b2',
+        theme: 'dark',
+      });
+
+      await manager.restoreFromConfig();
+      await manager.awaitRestore();
+      await manager.awaitRestore();
+      expect(manager.listMinds()).toHaveLength(1);
+    });
+  });
+
   describe('restoreFromConfig ID preservation', () => {
     it('uses persisted IDs instead of generating new ones', async () => {
       mockConfigService.load.mockReturnValue({

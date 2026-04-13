@@ -1,4 +1,4 @@
-import './index.css';
+import './renderer/index.css';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './renderer/App';

@@ -59,16 +59,6 @@ export interface ChatMessage {
   sender?: { mindId: string; name: string };
 }
 
-export interface AgentStatus {
-  connected: boolean;
-  mindPath: string | null;
-  agentName: string | null;
-  sessionActive: boolean;
-  uptime: number | null;
-  error: string | null;
-  extensions: string[];
-}
-
 // ---------------------------------------------------------------------------
 // Mind — multi-mind runtime types
 // ---------------------------------------------------------------------------
@@ -144,13 +134,6 @@ export interface ElectronAPI {
     openWindow: (mindId: string) => Promise<void>;
     onMindChanged: (callback: (minds: MindContext[]) => void) => () => void;
   };
-  /** @deprecated Use mind: namespace instead */
-  agent: {
-    getStatus: () => Promise<AgentStatus>;
-    selectMindDirectory: () => Promise<string | null>;
-    setMindPath: (mindPath: string) => Promise<void>;
-    onStatusChanged: (callback: (status: AgentStatus) => void) => () => void;
-  };
   lens: {
     getViews: (mindId?: string) => Promise<LensViewManifest[]>;
     getViewData: (viewId: string, mindId?: string) => Promise<Record<string, unknown> | null>;
@@ -168,10 +151,6 @@ export interface ElectronAPI {
     pickPath: () => Promise<string | null>;
     create: (config: { name: string; role: string; voice: string; voiceDescription: string; basePath: string }) => Promise<{ success: boolean; mindPath?: string; error?: string }>;
     onProgress: (callback: (progress: { step: string; detail: string }) => void) => () => void;
-  };
-  config: {
-    load: () => Promise<AppConfig>;
-    save: (config: AppConfig) => Promise<void>;
   };
   a2a: {
     onIncoming: (callback: (payload: { targetMindId: string; message: Message; replyMessageId: string }) => void) => () => void;

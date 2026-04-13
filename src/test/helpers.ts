@@ -1,6 +1,5 @@
 import { vi } from 'vitest';
 import type {
-  AgentStatus,
   ChatMessage,
   ChatEvent,
   ContentBlock,
@@ -11,35 +10,6 @@ import type {
   LensViewManifest,
   ElectronAPI,
 } from '../shared/types';
-
-// ---------------------------------------------------------------------------
-// AgentStatus factories
-// ---------------------------------------------------------------------------
-
-export function defaultAgentStatus(): AgentStatus {
-  return {
-    connected: false,
-    mindPath: null,
-    agentName: null,
-    sessionActive: false,
-    uptime: null,
-    error: null,
-    extensions: [],
-  };
-}
-
-export function connectedAgentStatus(overrides?: Partial<AgentStatus>): AgentStatus {
-  return {
-    connected: true,
-    mindPath: 'C:\\test\\mind',
-    agentName: 'test-agent',
-    sessionActive: true,
-    uptime: 100,
-    error: null,
-    extensions: [],
-    ...overrides,
-  };
-}
 
 // ---------------------------------------------------------------------------
 // ContentBlock factories
@@ -135,12 +105,6 @@ export function mockElectronAPI(): ElectronAPI {
       listModels: vi.fn().mockResolvedValue([]),
       onEvent: vi.fn().mockReturnValue(() => {}),
     },
-    agent: {
-      getStatus: vi.fn().mockResolvedValue(defaultAgentStatus()),
-      selectMindDirectory: vi.fn().mockResolvedValue(null),
-      setMindPath: vi.fn().mockResolvedValue(undefined),
-      onStatusChanged: vi.fn().mockReturnValue(() => {}),
-    },
     mind: {
       add: vi.fn().mockResolvedValue({ mindId: 'test-1234', mindPath: 'C:\\test', identity: { name: 'Test', systemMessage: '' }, status: 'ready' }),
       remove: vi.fn().mockResolvedValue(undefined),
@@ -167,10 +131,6 @@ export function mockElectronAPI(): ElectronAPI {
       pickPath: vi.fn().mockResolvedValue(null),
       create: vi.fn().mockResolvedValue({ success: true }),
       onProgress: vi.fn().mockReturnValue(() => {}),
-    },
-    config: {
-      load: vi.fn().mockResolvedValue({ mindPath: null, theme: 'dark' }),
-      save: vi.fn().mockResolvedValue(undefined),
     },
     a2a: {
       onIncoming: vi.fn().mockReturnValue(() => {}),

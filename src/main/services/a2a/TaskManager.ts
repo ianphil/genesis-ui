@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events';
 import type { AgentCardRegistry } from './AgentCardRegistry';
-import type { CopilotSession } from '../mind/types';
+import type { CopilotSession } from '../mind';
 import type {
   SendMessageRequest,
   Task,

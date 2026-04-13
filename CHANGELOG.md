@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.18.1 (2026-04-13)
+
+### Structural Cleanup (Uncle Bob Review)
+- **Deleted orphaned `agent.ts` IPC** — dead module that would crash on import (duplicate handlers)
+- **Deleted `SdkLoader.ts` singleton** — superseded by `CopilotClientFactory`; migrated `MindScaffold` to use injected factory
+- **Created `mind/` barrel export** — consistent with all other service directories
+- **Fixed dependency direction** — A2A protocol types now defined in `shared/`, not re-exported from `main/`
+- **Completed `agent:` namespace migration** — removed deprecated API, preload bindings, backward-compat IPC handlers; `useAgentStatus` hook now uses `mind:` namespace exclusively
+- **Cleaned up `main.ts` composition root** — replaced `_restorePromise` as-any hack with proper `awaitRestore()` method; extracted event wiring into `wireLifecycleEvents()`
+- **Moved `index.css`** to `src/renderer/` (renderer-only concern)
+- **Removed duplicate `makeMessage`** helper from `store.test.ts`
+
 ## v0.18.0 (2026-04-13)
 
 ### A2A Tasks (Phase 4)

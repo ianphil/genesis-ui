@@ -48,8 +48,11 @@ export function GenesisFlow({ onComplete }: Props) {
 
   const handleBootComplete = useCallback(() => {
     dispatch({ type: 'NEW_CONVERSATION' });
-    window.electronAPI.agent.getStatus().then((status) => {
-      dispatch({ type: 'SET_AGENT_STATUS', payload: status });
+    // Refresh minds list so the new mind appears in the store
+    window.electronAPI.mind.list().then((loadedMinds) => {
+      dispatch({ type: 'SET_MINDS', payload: loadedMinds });
+      const newest = loadedMinds[loadedMinds.length - 1];
+      if (newest) dispatch({ type: 'SET_ACTIVE_MIND', payload: newest.mindId });
     });
     setStage('done');
     onComplete();

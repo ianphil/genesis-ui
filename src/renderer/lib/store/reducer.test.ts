@@ -12,8 +12,6 @@ import {
   makeToolCallBlock,
   makeReasoningBlock,
   makeChatEvent,
-  defaultAgentStatus,
-  connectedAgentStatus,
   makeModelInfo,
   makeLensViewManifest,
 } from '../../../test/helpers';
@@ -265,12 +263,6 @@ describe('appReducer', () => {
     };
     const state = appReducer(twoMinds, { type: 'REMOVE_MIND', payload: mindId });
     expect(state.activeMindId).toBe('other');
-  });
-
-  it('SET_AGENT_STATUS updates agentStatus', () => {
-    const status = connectedAgentStatus();
-    const state = appReducer(initialState, { type: 'SET_AGENT_STATUS', payload: status });
-    expect(state.agentStatus).toEqual(status);
   });
 
   it('SET_AVAILABLE_MODELS updates model list', () => {

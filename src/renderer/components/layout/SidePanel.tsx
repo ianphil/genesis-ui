@@ -50,9 +50,9 @@ function LensViewSideContent() {
 }
 
 export function SidePanel() {
-  const { agentStatus, minds, activeMindId, activeView } = useAppState();
+  const { minds, activeMindId, activeView } = useAppState();
   const activeMind = minds.find(m => m.mindId === activeMindId);
-  const connected = minds.length > 0 || agentStatus.connected;
+  const connected = minds.length > 0;
   const dispatch = useAppDispatch();
 
   return (

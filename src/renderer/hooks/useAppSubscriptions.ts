@@ -6,7 +6,7 @@ import { useAppState, useAppDispatch } from '../lib/store';
  * Mount once in AppShell — never in a view component.
  */
 export function useAppSubscriptions() {
-  const { agentStatus, activeMindId } = useAppState();
+  const { minds, activeMindId } = useAppState();
   const dispatch = useAppDispatch();
   const modelsLoaded = useRef(false);
   const viewsLoaded = useRef(false);
@@ -33,7 +33,7 @@ export function useAppSubscriptions() {
     viewsLoaded.current = false;
   }, [activeMindId]);
   useEffect(() => {
-    const connected = agentStatus.connected || !!activeMindId;
+    const connected = minds.length > 0 || !!activeMindId;
     if (!connected) {
       modelsLoaded.current = false;
       viewsLoaded.current = false;
@@ -72,7 +72,7 @@ export function useAppSubscriptions() {
       };
       loadViews();
     }
-  }, [agentStatus.connected, activeMindId, dispatch]);
+  }, [minds.length, activeMindId, dispatch]);
 
   // A2A incoming message listener
   useEffect(() => {

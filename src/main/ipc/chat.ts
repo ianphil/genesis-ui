@@ -1,7 +1,7 @@
 // Chat IPC handlers — thin adapters for ChatService
 import { ipcMain, BrowserWindow } from 'electron';
 import type { ChatService } from '../services/chat/ChatService';
-import type { MindManager } from '../services/mind/MindManager';
+import type { MindManager } from '../services/mind';
 import type { ChatEvent } from '../../shared/types';
 
 export function setupChatIPC(chatService: ChatService, mindManager: MindManager): void {

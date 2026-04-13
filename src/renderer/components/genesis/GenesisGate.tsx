@@ -9,7 +9,7 @@ interface Props {
 }
 
 export function GenesisGate({ children }: Props) {
-  const { agentStatus, minds, showLanding, mindsChecked } = useAppState();
+  const { minds, showLanding, mindsChecked } = useAppState();
   const dispatch = useAppDispatch();
   const [mode, setMode] = useState<'idle' | 'genesis'>('idle');
 
@@ -24,7 +24,7 @@ export function GenesisGate({ children }: Props) {
     return <ChamberLoadingScreen />;
   }
 
-  const hasMinds = minds.length > 0 || agentStatus.connected;
+  const hasMinds = minds.length > 0;
   const showGate = showLanding || !hasMinds;
 
   // If in genesis flow, show it
@@ -41,14 +41,13 @@ export function GenesisGate({ children }: Props) {
       <LandingScreen
         onNewAgent={() => setMode('genesis')}
         onOpenExisting={async () => {
-          const path = await window.electronAPI.agent.selectMindDirectory();
-          if (path) {
-            // Refresh minds list
+          const dirPath = await window.electronAPI.mind.selectDirectory();
+          if (dirPath) {
+            await window.electronAPI.mind.add(dirPath);
             const loadedMinds = await window.electronAPI.mind.list();
             dispatch({ type: 'SET_MINDS', payload: loadedMinds });
-            if (loadedMinds.length > 0) {
-              dispatch({ type: 'SET_ACTIVE_MIND', payload: loadedMinds[loadedMinds.length - 1].mindId });
-            }
+            const newest = loadedMinds[loadedMinds.length - 1];
+            if (newest) dispatch({ type: 'SET_ACTIVE_MIND', payload: newest.mindId });
             dispatch({ type: 'HIDE_LANDING' });
           }
         }}

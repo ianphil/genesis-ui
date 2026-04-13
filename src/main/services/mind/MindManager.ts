@@ -19,6 +19,7 @@ export class MindManager extends EventEmitter {
   private loading = new Map<string, Promise<MindContext>>();
   private windowByMind = new Map<string, { focus: () => void; close: () => void; on: (event: string, cb: () => void) => void }>();
   private activeMindId: string | null = null;
+  private restorePromise: Promise<void> | null = null;
 
   constructor(
     private readonly clientFactory: CopilotClientFactory,
@@ -179,7 +180,16 @@ export class MindManager extends EventEmitter {
     );
   }
 
+  awaitRestore(): Promise<void> {
+    return this.restorePromise ?? Promise.resolve();
+  }
+
   async restoreFromConfig(): Promise<void> {
+    this.restorePromise = this.doRestore();
+    return this.restorePromise;
+  }
+
+  private async doRestore(): Promise<void> {
     const config = this.configService.load();
     for (const record of config.minds) {
       try {
