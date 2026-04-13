@@ -2,8 +2,8 @@
 
 ## Now
 
-- [ ] **Session timeout recovery** `bug` — idle chat gives "Session not found" when CLI session gets harvested. Detect stale session errors, auto-create new session transparently, show "reconnecting..." indicator. *(Kent feedback 2026-04-09)*
-- [ ] **Agent doesn't load SOUL/memory on first message** `bug` — after genesis, saying "hi" doesn't trigger the agent to read SOUL.md and .working-memory files. Agent instructions not being injected into session context.
+- [ ] **🔴 Session timeout recovery** `bug` `p0` — idle session gives "Session not found" when CLI session gets harvested. Affects both user chat AND incoming a2a messages — an agent-to-agent message arriving on a timed-out session throws instead of recovering. Detect stale session errors, auto-create new session transparently, show "reconnecting..." indicator. Replay the failed message after reconnect. **Blocks fleet coordination — a2a tasks silently fail on timed-out agents.** *(Kent feedback 2026-04-09; a2a trigger confirmed 2026-04-13; Ian: highest priority, next work item)*
+- [ ] **Agent doesn't load SOUL/memory on first message** `bug`— after genesis, saying "hi" doesn't trigger the agent to read SOUL.md and .working-memory files. Agent instructions not being injected into session context.
 - [ ] **New Mind missing extensions/skills** `bug` — genesis bootstrap doesn't install extensions (cron, canvas, idea) or skills (commit, daily-report, etc.). New minds start bare.
 - [ ] **Inject local time/timezone into every prompt** `bug` — agent should know the time without shelling out. Inject `current_datetime` and timezone into each `session.send()`. SDK has a `current_datetime` section in the prompt template.
 - [ ] **Teams Agency MCP issue** `bug` — Kent reported problem with Teams MCP proxy; shared log in AET SWE Chat. Needs investigation. *(Kent, 2026-04-09)*
@@ -16,7 +16,8 @@
 
 ## Next
 
-- [ ] **@mention targeting in chatroom** `ux` — `@AgentName` in a chatroom message should route only to that agent (not broadcast). Parse @mentions from input, filter broadcast participants to only the mentioned agent(s). That agent responds and does work; others stay silent. *(Ian, 2026-04-13)*
+- [ ] **Agent management (add/remove/list)** `ux` `arch` — Chamber should support adding and removing agents from the fleet, not just Lens views. Today updating the roster requires manually editing SOUL.md files and reloading agents. Chamber should: add a new agent, remove an agent, view/list current agents and their roles. Natural extension of Chamber's configuration capabilities. *(Ian, 2026-04-13)*
+- [ ] **@mention targeting in chatroom** `ux`— `@AgentName` in a chatroom message should route only to that agent (not broadcast). Parse @mentions from input, filter broadcast participants to only the mentioned agent(s). That agent responds and does work; others stay silent. *(Ian, 2026-04-13)*
 - [ ] **Generic `handleChatEvent<T>`** `quality` — `handleChatEvent` returns `ChatMessage[]` but chatroom reducer casts to `ChatroomMessage[]`. Make function generic to preserve extended types. *(Uncle Bob review, 2026-04-13)*
 - [ ] **Chatroom roundId alignment** `bug` — renderer generates optimistic roundId, service generates a different one. Pass roundId through IPC so both sides agree. *(Uncle Bob review, 2026-04-13)*
 - [ ] **IPC input validation on chatroom:send** `security` — no runtime type guards; renderer could send non-string. Add `typeof message !== 'string'` guard. *(Uncle Bob review, 2026-04-13)*
