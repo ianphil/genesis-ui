@@ -56,6 +56,11 @@ const electronAPI: ElectronAPI = {
   a2a: {
     onIncoming: (callback: (payload: any) => void) => createIpcListener(ipcRenderer, 'a2a:incoming', callback),
     listAgents: () => ipcRenderer.invoke('a2a:listAgents'),
+    onTaskStatusUpdate: (callback: (payload: any) => void) => createIpcListener(ipcRenderer, 'a2a:task-status-update', callback),
+    onTaskArtifactUpdate: (callback: (payload: any) => void) => createIpcListener(ipcRenderer, 'a2a:task-artifact-update', callback),
+    getTask: (taskId: string, historyLength?: number) => ipcRenderer.invoke('a2a:getTask', taskId, historyLength),
+    listTasks: (filter?: { contextId?: string; status?: string }) => ipcRenderer.invoke('a2a:listTasks', filter),
+    cancelTask: (taskId: string) => ipcRenderer.invoke('a2a:cancelTask', taskId),
   },
   window: {
     minimize: () => ipcRenderer.send('window:minimize'),

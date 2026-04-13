@@ -1,5 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { buildSessionTools } from './tools';
+import type { Task } from './types';
+
+const mockTaskManager = {
+  sendTask: vi.fn(),
+  getTask: vi.fn(),
+  listTasks: vi.fn(),
+  cancelTask: vi.fn(),
+};
 
 const mockRouter = {
   sendMessage: vi.fn(async (req: any) => ({
@@ -72,8 +80,9 @@ describe('A2A Tools', () => {
       extensionTools as any,
       mockRouter as any,
       mockRegistry as any,
+      mockTaskManager as any,
     );
-    expect(tools.length).toBe(4); // 2 extension + 2 A2A
+    expect(tools.length).toBe(8); // 2 extension + 6 A2A
   });
 
   it('buildSessionTools() includes send_message and list_agents', () => {
@@ -82,6 +91,7 @@ describe('A2A Tools', () => {
       extensionTools as any,
       mockRouter as any,
       mockRegistry as any,
+      mockTaskManager as any,
     );
     const names = tools.map((t) => t.name);
     expect(names).toContain('a2a_send_message');
@@ -94,6 +104,7 @@ describe('A2A Tools', () => {
       extensionTools as any,
       mockRouter as any,
       mockRegistry as any,
+      mockTaskManager as any,
     );
     const sendTool = tools.find((t) => t.name === 'a2a_send_message')!;
     expect(sendTool.parameters).toBeDefined();
@@ -110,6 +121,7 @@ describe('A2A Tools', () => {
       extensionTools as any,
       mockRouter as any,
       mockRegistry as any,
+      mockTaskManager as any,
     );
     const sendTool = tools.find((t) => t.name === 'a2a_send_message')!;
     await sendTool.handler({ recipient: 'mind-b', message: 'Hello B' });
@@ -129,6 +141,7 @@ describe('A2A Tools', () => {
       extensionTools as any,
       mockRouter as any,
       mockRegistry as any,
+      mockTaskManager as any,
     );
     const sendTool = tools.find((t) => t.name === 'a2a_send_message')!;
     await sendTool.handler({ recipient: 'mind-b', message: 'Hello' });
@@ -144,6 +157,7 @@ describe('A2A Tools', () => {
       extensionTools as any,
       mockRouter as any,
       mockRegistry as any,
+      mockTaskManager as any,
     );
     const sendTool = tools.find((t) => t.name === 'a2a_send_message')!;
     const result = await sendTool.handler({ recipient: 'mind-b', message: 'Hello' });
@@ -158,6 +172,7 @@ describe('A2A Tools', () => {
       extensionTools as any,
       mockRouter as any,
       mockRegistry as any,
+      mockTaskManager as any,
     );
     const sendTool = tools.find((t) => t.name === 'a2a_send_message')!;
     await sendTool.handler({
@@ -176,6 +191,7 @@ describe('A2A Tools', () => {
       extensionTools as any,
       mockRouter as any,
       mockRegistry as any,
+      mockTaskManager as any,
     );
     const listTool = tools.find((t) => t.name === 'a2a_list_agents')!;
     const result = await listTool.handler({});
@@ -192,6 +208,7 @@ describe('A2A Tools', () => {
       extensionTools as any,
       mockRouter as any,
       mockRegistry as any,
+      mockTaskManager as any,
     );
     const listTool = tools.find((t) => t.name === 'a2a_list_agents')!;
     const result = (await listTool.handler({})) as any[];
@@ -205,8 +222,8 @@ describe('A2A Tools', () => {
   });
 
   it('tools are mind-scoped via closure', async () => {
-    const toolsA = buildSessionTools('mind-a', [], mockRouter as any, mockRegistry as any);
-    const toolsB = buildSessionTools('mind-b', [], mockRouter as any, mockRegistry as any);
+    const toolsA = buildSessionTools('mind-a', [], mockRouter as any, mockRegistry as any, mockTaskManager as any);
+    const toolsB = buildSessionTools('mind-b', [], mockRouter as any, mockRegistry as any, mockTaskManager as any);
 
     const sendA = toolsA.find((t) => t.name === 'a2a_send_message')!;
     const sendB = toolsB.find((t) => t.name === 'a2a_send_message')!;
@@ -216,5 +233,182 @@ describe('A2A Tools', () => {
 
     expect(mockRouter.sendMessage.mock.calls[0][0].message.metadata.fromId).toBe('mind-a');
     expect(mockRouter.sendMessage.mock.calls[1][0].message.metadata.fromId).toBe('mind-b');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task Tools
+// ---------------------------------------------------------------------------
+
+describe('A2A Task Tools', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  function getTools() {
+    return buildSessionTools(
+      'mind-a',
+      [],
+      mockRouter as any,
+      mockRegistry as any,
+      mockTaskManager as any,
+    );
+  }
+
+  function findTool(name: string) {
+    return getTools().find((t) => t.name === name)!;
+  }
+
+  const fakeTask: Task = {
+    id: 'task-123',
+    contextId: 'ctx-456',
+    status: { state: 'submitted', timestamp: new Date().toISOString() },
+    artifacts: [],
+    history: [],
+  };
+
+  // 1. a2a_send_task creates task via TaskManager.sendTask
+  it('a2a_send_task creates task via TaskManager.sendTask', async () => {
+    mockTaskManager.sendTask.mockResolvedValueOnce(fakeTask);
+    const tool = findTool('a2a_send_task');
+    await tool.handler({ recipient: 'mind-b', message: 'Do something' });
+
+    expect(mockTaskManager.sendTask).toHaveBeenCalledTimes(1);
+    const req = mockTaskManager.sendTask.mock.calls[0][0];
+    expect(req.recipient).toBe('mind-b');
+    expect(req.message.parts[0].text).toBe('Do something');
+    expect(req.configuration.returnImmediately).toBe(true);
+  });
+
+  // 2. a2a_send_task passes contextId and referenceTaskIds
+  it('a2a_send_task passes contextId and referenceTaskIds', async () => {
+    mockTaskManager.sendTask.mockResolvedValueOnce(fakeTask);
+    const tool = findTool('a2a_send_task');
+    await tool.handler({
+      recipient: 'mind-b',
+      message: 'Follow up',
+      context_id: 'ctx-existing',
+      reference_task_ids: ['task-prev-1', 'task-prev-2'],
+    });
+
+    const req = mockTaskManager.sendTask.mock.calls[0][0];
+    expect(req.message.contextId).toBe('ctx-existing');
+    expect(req.message.referenceTaskIds).toEqual(['task-prev-1', 'task-prev-2']);
+  });
+
+  // 3. a2a_send_task returns task with id and state
+  it('a2a_send_task returns task with id and state', async () => {
+    mockTaskManager.sendTask.mockResolvedValueOnce(fakeTask);
+    const tool = findTool('a2a_send_task');
+    const result = (await tool.handler({ recipient: 'mind-b', message: 'Go' })) as Task;
+
+    expect(result.id).toBe('task-123');
+    expect(result.contextId).toBe('ctx-456');
+    expect(result.status.state).toBe('submitted');
+  });
+
+  // 4. a2a_send_task has natural language description
+  it('a2a_send_task has natural language description', () => {
+    const tool = findTool('a2a_send_task');
+    expect(tool.description.length).toBeGreaterThan(20);
+    expect(tool.description.toLowerCase()).toContain('task');
+  });
+
+  // 5. a2a_get_task returns task from TaskManager
+  it('a2a_get_task returns task from TaskManager', async () => {
+    mockTaskManager.getTask.mockReturnValueOnce(fakeTask);
+    const tool = findTool('a2a_get_task');
+    const result = await tool.handler({ task_id: 'task-123' });
+
+    expect(mockTaskManager.getTask).toHaveBeenCalledWith('task-123', undefined);
+    expect(result).toEqual(fakeTask);
+  });
+
+  // 6. a2a_get_task with historyLength param
+  it('a2a_get_task with historyLength param', async () => {
+    mockTaskManager.getTask.mockReturnValueOnce(fakeTask);
+    const tool = findTool('a2a_get_task');
+    await tool.handler({ task_id: 'task-123', history_length: 5 });
+
+    expect(mockTaskManager.getTask).toHaveBeenCalledWith('task-123', 5);
+  });
+
+  // 7. a2a_get_task for unknown task returns error message
+  it('a2a_get_task for unknown task returns error message', async () => {
+    mockTaskManager.getTask.mockReturnValueOnce(null);
+    const tool = findTool('a2a_get_task');
+    const result = await tool.handler({ task_id: 'task-nonexistent' });
+
+    expect(result).toEqual({ error: 'Task not found' });
+  });
+
+  // 8. a2a_list_tasks returns tasks from TaskManager
+  it('a2a_list_tasks returns tasks from TaskManager', async () => {
+    const response = { tasks: [fakeTask], nextPageToken: '', pageSize: 1, totalSize: 1 };
+    mockTaskManager.listTasks.mockReturnValueOnce(response);
+    const tool = findTool('a2a_list_tasks');
+    const result = await tool.handler({});
+
+    expect(mockTaskManager.listTasks).toHaveBeenCalledTimes(1);
+    expect(result).toEqual(response);
+  });
+
+  // 9. a2a_list_tasks passes filter params
+  it('a2a_list_tasks passes filter params', async () => {
+    const response = { tasks: [], nextPageToken: '', pageSize: 0, totalSize: 0 };
+    mockTaskManager.listTasks.mockReturnValueOnce(response);
+    const tool = findTool('a2a_list_tasks');
+    await tool.handler({ context_id: 'ctx-456', status: 'working' });
+
+    expect(mockTaskManager.listTasks).toHaveBeenCalledWith({ contextId: 'ctx-456', status: 'working' });
+  });
+
+  // 10. a2a_cancel_task cancels via TaskManager
+  it('a2a_cancel_task cancels via TaskManager', async () => {
+    const canceledTask = { ...fakeTask, status: { state: 'canceled' as const, timestamp: new Date().toISOString() } };
+    mockTaskManager.cancelTask.mockReturnValueOnce(canceledTask);
+    const tool = findTool('a2a_cancel_task');
+    const result = await tool.handler({ task_id: 'task-123' });
+
+    expect(mockTaskManager.cancelTask).toHaveBeenCalledWith('task-123');
+    expect((result as Task).status.state).toBe('canceled');
+  });
+
+  // 11. a2a_cancel_task for terminal task returns error message
+  it('a2a_cancel_task for terminal task returns error message', async () => {
+    mockTaskManager.cancelTask.mockImplementationOnce(() => {
+      throw new Error('Cannot cancel task in terminal state: completed');
+    });
+    const tool = findTool('a2a_cancel_task');
+    const result = await tool.handler({ task_id: 'task-done' });
+
+    expect(result).toEqual({ error: 'Cannot cancel task in terminal state: completed' });
+  });
+
+  // 12. All 4 tools have correct parameter schemas
+  it('all task tools have correct parameter schemas', () => {
+    const tools = getTools();
+
+    const sendTask = tools.find((t) => t.name === 'a2a_send_task')!;
+    const sendParams = sendTask.parameters as any;
+    expect(sendParams.required).toContain('recipient');
+    expect(sendParams.required).toContain('message');
+    expect(sendParams.properties.context_id).toBeDefined();
+    expect(sendParams.properties.reference_task_ids).toBeDefined();
+    expect(sendParams.properties.reference_task_ids.type).toBe('array');
+
+    const getTask = tools.find((t) => t.name === 'a2a_get_task')!;
+    const getParams = getTask.parameters as any;
+    expect(getParams.required).toContain('task_id');
+    expect(getParams.properties.history_length).toBeDefined();
+    expect(getParams.properties.history_length.type).toBe('number');
+
+    const listTasks = tools.find((t) => t.name === 'a2a_list_tasks')!;
+    const listParams = listTasks.parameters as any;
+    expect(listParams.properties.context_id).toBeDefined();
+    expect(listParams.properties.status).toBeDefined();
+    expect(listParams.required).toBeUndefined();
+
+    const cancelTask = tools.find((t) => t.name === 'a2a_cancel_task')!;
+    const cancelParams = cancelTask.parameters as any;
+    expect(cancelParams.required).toContain('task_id');
   });
 });

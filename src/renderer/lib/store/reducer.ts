@@ -1,4 +1,5 @@
 import type { ChatMessage, ChatEvent, ContentBlock } from '../../../shared/types';
+import type { Task, TaskState } from '../../../shared/a2a-types';
 import type { AppState, AppAction } from './state';
 
 /** Extract plain text from content blocks (for search, accessibility, etc.) */
@@ -272,6 +273,44 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         },
         streamingByMind: { ...state.streamingByMind, [targetMindId]: true },
         isStreaming: isActiveMind ? true : state.isStreaming,
+      };
+    }
+
+    case 'TASK_STATUS_UPDATE': {
+      const TERMINAL_STATES: Set<TaskState> = new Set(['completed', 'failed', 'canceled', 'rejected']);
+      const { taskId, targetMindId, status, contextId } = action.payload;
+      const existingTasks = state.tasksByMind[targetMindId] ?? [];
+      const idx = existingTasks.findIndex(t => t.id === taskId);
+      let updatedTasks: Task[];
+      if (idx >= 0) {
+        const existing = existingTasks[idx];
+        // Don't overwrite terminal tasks with non-terminal status
+        if (TERMINAL_STATES.has(existing.status.state) && !TERMINAL_STATES.has(status.state)) {
+          return state;
+        }
+        updatedTasks = existingTasks.map((t, i) => i === idx ? { ...t, status } : t);
+      } else {
+        const newTask: Task = { id: taskId, contextId, status };
+        updatedTasks = [...existingTasks, newTask];
+      }
+      return {
+        ...state,
+        tasksByMind: { ...state.tasksByMind, [targetMindId]: updatedTasks },
+      };
+    }
+
+    case 'TASK_ARTIFACT_UPDATE': {
+      const { taskId, targetMindId, artifact } = action.payload;
+      const tasks = state.tasksByMind[targetMindId];
+      if (!tasks) return state;
+      const idx = tasks.findIndex(t => t.id === taskId);
+      if (idx < 0) return state;
+      const task = tasks[idx];
+      const updatedTask: Task = { ...task, artifacts: [...(task.artifacts ?? []), artifact] };
+      const updatedTasks = tasks.map((t, i) => i === idx ? updatedTask : t);
+      return {
+        ...state,
+        tasksByMind: { ...state.tasksByMind, [targetMindId]: updatedTasks },
       };
     }
 

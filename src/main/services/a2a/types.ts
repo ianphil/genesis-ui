@@ -41,7 +41,7 @@ export interface SendMessageResponse {
 
 export interface Task {
   id: string;
-  contextId?: string;
+  contextId: string;
   status: TaskStatus;
   artifacts?: Artifact[];
   history?: Message[];
@@ -70,6 +70,7 @@ export interface Artifact {
   description?: string;
   parts: Part[];
   metadata?: Record<string, unknown>;
+  extensions?: string[];
 }
 
 export interface AgentCard {
@@ -79,6 +80,7 @@ export interface AgentCard {
   provider?: AgentProvider;
   version: string;
   documentationUrl?: string;
+  iconUrl?: string;
   capabilities: AgentCapabilities;
   defaultInputModes: string[];
   defaultOutputModes: string[];
@@ -100,6 +102,7 @@ export interface AgentSkill {
 export interface AgentCapabilities {
   streaming?: boolean;
   pushNotifications?: boolean;
+  extensions?: AgentExtension[];
 }
 
 export interface AgentInterface {
@@ -112,4 +115,62 @@ export interface AgentInterface {
 export interface AgentProvider {
   url: string;
   organization: string;
+}
+
+// Task operation types (from A2A proto spec)
+
+export interface TaskStatusUpdateEvent {
+  taskId: string;
+  contextId: string;
+  status: TaskStatus;
+  metadata?: Record<string, unknown>;
+}
+
+export interface TaskArtifactUpdateEvent {
+  taskId: string;
+  contextId: string;
+  artifact: Artifact;
+  append?: boolean;
+  lastChunk?: boolean;
+  metadata?: Record<string, unknown>;
+}
+
+export interface GetTaskRequest {
+  id: string;
+  /** unset = no limit, 0 = exclude history */
+  historyLength?: number;
+}
+
+export interface ListTasksRequest {
+  contextId?: string;
+  status?: TaskState;
+  historyLength?: number;
+}
+
+export interface ListTasksResponse {
+  tasks: Task[];
+  nextPageToken: string;
+  pageSize: number;
+  totalSize: number;
+}
+
+export interface CancelTaskRequest {
+  id: string;
+  metadata?: Record<string, unknown>;
+}
+
+// For future streaming compatibility
+export interface StreamResponse {
+  task?: Task;
+  message?: Message;
+  statusUpdate?: TaskStatusUpdateEvent;
+  artifactUpdate?: TaskArtifactUpdateEvent;
+}
+
+// Agent extension support
+export interface AgentExtension {
+  uri: string;
+  description?: string;
+  required?: boolean;
+  params?: Record<string, unknown>;
 }

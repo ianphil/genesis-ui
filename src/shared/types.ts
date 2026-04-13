@@ -176,6 +176,11 @@ export interface ElectronAPI {
   a2a: {
     onIncoming: (callback: (payload: { targetMindId: string; message: Message; replyMessageId: string }) => void) => () => void;
     listAgents: () => Promise<AgentCard[]>;
+    onTaskStatusUpdate: (callback: (payload: any) => void) => () => void;
+    onTaskArtifactUpdate: (callback: (payload: any) => void) => () => void;
+    getTask: (taskId: string, historyLength?: number) => Promise<any>;
+    listTasks: (filter?: { contextId?: string; status?: string }) => Promise<any>;
+    cancelTask: (taskId: string) => Promise<any>;
   };
   window: {
     minimize: () => void;

@@ -5,6 +5,7 @@ import { describe, it, expect } from 'vitest';
 import { handleChatEvent, appReducer, initialState } from '.';
 import type { AppState, AppAction } from '.';
 import type { ChatMessage, ChatEvent } from '../../../shared/types';
+import type { Task, TaskStatus, Artifact } from '../../../shared/a2a-types';
 import {
   makeMessage,
   makeTextBlock,
@@ -413,6 +414,148 @@ describe('appReducer', () => {
       const prev = { ...withActiveMind, streamingByMind: { [mindId]: true }, isStreaming: true };
       const state = appReducer(prev, { type: 'NEW_CONVERSATION' });
       expect(state.streamingByMind[mindId]).toBe(false);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Task tracking
+  // -------------------------------------------------------------------------
+
+  describe('Task tracking', () => {
+    const makeTaskStatus = (state: Task['status']['state']): TaskStatus => ({
+      state,
+      timestamp: new Date().toISOString(),
+    });
+
+    const makeTask = (overrides?: Partial<Task>): Task => ({
+      id: 'task-1',
+      contextId: 'ctx-1',
+      status: makeTaskStatus('submitted'),
+      ...overrides,
+    });
+
+    const makeArtifact = (overrides?: Partial<Artifact>): Artifact => ({
+      artifactId: 'art-1',
+      parts: [{ text: 'result data', mediaType: 'text/plain' }],
+      ...overrides,
+    });
+
+    it('initial state has empty tasksByMind', () => {
+      expect(initialState.tasksByMind).toEqual({});
+    });
+
+    it('TASK_STATUS_UPDATE adds new task to state', () => {
+      const state = appReducer(initialState, {
+        type: 'TASK_STATUS_UPDATE',
+        payload: {
+          taskId: 'task-1',
+          contextId: 'ctx-1',
+          status: makeTaskStatus('submitted'),
+          targetMindId: mindId,
+        },
+      });
+      expect(state.tasksByMind[mindId]).toHaveLength(1);
+      expect(state.tasksByMind[mindId][0]).toMatchObject({
+        id: 'task-1',
+        contextId: 'ctx-1',
+        status: { state: 'submitted' },
+      });
+    });
+
+    it('TASK_STATUS_UPDATE updates existing task status', () => {
+      const stateWithTask: AppState = {
+        ...initialState,
+        tasksByMind: { [mindId]: [makeTask({ id: 'task-1', status: makeTaskStatus('submitted') })] },
+      };
+      const state = appReducer(stateWithTask, {
+        type: 'TASK_STATUS_UPDATE',
+        payload: {
+          taskId: 'task-1',
+          contextId: 'ctx-1',
+          status: makeTaskStatus('working'),
+          targetMindId: mindId,
+        },
+      });
+      expect(state.tasksByMind[mindId]).toHaveLength(1);
+      expect(state.tasksByMind[mindId][0].status.state).toBe('working');
+    });
+
+    it('TASK_ARTIFACT_UPDATE adds artifact to existing task', () => {
+      const stateWithTask: AppState = {
+        ...initialState,
+        tasksByMind: { [mindId]: [makeTask({ id: 'task-1' })] },
+      };
+      const artifact = makeArtifact({ artifactId: 'art-1' });
+      const state = appReducer(stateWithTask, {
+        type: 'TASK_ARTIFACT_UPDATE',
+        payload: {
+          taskId: 'task-1',
+          contextId: 'ctx-1',
+          artifact,
+          targetMindId: mindId,
+        },
+      });
+      expect(state.tasksByMind[mindId][0].artifacts).toHaveLength(1);
+      expect(state.tasksByMind[mindId][0].artifacts![0].artifactId).toBe('art-1');
+    });
+
+    it('TASK_ARTIFACT_UPDATE for unknown task is no-op', () => {
+      const state = appReducer(initialState, {
+        type: 'TASK_ARTIFACT_UPDATE',
+        payload: {
+          taskId: 'nonexistent',
+          contextId: 'ctx-1',
+          artifact: makeArtifact(),
+          targetMindId: mindId,
+        },
+      });
+      expect(state.tasksByMind[mindId]).toBeUndefined();
+    });
+
+    it('tasks grouped by target mind', () => {
+      let state = appReducer(initialState, {
+        type: 'TASK_STATUS_UPDATE',
+        payload: { taskId: 'task-a', contextId: 'ctx-a', status: makeTaskStatus('submitted'), targetMindId: 'mind-1' },
+      });
+      state = appReducer(state, {
+        type: 'TASK_STATUS_UPDATE',
+        payload: { taskId: 'task-b', contextId: 'ctx-b', status: makeTaskStatus('working'), targetMindId: 'mind-2' },
+      });
+      expect(state.tasksByMind['mind-1']).toHaveLength(1);
+      expect(state.tasksByMind['mind-2']).toHaveLength(1);
+      expect(state.tasksByMind['mind-1'][0].id).toBe('task-a');
+      expect(state.tasksByMind['mind-2'][0].id).toBe('task-b');
+    });
+
+    it('multiple tasks per mind tracked correctly', () => {
+      let state = appReducer(initialState, {
+        type: 'TASK_STATUS_UPDATE',
+        payload: { taskId: 'task-1', contextId: 'ctx-1', status: makeTaskStatus('submitted'), targetMindId: mindId },
+      });
+      state = appReducer(state, {
+        type: 'TASK_STATUS_UPDATE',
+        payload: { taskId: 'task-2', contextId: 'ctx-2', status: makeTaskStatus('working'), targetMindId: mindId },
+      });
+      expect(state.tasksByMind[mindId]).toHaveLength(2);
+      expect(state.tasksByMind[mindId][0].id).toBe('task-1');
+      expect(state.tasksByMind[mindId][1].id).toBe('task-2');
+    });
+
+    it('terminal task state persists (not overwritten by stale update)', () => {
+      const stateWithTerminal: AppState = {
+        ...initialState,
+        tasksByMind: { [mindId]: [makeTask({ id: 'task-1', status: makeTaskStatus('completed') })] },
+      };
+      const state = appReducer(stateWithTerminal, {
+        type: 'TASK_STATUS_UPDATE',
+        payload: {
+          taskId: 'task-1',
+          contextId: 'ctx-1',
+          status: makeTaskStatus('working'),
+          targetMindId: mindId,
+        },
+      });
+      expect(state.tasksByMind[mindId][0].status.state).toBe('completed');
     });
   });
 });

@@ -1,5 +1,5 @@
 import type { ChatMessage, ChatEvent, AgentStatus, ModelInfo, LensViewManifest, MindContext, ContentBlock } from '../../../shared/types';
-import type { Message } from '../../../shared/a2a-types';
+import type { Message, Task, TaskStatusUpdateEvent, TaskArtifactUpdateEvent } from '../../../shared/a2a-types';
 
 export type LensView = 'chat' | string;
 
@@ -17,6 +17,7 @@ export interface AppState {
   discoveredViews: LensViewManifest[];
   showLanding: boolean;
   mindsChecked: boolean;
+  tasksByMind: Record<string, Task[]>;
 }
 
 export type AppAction =
@@ -37,7 +38,9 @@ export type AppAction =
   | { type: 'MINDS_CHECKED' }
   | { type: 'CLEAR_MESSAGES' }
   | { type: 'NEW_CONVERSATION' }
-  | { type: 'A2A_INCOMING'; payload: { targetMindId: string; message: Message; replyMessageId: string } };
+  | { type: 'A2A_INCOMING'; payload: { targetMindId: string; message: Message; replyMessageId: string } }
+  | { type: 'TASK_STATUS_UPDATE'; payload: TaskStatusUpdateEvent & { targetMindId: string } }
+  | { type: 'TASK_ARTIFACT_UPDATE'; payload: TaskArtifactUpdateEvent & { targetMindId: string } };
 
 export const initialState: AppState = {
   minds: [],
@@ -60,4 +63,5 @@ export const initialState: AppState = {
   discoveredViews: [],
   showLanding: false,
   mindsChecked: false,
+  tasksByMind: {},
 };

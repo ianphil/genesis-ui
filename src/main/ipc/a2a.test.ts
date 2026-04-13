@@ -10,6 +10,7 @@ vi.mock('electron', () => ({
 
 import { ipcMain, BrowserWindow } from 'electron';
 import { setupA2AIPC } from './a2a';
+import type { TaskStatusUpdateEvent, TaskArtifactUpdateEvent } from '../services/a2a/types';
 
 const mockRegistry = {
   getCards: vi.fn(() => [
@@ -18,13 +19,19 @@ const mockRegistry = {
   ]),
 };
 
+const mockTaskManager = {
+  getTask: vi.fn(),
+  listTasks: vi.fn(),
+  cancelTask: vi.fn(),
+};
+
 describe('A2A IPC', () => {
   let ipcEmitter: EventEmitter;
 
   beforeEach(() => {
     vi.clearAllMocks();
     ipcEmitter = new EventEmitter();
-    setupA2AIPC(ipcEmitter, mockRegistry as any);
+    setupA2AIPC(ipcEmitter, mockRegistry as any, mockTaskManager as any);
   });
 
   it('a2a:incoming forwards to all windows', () => {
@@ -75,5 +82,99 @@ describe('A2A IPC', () => {
       { mindId: 'agent-b', name: 'Agent B' },
     ]);
     expect(mockRegistry.getCards).toHaveBeenCalled();
+  });
+
+  // --- Task IPC tests ---
+
+  it('task:status-update event forwarded to all BrowserWindows', () => {
+    const wc1 = { send: vi.fn() };
+    const wc2 = { send: vi.fn() };
+    (BrowserWindow.getAllWindows as any).mockReturnValue([
+      { webContents: wc1 },
+      { webContents: wc2 },
+    ]);
+
+    const payload: TaskStatusUpdateEvent = {
+      taskId: 'task-1',
+      contextId: 'ctx-1',
+      status: { state: 'working' },
+    };
+    ipcEmitter.emit('task:status-update', payload);
+
+    expect(wc1.send).toHaveBeenCalledWith('a2a:task-status-update', payload);
+    expect(wc2.send).toHaveBeenCalledWith('a2a:task-status-update', payload);
+  });
+
+  it('task:artifact-update event forwarded to all BrowserWindows', () => {
+    const wc1 = { send: vi.fn() };
+    const wc2 = { send: vi.fn() };
+    (BrowserWindow.getAllWindows as any).mockReturnValue([
+      { webContents: wc1 },
+      { webContents: wc2 },
+    ]);
+
+    const payload: TaskArtifactUpdateEvent = {
+      taskId: 'task-1',
+      contextId: 'ctx-1',
+      artifact: { artifactId: 'art-1', parts: [{ text: 'result' }] },
+      lastChunk: true,
+    };
+    ipcEmitter.emit('task:artifact-update', payload);
+
+    expect(wc1.send).toHaveBeenCalledWith('a2a:task-artifact-update', payload);
+    expect(wc2.send).toHaveBeenCalledWith('a2a:task-artifact-update', payload);
+  });
+
+  it('a2a:getTask handle returns task from TaskManager', async () => {
+    const task = { id: 'task-1', contextId: 'ctx-1', status: { state: 'completed' } };
+    mockTaskManager.getTask.mockReturnValue(task);
+
+    const handleCalls = (ipcMain.handle as any).mock.calls;
+    const handler = handleCalls.find((c: any) => c[0] === 'a2a:getTask');
+    expect(handler).toBeDefined();
+
+    const result = await handler[1]({}, 'task-1', 5);
+    expect(mockTaskManager.getTask).toHaveBeenCalledWith('task-1', 5);
+    expect(result).toEqual(task);
+  });
+
+  it('a2a:listTasks handle returns task list from TaskManager', async () => {
+    const response = { tasks: [], nextPageToken: '', pageSize: 0, totalSize: 0 };
+    mockTaskManager.listTasks.mockReturnValue(response);
+
+    const handleCalls = (ipcMain.handle as any).mock.calls;
+    const handler = handleCalls.find((c: any) => c[0] === 'a2a:listTasks');
+    expect(handler).toBeDefined();
+
+    const filter = { contextId: 'ctx-1', status: 'working' };
+    const result = await handler[1]({}, filter);
+    expect(mockTaskManager.listTasks).toHaveBeenCalledWith(filter);
+    expect(result).toEqual(response);
+  });
+
+  it('a2a:cancelTask handle returns updated task', async () => {
+    const task = { id: 'task-1', contextId: 'ctx-1', status: { state: 'canceled' } };
+    mockTaskManager.cancelTask.mockReturnValue(task);
+
+    const handleCalls = (ipcMain.handle as any).mock.calls;
+    const handler = handleCalls.find((c: any) => c[0] === 'a2a:cancelTask');
+    expect(handler).toBeDefined();
+
+    const result = await handler[1]({}, 'task-1');
+    expect(mockTaskManager.cancelTask).toHaveBeenCalledWith('task-1');
+    expect(result).toEqual(task);
+  });
+
+  it('a2a:cancelTask returns error object when TaskManager throws', async () => {
+    mockTaskManager.cancelTask.mockImplementation(() => {
+      throw new Error('Task task-1 not found');
+    });
+
+    const handleCalls = (ipcMain.handle as any).mock.calls;
+    const handler = handleCalls.find((c: any) => c[0] === 'a2a:cancelTask');
+    expect(handler).toBeDefined();
+
+    const result = await handler[1]({}, 'task-1');
+    expect(result).toEqual({ error: 'Task task-1 not found' });
   });
 });
