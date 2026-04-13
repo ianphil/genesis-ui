@@ -9,6 +9,7 @@
 - [ ] **Teams Agency MCP issue** `bug` — Kent reported problem with Teams MCP proxy; shared log in AET SWE Chat. Needs investigation. *(Kent, 2026-04-09)*
 - [ ] **No Start Menu icon** `bug` — installer doesn't create Start Menu shortcut. Likely Electron Forge / Squirrel config in packaging step.
 - [ ] **Upgrade genesis-created minds on open** `bug` — minds created via CLI genesis (not Chamber) may be missing lens defaults, lens skill, and other Chamber-specific bootstrapping. When a mind is opened in Chamber for the first time, detect and run `seedLensDefaults` + `installLensSkill` + any missing capabilities. *(Ian, 2026-04-12)*
+- [ ] **Boot screen shows stale version** `bug` — hardcoded 0.15.0 instead of reading from package.json. Should pull version dynamically. *(Ian, 2026-04-13)*
 - [ ] **Landing screen needs a back button** `ux` — when "Add Agent" navigates to the landing screen, there's no way to go back if you change your mind. Add a back/cancel action that returns to the previous chat view. *(Ian, 2026-04-12)*
 - [ ] **Lens refresh survives view switching** `ux` — clicking away from a lens while it's refreshing drops the pending result. The agent still writes the file, but the UI never picks up the new data. Either show a toast when refresh completes, or re-read data when returning to the view. *(Ian, 2026-04-12)*
 - [ ] **Popout should continue conversation** `ux` — popping out an agent starts a fresh chat instead of continuing the current conversation. Messages should transfer to the popout and return when closed. Related to conversation history feature. *(Ian, 2026-04-12)*
@@ -37,9 +38,7 @@
 - [ ] **Upgrade from genesis UI** `ux` — button/menu for discovering and installing genesis updates without typing a prompt.
 - [ ] **Upgrade to Myelin memory** `arch` — migration from flat-file `.working-memory/` to `shsolomo/myelin` knowledge graph.
 - [ ] **Move Responses API to frontier** `arch` — extract responses extension from genesis to frontier repo.
-- [ ] **Intercom** `arch` — agent-to-agent communication on A2A protocol; evolves responses + yellow-pages.
 - [ ] **Extension lib refactor** `arch` — shared lib for CLI extensions + Lens views.
-- [ ] **Multi-window / multi-agent** `arch` — single host process, `MindManager` with `Map<mindPath, {session, extensions, window}>`. Fleet awareness, in-process A2A routing.
 - [ ] **Connection health check** `arch` — real SDK health, not synthetic `mindPath !== null`. #12.
 - [ ] **Harden mind path validation** `security` — traversal/symlink checks. #3.
 - [ ] **Permission prompt flow** `security` — replace auto-approve with user prompt. #5.
