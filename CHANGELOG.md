@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.22.0 (2026-04-16)
+
+### Chat markdown rendering
+- **Typography plugin** — registered `@tailwindcss/typography` via Tailwind v4 `@plugin` directive so `prose` classes now actually style headings, lists, tables, and blockquotes in chat messages.
+- **Syntax highlighting** — added `rehype-highlight` with a `github-dark` theme for fenced code blocks.
+- **External links** — markdown links now open in a new window with `rel=noopener noreferrer`.
+- **Refined overrides** — cleaned up `.prose` CSS for inline vs block code chips and GFM tables.
+
 ## v0.21.0 (2026-04-16)
 
 ### Multi-account GitHub auth
