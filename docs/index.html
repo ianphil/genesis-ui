@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chamber — Where AI Agents Are Born</title>
+<meta name="description" content="Chamber is a desktop app for creating and running AI agents. Download for Windows.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface-2: #1a1a26;
+    --border: #2a2a3a;
+    --text: #e4e4ed;
+    --text-muted: #8888a0;
+    --accent: #6366f1;
+    --accent-glow: rgba(99, 102, 241, 0.25);
+    --green: #22c55e;
+    --green-muted: rgba(34, 197, 94, 0.15);
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  .glow {
+    position: fixed;
+    width: 600px;
+    height: 600px;
+    border-radius: 50%;
+    filter: blur(120px);
+    opacity: 0.12;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .glow-1 { background: #6366f1; top: -200px; right: -100px; }
+  .glow-2 { background: #8b5cf6; bottom: -200px; left: -100px; }
+
+  nav {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    padding: 1rem 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    backdrop-filter: blur(20px);
+    background: rgba(10, 10, 15, 0.8);
+    border-bottom: 1px solid var(--border);
+  }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-weight: 700;
+    font-size: 1.2rem;
+    letter-spacing: -0.02em;
+  }
+  .logo-icon {
+    width: 32px; height: 32px;
+    background: var(--accent);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+  }
+  nav a {
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 0.9rem;
+    transition: color 0.2s;
+  }
+  nav a:hover { color: var(--text); }
+  .nav-links { display: flex; gap: 1.5rem; align-items: center; }
+
+  .hero {
+    position: relative;
+    z-index: 1;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 8rem 2rem 4rem;
+  }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 1rem;
+    background: var(--green-muted);
+    border: 1px solid rgba(34, 197, 94, 0.3);
+    border-radius: 999px;
+    font-size: 0.8rem;
+    color: var(--green);
+    font-weight: 500;
+    margin-bottom: 2rem;
+  }
+  .badge-dot {
+    width: 6px; height: 6px;
+    background: var(--green);
+    border-radius: 50%;
+    animation: pulse-dot 2s infinite;
+  }
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+  h1 {
+    font-size: clamp(2.5rem, 6vw, 4.5rem);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+    margin-bottom: 1.5rem;
+    background: linear-gradient(135deg, var(--text) 0%, var(--text-muted) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .subtitle {
+    font-size: 1.25rem;
+    color: var(--text-muted);
+    max-width: 540px;
+    margin: 0 auto 3rem;
+    line-height: 1.7;
+  }
+
+  .download-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  .btn-download {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 2.5rem;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 12px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.2s;
+    box-shadow: 0 0 30px var(--accent-glow);
+  }
+  .btn-download:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 50px var(--accent-glow);
+  }
+  .btn-download svg { width: 20px; height: 20px; }
+  .download-meta {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+  }
+  .download-meta span { margin: 0 0.3rem; }
+  #version-tag, #file-size { font-weight: 500; color: var(--text); }
+
+  .features {
+    position: relative;
+    z-index: 1;
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 4rem 2rem 6rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+  }
+  .feature-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 2rem;
+    transition: border-color 0.2s;
+  }
+  .feature-card:hover { border-color: var(--accent); }
+  .feature-icon {
+    width: 44px; height: 44px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    margin-bottom: 1.25rem;
+  }
+  .feature-card h3 {
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    letter-spacing: -0.01em;
+  }
+  .feature-card p {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    line-height: 1.6;
+  }
+
+  .requirements {
+    position: relative;
+    z-index: 1;
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 0 2rem 6rem;
+    text-align: center;
+  }
+  .requirements h2 {
+    font-size: 1.6rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    letter-spacing: -0.02em;
+  }
+  .requirements .sub {
+    color: var(--text-muted);
+    margin-bottom: 2rem;
+    font-size: 0.95rem;
+  }
+  .req-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    text-align: left;
+  }
+  .req-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+  }
+  .req-check {
+    width: 28px; height: 28px;
+    background: var(--green-muted);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--green);
+    font-size: 0.85rem;
+    flex-shrink: 0;
+  }
+  .req-item .req-text { font-size: 0.9rem; }
+  .req-item .req-text small {
+    display: block;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    margin-top: 0.2rem;
+  }
+
+  footer {
+    position: relative;
+    z-index: 1;
+    text-align: center;
+    padding: 2rem;
+    border-top: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 0.8rem;
+  }
+  footer a { color: var(--accent); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+
+  .loading { opacity: 0.5; }
+</style>
+</head>
+<body>
+
+<div class="glow glow-1"></div>
+<div class="glow glow-2"></div>
+
+<nav>
+  <div class="logo">
+    <div class="logo-icon">⬡</div>
+    Chamber
+  </div>
+  <div class="nav-links">
+    <a href="https://github.com/ianphil/chamber" target="_blank">GitHub</a>
+    <a href="https://github.com/ianphil/chamber/releases" target="_blank">All Releases</a>
+  </div>
+</nav>
+
+<section class="hero">
+  <div class="badge">
+    <span class="badge-dot"></span>
+    <span id="release-status">Checking latest release…</span>
+  </div>
+
+  <h1>Where AI Agents<br>Are Born</h1>
+  <p class="subtitle">
+    Chamber is a desktop app for creating and running AI agents.
+    Select a mind, start chatting — your agent handles the rest.
+  </p>
+
+  <div class="download-group">
+    <a id="download-btn" class="btn-download loading" href="#">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/>
+        <line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+      <span id="btn-text">Download for Windows</span>
+    </a>
+    <div class="download-meta">
+      <span id="version-tag">—</span> · <span id="file-size">—</span> · Windows x64
+    </div>
+  </div>
+</section>
+
+<section class="features">
+  <div class="feature-card">
+    <div class="feature-icon">💬</div>
+    <h3>Zero-Config Agents</h3>
+    <p>Login with your GitHub account, name your agent, and start talking. No setup, no config files, no terminal required.</p>
+  </div>
+  <div class="feature-card">
+    <div class="feature-icon">🔮</div>
+    <h3>Lens Views</h3>
+    <p>Your agent can extend the UI with custom dashboards and panels — live data views that appear right in the sidebar.</p>
+  </div>
+  <div class="feature-card">
+    <div class="feature-icon">⚡</div>
+    <h3>Cron &amp; MCP</h3>
+    <p>Agents run autonomously — watching Teams, ADO, Calendar, and email on schedules you define. Always-on intelligence.</p>
+  </div>
+  <div class="feature-card">
+    <div class="feature-icon">🧠</div>
+    <h3>IDEA Knowledge</h3>
+    <p>Built-in knowledge system with semantic search. Your agent remembers context across conversations and grows smarter over time.</p>
+  </div>
+  <div class="feature-card">
+    <div class="feature-icon">🔌</div>
+    <h3>Extension System</h3>
+    <p>Mind-local extensions discovered automatically. Canvas, cron, IDEA adapters — the agent's capabilities grow with its mind.</p>
+  </div>
+  <div class="feature-card">
+    <div class="feature-icon">🖥️</div>
+    <h3>Desktop Native</h3>
+    <p>Not a browser tab. A real desktop app with system tray, native notifications, and full access to your local filesystem.</p>
+  </div>
+</section>
+
+<section class="requirements">
+  <h2>Before You Install</h2>
+  <p class="sub">A few things you'll need to get started.</p>
+  <div class="req-list">
+    <div class="req-item">
+      <div class="req-check">✓</div>
+      <div class="req-text">
+        <strong>GitHub Account</strong>
+        <small>GitHub or GitHub EMU (Enterprise Managed Users)</small>
+      </div>
+    </div>
+    <div class="req-item">
+      <div class="req-check">✓</div>
+      <div class="req-text">
+        <strong>GitHub Copilot License</strong>
+        <small>Chamber uses the Copilot SDK under the hood</small>
+      </div>
+    </div>
+    <div class="req-item">
+      <div class="req-check">✓</div>
+      <div class="req-text">
+        <strong>Windows 10 or later</strong>
+        <small>x64 architecture · macOS &amp; Linux coming soon</small>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  Built by <a href="https://github.com/ianphil" target="_blank">Ian Philpot</a> ·
+  <a href="https://github.com/ianphil/chamber" target="_blank">Source on GitHub</a>
+</footer>
+
+<script>
+(async function() {
+  const btn = document.getElementById('download-btn');
+  const btnText = document.getElementById('btn-text');
+  const versionTag = document.getElementById('version-tag');
+  const fileSize = document.getElementById('file-size');
+  const releaseStatus = document.getElementById('release-status');
+
+  try {
+    const res = await fetch('https://api.github.com/repos/ianphil/chamber/releases/latest');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const release = await res.json();
+
+    const exe = release.assets.find(function(a) {
+      return a.name.endsWith('.exe') && a.name.toLowerCase().includes('setup');
+    }) || release.assets.find(function(a) {
+      return a.name.endsWith('.exe');
+    });
+
+    if (exe) {
+      btn.href = exe.browser_download_url;
+      btn.classList.remove('loading');
+      btnText.textContent = 'Download for Windows';
+      versionTag.textContent = release.tag_name;
+      fileSize.textContent = formatBytes(exe.size);
+      releaseStatus.textContent = release.tag_name + ' released ' + timeAgo(release.published_at);
+    } else {
+      btn.href = release.html_url;
+      btn.classList.remove('loading');
+      btnText.textContent = 'View Latest Release';
+      versionTag.textContent = release.tag_name;
+      fileSize.textContent = '\u2014';
+      releaseStatus.textContent = release.tag_name + ' \u2014 see release page for downloads';
+    }
+  } catch (err) {
+    btn.href = 'https://github.com/ianphil/chamber/releases/latest';
+    btn.classList.remove('loading');
+    btnText.textContent = 'View Releases on GitHub';
+    versionTag.textContent = 'latest';
+    fileSize.textContent = '\u2014';
+    releaseStatus.textContent = 'Visit GitHub for the latest release';
+  }
+
+  function formatBytes(bytes) {
+    if (bytes === 0) return '0 B';
+    var k = 1024;
+    var sizes = ['B', 'KB', 'MB', 'GB'];
+    var i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  }
+
+  function timeAgo(dateStr) {
+    var seconds = Math.floor((new Date() - new Date(dateStr)) / 1000);
+    var intervals = [
+      [31536000, 'year'], [2592000, 'month'], [86400, 'day'],
+      [3600, 'hour'], [60, 'minute']
+    ];
+    for (var idx = 0; idx < intervals.length; idx++) {
+      var secs = intervals[idx][0];
+      var label = intervals[idx][1];
+      var count = Math.floor(seconds / secs);
+      if (count >= 1) return count + ' ' + label + (count > 1 ? 's' : '') + ' ago';
+    }
+    return 'just now';
+  }
+})();
+</script>
+
+</body>
+</html>
