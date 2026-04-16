@@ -220,6 +220,15 @@ Concretely, a ~1-day piece of work:
 
 One thing to be careful about: **streaming blocks arrive incrementally, and a tool block's text can grow over many frames.** The grouping logic must be stable as new content arrives within an existing block (don't re-key), and must be stable when a new block appends at the end (don't re-key earlier rows). Use block `id` as the React key, not position. Today's code already keys by block id, so this carries over, but the `WorkGroup` wrapper needs a stable key derived from the first block's id in the group, not the group's index.
 
+## Locked decisions
+
+Recorded here so we don't relitigate them every time we pick the work back up.
+
+1. **Contracts library: `zod`.** Ubiquitous, zero friction, strong TS inference, no runtime ecosystem lock-in. If we later adopt more of Effect for good reasons, migrate to Effect `Schema` then — not speculatively.
+2. **Monorepo tooling: npm workspaces + `turbo`.** Smallest blast radius from where Chamber is today. Keep the existing Node + npm runtime. `turbo` gives us the task graph we need without swapping package managers. Bun adoption is a separate, later conversation.
+3. **WebSocket library: `ws` + a thin JSON-RPC 2.0 wrapper we own.** `ws` is the smallest thing that works. The wrapper is ~100 LOC, zero new concepts, directly mirrors the JSON-RPC spec. Rejected: `socket.io` (too much machinery), `tRPC` (ties us harder to TS at both ends than needed), `gRPC` (overkill, codegen).
+4. **Sequencing: WorkGroup chat refactor first, then the architecture split.** WorkGroup is purely renderer-side, ships user-visible value immediately, and is independent of the split. We land it on its own branch off `devel`, merge back, *then* start Phase 1 of the architecture refactor (contracts package). WorkGroup gives us a UI we like living inside the current Electron+IPC world before we start moving the walls.
+
 ## Caveats
 
 - t3code is explicit WIP (see `CONTRIBUTING.md`). Their own design may still churn.
