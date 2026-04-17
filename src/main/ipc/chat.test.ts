@@ -7,6 +7,7 @@ vi.mock('electron', () => ({
 
 import { ipcMain, BrowserWindow } from 'electron';
 import { setupChatIPC } from './chat';
+import { Dispatcher } from '../rpc/dispatcher';
 import { IpcValidationError } from '../../contracts/errors';
 import type { ChatService } from '../services/chat/ChatService';
 import type { MindManager } from '../services/mind';
@@ -33,13 +34,20 @@ function getHandler(channel: string): (event: unknown, ...args: unknown[]) => un
   return call[1] as (event: unknown, ...args: unknown[]) => unknown;
 }
 
+function setup(svc: ChatService = fakeChatService(), mgr: MindManager = fakeMindManager()) {
+  const dispatcher = new Dispatcher();
+  setupChatIPC(dispatcher, svc, mgr);
+  return { dispatcher, svc, mgr };
+}
+
 describe('setupChatIPC — validation', () => {
   beforeEach(() => {
     vi.mocked(ipcMain.handle).mockClear();
+    vi.mocked(BrowserWindow.fromWebContents).mockReturnValue(null);
   });
 
   it('registers all chat handlers', () => {
-    setupChatIPC(fakeChatService(), fakeMindManager());
+    setup();
     const channels = vi.mocked(ipcMain.handle).mock.calls.map((c) => c[0]);
     expect(channels).toEqual(
       expect.arrayContaining(['chat:send', 'chat:stop', 'chat:newConversation', 'chat:listModels']),
@@ -47,8 +55,7 @@ describe('setupChatIPC — validation', () => {
   });
 
   it('chat:send rejects with IpcValidationError on bad args', async () => {
-    const svc = fakeChatService();
-    setupChatIPC(svc, fakeMindManager());
+    const { svc } = setup();
     const handler = getHandler('chat:send');
     await expect(
       handler({ sender: {} }, '', 'hello', 'msg1'),
@@ -56,14 +63,29 @@ describe('setupChatIPC — validation', () => {
     expect(svc.sendMessage).not.toHaveBeenCalled();
   });
 
-  it('chat:send invokes service on valid args', async () => {
+  it('chat:send invokes service on valid args and emits chat:event in positional form', async () => {
     const svc = fakeChatService();
-    const fakeWin = { webContents: { send: vi.fn() } } as unknown as Electron.BrowserWindow;
+    const sent: unknown[][] = [];
+    const fakeWin = {
+      isDestroyed: () => false,
+      webContents: {
+        send: (...args: unknown[]) => {
+          sent.push(args);
+        },
+      },
+    } as unknown as Electron.BrowserWindow;
     vi.mocked(BrowserWindow.fromWebContents).mockReturnValue(fakeWin);
-    setupChatIPC(svc, fakeMindManager());
+    // Capture the emit callback that ChatService receives so we can drive a push.
+    vi.mocked(svc.sendMessage).mockImplementation(
+      async (_mindId, _msg, _msgId, emit) => {
+        emit({ type: 'done' });
+      },
+    );
+
+    setup(svc);
     const handler = getHandler('chat:send');
     await handler({ sender: {} }, 'm1', 'hi', 'msg1');
-    expect(svc.sendMessage).toHaveBeenCalledTimes(1);
+
     expect(svc.sendMessage).toHaveBeenCalledWith(
       'm1',
       'hi',
@@ -71,19 +93,38 @@ describe('setupChatIPC — validation', () => {
       expect.any(Function),
       undefined,
     );
+    // Renderer wire format must stay positional: (channel, mindId, messageId, event)
+    expect(sent).toEqual([['chat:event', 'm1', 'msg1', { type: 'done' }]]);
   });
 
   it('chat:stop rejects invalid args', async () => {
-    const svc = fakeChatService();
-    setupChatIPC(svc, fakeMindManager());
+    const { svc } = setup();
     const handler = getHandler('chat:stop');
     await expect(handler({ sender: {} }, 'm1')).rejects.toBeInstanceOf(IpcValidationError);
     expect(svc.cancelMessage).not.toHaveBeenCalled();
   });
 
-  it('chat:newConversation rejects empty mindId', async () => {
+  it('chat:stop emits done event via reply.emit in positional form', async () => {
     const svc = fakeChatService();
-    setupChatIPC(svc, fakeMindManager());
+    const sent: unknown[][] = [];
+    const fakeWin = {
+      isDestroyed: () => false,
+      webContents: {
+        send: (...args: unknown[]) => {
+          sent.push(args);
+        },
+      },
+    } as unknown as Electron.BrowserWindow;
+    vi.mocked(BrowserWindow.fromWebContents).mockReturnValue(fakeWin);
+    setup(svc);
+    const handler = getHandler('chat:stop');
+    await handler({ sender: {} }, 'm1', 'msg1');
+    expect(svc.cancelMessage).toHaveBeenCalledWith('m1', 'msg1');
+    expect(sent).toEqual([['chat:event', 'm1', 'msg1', { type: 'done' }]]);
+  });
+
+  it('chat:newConversation rejects empty mindId', async () => {
+    const { svc } = setup();
     const handler = getHandler('chat:newConversation');
     await expect(handler({ sender: {} }, '')).rejects.toBeInstanceOf(IpcValidationError);
     expect(svc.newConversation).not.toHaveBeenCalled();
@@ -92,7 +133,7 @@ describe('setupChatIPC — validation', () => {
   it('chat:listModels accepts no args (falls back to active mind)', async () => {
     const svc = fakeChatService();
     const mgr = fakeMindManager();
-    setupChatIPC(svc, mgr);
+    setup(svc, mgr);
     const handler = getHandler('chat:listModels');
     const result = await handler({ sender: {} });
     expect(result).toEqual([{ id: 'gpt-5', name: 'GPT-5' }]);
@@ -100,8 +141,7 @@ describe('setupChatIPC — validation', () => {
   });
 
   it('chat:listModels rejects non-string mindId', async () => {
-    const svc = fakeChatService();
-    setupChatIPC(svc, fakeMindManager());
+    setup();
     const handler = getHandler('chat:listModels');
     await expect(handler({ sender: {} }, 42)).rejects.toBeInstanceOf(IpcValidationError);
   });

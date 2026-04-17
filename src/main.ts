@@ -29,6 +29,7 @@ import { setupAuthIPC } from './main/ipc/auth';
 import { setupA2AIPC } from './main/ipc/a2a';
 import { setupChatroomIPC } from './main/ipc/chatroom';
 import { setupWindowIPC } from './main/ipc/window';
+import { Dispatcher } from './main/rpc/dispatcher';
 
 import { EventEmitter } from 'events';
 import { wireLifecycleEvents } from './main/wireLifecycleEvents';
@@ -130,8 +131,11 @@ const createWindow = () => {
 };
 
 app.on('ready', async () => {
+  // --- RPC dispatcher (transport-agnostic handler table) ---
+  const dispatcher = new Dispatcher();
+
   // --- IPC adapters (thin, parameter-injected) ---
-  setupChatIPC(chatService, mindManager);
+  setupChatIPC(dispatcher, chatService, mindManager);
   setupMindIPC(mindManager, {
     preloadPath: path.join(__dirname, 'preload.js'),
     devServerUrl: MAIN_WINDOW_VITE_DEV_SERVER_URL || undefined,

@@ -1,66 +1,21 @@
-// Chat IPC handlers — thin adapters for ChatService
-import { ipcMain, BrowserWindow } from 'electron';
+// Chat IPC adapter — thin bridge from ipcMain to the Dispatcher.
+// The actual chat handlers live in src/main/rpc/handlers/chat.ts so they
+// can be served over WS in the future without being rewritten.
+import { ipcMain } from 'electron';
 import type { ChatService } from '../services/chat/ChatService';
 import type { MindManager } from '../services/mind';
-import type { ChatEvent } from '../../shared/types';
-import { withValidation } from './withValidation';
-import {
-  ChatListModelsArgs,
-  ChatNewConversationArgs,
-  ChatSendArgs,
-  ChatStopArgs,
-} from '../../contracts/chat';
+import type { Dispatcher } from '../rpc/dispatcher';
+import { registerChatHandlers, CHAT_CHANNELS } from '../rpc/handlers/chat';
+import { makeIpcBridge } from './bridge';
 
-export function setupChatIPC(chatService: ChatService, mindManager: MindManager): void {
-  ipcMain.handle(
-    'chat:send',
-    withValidation(
-      'chat:send',
-      ChatSendArgs,
-      async (event: Electron.IpcMainInvokeEvent, mindId, message, messageId, model) => {
-        const win = BrowserWindow.fromWebContents(event.sender);
-        if (!win) return;
-
-        const emit = (evt: ChatEvent) => win.webContents.send('chat:event', mindId, messageId, evt);
-        await chatService.sendMessage(mindId, message, messageId, emit, model);
-      },
-    ),
-  );
-
-  ipcMain.handle(
-    'chat:listModels',
-    withValidation(
-      'chat:listModels',
-      ChatListModelsArgs,
-      async (_event: Electron.IpcMainInvokeEvent, mindId) => {
-        const id = mindId ?? mindManager.getActiveMindId() ?? mindManager.listMinds()[0]?.mindId;
-        if (!id) return [];
-        return chatService.listModels(id);
-      },
-    ),
-  );
-
-  ipcMain.handle(
-    'chat:stop',
-    withValidation(
-      'chat:stop',
-      ChatStopArgs,
-      async (event: Electron.IpcMainInvokeEvent, mindId, messageId) => {
-        const win = BrowserWindow.fromWebContents(event.sender);
-        await chatService.cancelMessage(mindId, messageId);
-        if (win) win.webContents.send('chat:event', mindId, messageId, { type: 'done' });
-      },
-    ),
-  );
-
-  ipcMain.handle(
-    'chat:newConversation',
-    withValidation(
-      'chat:newConversation',
-      ChatNewConversationArgs,
-      async (_event: Electron.IpcMainInvokeEvent, mindId) => {
-        await chatService.newConversation(mindId);
-      },
-    ),
-  );
+export function setupChatIPC(
+  dispatcher: Dispatcher,
+  chatService: ChatService,
+  mindManager: MindManager,
+): void {
+  registerChatHandlers(dispatcher, chatService, mindManager);
+  for (const channel of CHAT_CHANNELS) {
+    ipcMain.handle(channel, makeIpcBridge(dispatcher, channel));
+  }
 }
+
