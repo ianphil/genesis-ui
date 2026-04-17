@@ -9,6 +9,7 @@ vi.mock('electron', () => ({
 
 import { ipcMain, BrowserWindow } from 'electron';
 import { setupAuthIPC } from './auth';
+import { IpcValidationError } from '../../contracts/errors';
 import type { AuthService } from '../services/auth';
 import type { MindManager } from '../services/mind';
 
@@ -71,6 +72,12 @@ describe('setupAuthIPC', () => {
     expect(fakeMindManager.reloadAllMinds).toHaveBeenCalled();
     expect(mockSend).toHaveBeenNthCalledWith(1, 'auth:accountSwitchStarted', { login: 'bob' });
     expect(mockSend).toHaveBeenNthCalledWith(2, 'auth:accountSwitched', { login: 'bob' });
+  });
+
+  it('auth:switchAccount rejects with IpcValidationError on empty login', async () => {
+    setupAuthIPC(createFakeAuth(), createFakeMindManager());
+    const switchCall = vi.mocked(ipcMain.handle).mock.calls.find(c => c[0] === 'auth:switchAccount');
+    await expect(switchCall![1]({} as never, '')).rejects.toBeInstanceOf(IpcValidationError);
   });
 
   it('auth:switchAccount rejects when account is missing', async () => {
