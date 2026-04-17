@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### SDK
+
+- **CopilotClient runs with the mind folder as `cwd`** — `CopilotClientFactory.createClient` now forwards `mindPath` as the CLI process `cwd`. Previously the CLI inherited Electron's launch directory (often `C:\Windows\System32` when launched from Start Menu), so mind-local config like `.mcp.json`, `.copilot/`, and `AGENTS.md` was never discovered. Each mind now spawns its CLI inside its own folder.
+
 ### Contracts package (Phase 1 of architecture split)
 
 - **`src/contracts/`** — new zod-backed contracts package mirroring the current IPC surface. Defines request-arg schemas for every `chat:*`, `mind:*`, `lens:*`, `auth:*`, `genesis:*`, `a2a:*`, `chatroom:*`, and `window:*` channel, plus `ChatEvent`, `ChatMessage`, `ModelInfo`, `LensViewManifest`, `AuthAccount`, `AppConfig` (v2), and outbound push-event schemas.
