@@ -30,6 +30,8 @@ import { setupA2AIPC } from './main/ipc/a2a';
 import { setupChatroomIPC } from './main/ipc/chatroom';
 import { setupWindowIPC } from './main/ipc/window';
 import { Dispatcher } from './main/rpc/dispatcher';
+import { PushBus } from './main/rpc/pushBus';
+import { startRpcSidecar, type RpcSidecarHandle } from './main/rpc/wsServer';
 
 import { EventEmitter } from 'events';
 import { wireLifecycleEvents } from './main/wireLifecycleEvents';
@@ -87,6 +89,7 @@ viewDiscovery.setRefreshHandler({
 
 let mainWindow: BrowserWindow | null = null;
 let isQuitting = false;
+let rpcSidecar: RpcSidecarHandle | null = null;
 
 const createWindow = () => {
   mainWindow = new BrowserWindow({
@@ -133,6 +136,7 @@ const createWindow = () => {
 app.on('ready', async () => {
   // --- RPC dispatcher (transport-agnostic handler table) ---
   const dispatcher = new Dispatcher();
+  const pushBus = new PushBus();
 
   // --- IPC adapters (thin, parameter-injected) ---
   setupChatIPC(dispatcher, chatService, mindManager);
@@ -149,6 +153,21 @@ app.on('ready', async () => {
 
   // Window controls
   setupWindowIPC(() => mainWindow);
+
+  // --- RPC sidecar: loopback WebSocket + JSON-RPC 2.0 ---
+  // Binds 127.0.0.1 on a random free port and writes userData/rpc-port.json
+  // atomically so tests + future external clients can discover it. No auth;
+  // loopback-only is the Phase 2 security boundary.
+  try {
+    rpcSidecar = await startRpcSidecar({
+      dispatcher,
+      pushBus,
+      portFileDir: app.getPath('userData'),
+    });
+    console.log(`[rpc] sidecar listening on 127.0.0.1:${rpcSidecar.port}`);
+  } catch (err) {
+    console.error('[rpc] failed to start sidecar:', err);
+  }
 
   // Create window first (don't block on restore)
   createWindow();
@@ -176,7 +195,8 @@ app.on('before-quit', (e) => {
   e.preventDefault();
   isQuitting = true;
 
-  mindManager.shutdown()
+  const closeSidecar = rpcSidecar ? rpcSidecar.close() : Promise.resolve();
+  Promise.all([closeSidecar, mindManager.shutdown().catch(() => undefined)])
     .catch(() => { /* noop */ })
     .finally(() => app.quit());
 });
