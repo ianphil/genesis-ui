@@ -1,0 +1,23 @@
+{
+  "id": "signal-feed",
+  "name": "Signal Feed",
+  "icon": "📥",
+  "view": "table",
+  "prompt": "Read all signals from the scanner extension using scanner_get_signals with status 'new'. Format as a table showing: priority (🔴 high, 🟡 medium, 🟢 low), source (📧 email, 💬 teams), title, sender, time received (relative like '2h ago'), summary, and suggested action. Sort by priority (high first) then by time (newest first). If no signals exist, say 'No actionable signals — your inbox is clear ✨'.",
+  "schema": {
+    "type": "array",
+    "items": {
+      "type": "object",
+      "properties": {
+        "priority": { "type": "string", "description": "🔴/🟡/🟢" },
+        "source": { "type": "string", "description": "📧/💬" },
+        "title": { "type": "string" },
+        "sender": { "type": "string" },
+        "received": { "type": "string" },
+        "summary": { "type": "string" },
+        "suggestedAction": { "type": "string" }
+      }
+    }
+  },
+  "source": "prompt"
+}
