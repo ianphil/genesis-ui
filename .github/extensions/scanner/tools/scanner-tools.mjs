@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 // Scanner tools exposed to the Copilot agent
 import { getSignals, saveSignals, deduplicateSignals } from '../extension.mjs';
 
@@ -50,7 +51,7 @@ export function createScannerTools(extDir, state) {
         const newOnes = deduplicateSignals(signals, existing);
         const timestamped = newOnes.map(s => ({
           ...s,
-          id: crypto.randomUUID(),
+          id: randomUUID(),
           status: 'new',
           scannedAt: new Date().toISOString()
         }));
