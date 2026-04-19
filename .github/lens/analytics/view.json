@@ -1,0 +1,18 @@
+{
+  "id": "analytics",
+  "name": "Impact Analytics",
+  "icon": "📈",
+  "view": "briefing",
+  "prompt": "Generate Lucy's impact analytics dashboard. Calculate: 1) Total signals processed (from scanner_get_stats), 2) Time saved estimate (2 min per triaged signal, 5 min per dig deep, 3 min per briefing), 3) Signals by priority (high/medium/low counts), 4) Top 5 senders (from signal data), 5) Actions taken (reviewed + acted count). Format as a briefing card grid with large numbers and short labels. If no data, show 'No analytics yet — run a scan first.'",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "timeSavedMinutes": { "type": "number" },
+      "totalSignals": { "type": "number" },
+      "actionsTaken": { "type": "number" },
+      "priorityBreakdown": { "type": "object" },
+      "topSenders": { "type": "array" }
+    }
+  },
+  "source": "prompt"
+}
