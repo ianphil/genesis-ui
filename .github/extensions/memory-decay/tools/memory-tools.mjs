@@ -19,7 +19,11 @@ function writeTierEntry(extDir, tier, entry) {
   writeFileSync(join(dir, `${entry.id}.json`), JSON.stringify(entry, null, 2));
 }
 
+// UUID format validation to prevent path traversal
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function deleteTierEntry(extDir, tier, id) {
+  if (!UUID_RE.test(id)) return false;
   const filepath = join(getMemoryDir(extDir), tier, `${id}.json`);
   if (existsSync(filepath)) {
     unlinkSync(filepath);
@@ -71,7 +75,7 @@ export function createMemoryTools(extDir, state) {
         const allEntries = tiers.flatMap(t => readTier(extDir, t));
         const q = query.toLowerCase();
         const matched = allEntries
-          .filter(e => e.content.toLowerCase().includes(q) || (e.tags || []).some(t => t.toLowerCase().includes(q)))
+          .filter(e => e.content && (e.content.toLowerCase().includes(q) || (e.tags || []).some(t => t.toLowerCase().includes(q))))
           .map(e => ({ ...e, score: decayScore(1.0, e.lastTouchedAt, e.tier) }))
           .filter(e => e.score > 0.05)
           .sort((a, b) => b.score - a.score);
@@ -90,9 +94,10 @@ export function createMemoryTools(extDir, state) {
         required: ['id', 'tier']
       },
       handler: async ({ id, tier }) => {
-        const entries = readTier(extDir, tier);
-        const entry = entries.find(e => e.id === id);
-        if (!entry) return JSON.stringify({ error: 'Not found' });
+        if (!UUID_RE.test(id)) return JSON.stringify({ error: 'Invalid ID format' });
+        const filepath = join(getMemoryDir(extDir), tier, `${id}.json`);
+        if (!existsSync(filepath)) return JSON.stringify({ error: 'Not found' });
+        const entry = JSON.parse(readFileSync(filepath, 'utf-8'));
         entry.lastTouchedAt = new Date().toISOString();
         writeTierEntry(extDir, tier, entry);
         return JSON.stringify({ touched: true, id });
