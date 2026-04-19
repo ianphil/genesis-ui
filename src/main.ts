@@ -19,6 +19,8 @@ import { ChatroomService } from './main/services/chatroom';
 import { loadCanvasExtension } from './main/services/extensions/adapters/canvas';
 import { loadCronExtension } from './main/services/extensions/adapters/cron';
 import { loadIdeaExtension } from './main/services/extensions/adapters/idea';
+import { loadScannerExtension } from './main/services/extensions/adapters/scanner';
+import { loadMemoryDecayExtension } from './main/services/extensions/adapters/memory-decay';
 
 // IPC adapters
 import { setupChatIPC } from './main/ipc/chat';
@@ -44,6 +46,8 @@ const extensionLoader = new ExtensionLoader();
 extensionLoader.registerAdapter('canvas', loadCanvasExtension);
 extensionLoader.registerAdapter('cron', loadCronExtension);
 extensionLoader.registerAdapter('idea', loadIdeaExtension);
+extensionLoader.registerAdapter('scanner', loadScannerExtension);
+extensionLoader.registerAdapter('memory-decay', loadMemoryDecayExtension);
 const configService = new ConfigService();
 const saveActiveLogin = (login: string | null) => {
   const config = configService.load();
