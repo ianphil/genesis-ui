@@ -122,26 +122,29 @@ export async function streamAgentTurn(opts: StreamAgentOptions): Promise<StreamA
     }),
   );
 
-  // Set up idle/error listeners BEFORE send to avoid missing events
+  // Set up idle/error listeners BEFORE send to avoid missing events.
+  // The turnDone timeout ID is hoisted so it can be cleared on any exit path
+  // (send timeout, abort, or normal completion) to prevent 5-minute timer leaks.
+  let turnDoneTimeoutId: ReturnType<typeof setTimeout> | undefined;
   const turnDone = new Promise<void>((resolve, reject) => {
-    const timeout = setTimeout(resolve, 300_000);
+    turnDoneTimeoutId = setTimeout(resolve, 300_000);
 
     const unsubIdle = session.on('session.idle', () => {
-      clearTimeout(timeout);
+      clearTimeout(turnDoneTimeoutId);
       unsubIdle();
       resolve();
     });
     unsubs.push(unsubIdle);
 
     const unsubError = session.on('session.error', (e) => {
-      clearTimeout(timeout);
+      clearTimeout(turnDoneTimeoutId);
       unsubError();
       reject(new Error(e.data.message));
     });
     unsubs.push(unsubError);
 
     abortSignal.addEventListener('abort', () => {
-      clearTimeout(timeout);
+      clearTimeout(turnDoneTimeoutId);
       resolve();
     }, { once: true });
   });
@@ -152,6 +155,10 @@ export async function streamAgentTurn(opts: StreamAgentOptions): Promise<StreamA
   });
   try {
     await Promise.race([session.send({ prompt }), sendTimeout]);
+  } catch (err) {
+    // Send failed (e.g. 30s timeout) — clear the turnDone timer to prevent leak
+    clearTimeout(turnDoneTimeoutId);
+    throw err;
   } finally {
     clearTimeout(sendTimerId);
   }

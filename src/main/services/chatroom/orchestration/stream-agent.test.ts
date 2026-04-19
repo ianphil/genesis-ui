@@ -316,8 +316,10 @@ describe('streamAgentTurn', () => {
 
     await expect(promise).rejects.toThrow('Session not found');
 
-    // Drain the orphaned turnDone 300 000 ms timeout so it doesn't leak
-    await vi.runAllTimersAsync();
+    // The 300s turnDone timer must have been cleared when the 30s send
+    // timeout fired. If it leaked, getTimerCount() would be 1.
+    expect(vi.getTimerCount()).toBe(0);
+
     process.removeListener('unhandledRejection', swallow);
   });
 });
