@@ -2,9 +2,11 @@
 // Scans email + Teams periodically, extracts actionable signals, deduplicates
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
-import { join } from 'path';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 
-const SIGNALS_PATH = join(import.meta.dirname, 'data', 'signals.json');
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const SIGNALS_PATH = join(__dirname, 'data', 'signals.json');
 
 export function getSignals() {
   if (!existsSync(SIGNALS_PATH)) return [];
@@ -12,11 +14,13 @@ export function getSignals() {
 }
 
 export function saveSignals(signals) {
-  mkdirSync(join(import.meta.dirname, 'data'), { recursive: true });
+  mkdirSync(join(__dirname, 'data'), { recursive: true });
   writeFileSync(SIGNALS_PATH, JSON.stringify(signals, null, 2));
 }
 
+// Composite dedup key: title + sender + source to avoid false matches
 export function deduplicateSignals(newSignals, existing) {
-  const existingTitles = new Set(existing.map(s => s.title?.toLowerCase()));
-  return newSignals.filter(s => !existingTitles.has(s.title?.toLowerCase()));
+  const key = s => `${s.title?.toLowerCase()}|${s.sender?.toLowerCase()}|${s.source}`;
+  const existingKeys = new Set(existing.map(key));
+  return newSignals.filter(s => !existingKeys.has(key(s)));
 }
