@@ -1,0 +1,6 @@
+{
+  "name": "memory-decay",
+  "version": "0.1.0",
+  "description": "3-tier temporal memory with exponential decay — semantic, episodic, session",
+  "type": "module"
+}
