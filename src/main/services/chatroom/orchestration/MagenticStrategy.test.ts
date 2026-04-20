@@ -312,4 +312,207 @@ describe('MagenticStrategy', () => {
     // Should not have persisted any messages from workers
     expect(ctx.persistMessage).not.toHaveBeenCalled();
   });
+
+  // -------------------------------------------------------------------------
+  // v2: Batch assignments + parallel A2A dispatch
+  // -------------------------------------------------------------------------
+
+  it('supports batch assignments via assignments array', async () => {
+    const managerSess = createMockSession();
+    const workerASess = createMockSession();
+    const workerBSess = createMockSession();
+    sessions.set('manager', managerSess);
+    sessions.set('worker-a', workerASess);
+    sessions.set('worker-b', workerBSess);
+
+    autoIdleWithSequence(managerSess, [
+      '{"action": "update-plan", "plan": [{"id": "1", "description": "task A"}, {"id": "2", "description": "task B"}]}',
+      '{"action": "assign", "assignments": [{"assignee": "Worker A", "task_id": "1", "task_description": "do A"}, {"assignee": "Worker B", "task_id": "2", "task_description": "do B"}]}',
+      '{"action": "complete", "summary": "All done"}',
+    ]);
+
+    autoIdleWith(workerASess, 'A result');
+    autoIdleWith(workerBSess, 'B result');
+
+    const strategy = new MagenticStrategy({ managerMindId: 'manager', maxSteps: 10 });
+    const ctx = createContext(sessions);
+    const minds = [makeMind('manager', 'Manager'), makeMind('worker-a', 'Worker A'), makeMind('worker-b', 'Worker B')];
+
+    await strategy.execute('Do both tasks', minds, 'round-1', ctx);
+
+    // Both workers called (sequential fallback — no A2A)
+    expect(workerASess.send).toHaveBeenCalledTimes(1);
+    expect(workerBSess.send).toHaveBeenCalledTimes(1);
+  });
+
+  it('falls back to sequential when dispatchTask is not available', async () => {
+    const managerSess = createMockSession();
+    const workerSess = createMockSession();
+    sessions.set('manager', managerSess);
+    sessions.set('worker-a', workerSess);
+
+    autoIdleWithSequence(managerSess, [
+      '{"action": "update-plan", "plan": [{"id": "1", "description": "task"}]}',
+      '{"action": "assign", "assignee": "Worker A", "task_id": "1", "task_description": "do it"}',
+      '{"action": "complete", "summary": "done"}',
+    ]);
+    autoIdleWith(workerSess, 'Done');
+
+    const strategy = new MagenticStrategy({ managerMindId: 'manager', maxSteps: 10 });
+    // No dispatchTask — should use sequential path
+    const ctx = createContext(sessions);
+    expect(ctx.dispatchTask).toBeUndefined();
+
+    const minds = [makeMind('manager', 'Manager'), makeMind('worker-a', 'Worker A')];
+    await strategy.execute('Test', minds, 'round-1', ctx);
+
+    expect(workerSess.send).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses parallel A2A dispatch when dispatchTask is available and multiple assignments', async () => {
+    const managerSess = createMockSession();
+    sessions.set('manager', managerSess);
+
+    autoIdleWithSequence(managerSess, [
+      '{"action": "update-plan", "plan": [{"id": "1", "description": "task A"}, {"id": "2", "description": "task B"}]}',
+      '{"action": "assign", "assignments": [{"assignee": "Worker A", "task_id": "1"}, {"assignee": "Worker B", "task_id": "2"}]}',
+      '{"action": "complete", "summary": "done"}',
+    ]);
+
+    // Mock A2A dispatch
+    const dispatchedTasks = new Map<string, { status: { state: string }; artifacts: Array<{ parts: Array<{ text: string }> }> }>();
+    const mockDispatch = vi.fn(async (mindId: string, description: string) => {
+      const taskId = `a2a-task-${mindId}`;
+      dispatchedTasks.set(taskId, {
+        status: { state: 'working' },
+        artifacts: [],
+      });
+      // Simulate async completion
+      setTimeout(() => {
+        dispatchedTasks.set(taskId, {
+          status: { state: 'completed' },
+          artifacts: [{ parts: [{ text: `Result from ${mindId}: ${description}` }] }],
+        });
+      }, 100);
+      return { id: taskId, contextId: 'ctx-1', status: { state: 'submitted' } };
+    });
+    const mockPoll = vi.fn(async (taskId: string) => dispatchedTasks.get(taskId) ?? null);
+
+    const strategy = new MagenticStrategy({ managerMindId: 'manager', maxSteps: 10 });
+    const ctx = createContext(sessions, {
+      dispatchTask: mockDispatch,
+      pollTask: mockPoll,
+    });
+    const minds = [makeMind('manager', 'Manager'), makeMind('worker-a', 'Worker A'), makeMind('worker-b', 'Worker B')];
+
+    await strategy.execute('Parallel test', minds, 'round-1', ctx);
+
+    // Both tasks dispatched via A2A
+    expect(mockDispatch).toHaveBeenCalledTimes(2);
+    expect(mockPoll).toHaveBeenCalled();
+
+    // Ledger updates emitted
+    const events = (ctx as unknown as { _events: ChatroomStreamEvent[] })._events;
+    const ledgerUpdates = events.filter((e) => e.event.type === 'orchestration:task-ledger-update');
+    expect(ledgerUpdates.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('worker prompts use natural language, not XML directives', async () => {
+    const managerSess = createMockSession();
+    const workerSess = createMockSession();
+    sessions.set('manager', managerSess);
+    sessions.set('worker-a', workerSess);
+
+    autoIdleWithSequence(managerSess, [
+      '{"action": "update-plan", "plan": [{"id": "1", "description": "research topic"}]}',
+      '{"action": "assign", "assignee": "Worker A", "task_id": "1", "task_description": "research AI safety"}',
+      '{"action": "complete", "summary": "done"}',
+    ]);
+
+    let capturedPrompt = '';
+    workerSess.send.mockImplementation(async (opts: { prompt: string }) => {
+      capturedPrompt = opts.prompt;
+      setTimeout(() => {
+        workerSess._emit('assistant.message', { data: { messageId: 'sdk-1', content: 'Result' } });
+        workerSess._emit('session.idle', {});
+      }, 0);
+    });
+
+    const strategy = new MagenticStrategy({ managerMindId: 'manager', maxSteps: 10 });
+    const ctx = createContext(sessions);
+    const minds = [makeMind('manager', 'Manager'), makeMind('worker-a', 'Worker A')];
+
+    await strategy.execute('Research AI safety', minds, 'round-1', ctx);
+
+    // Worker prompt should NOT contain XML directives
+    expect(capturedPrompt).not.toContain('<assigned-task');
+    expect(capturedPrompt).not.toContain('<completed-tasks');
+    // Should contain natural language task description (from ledger, not assign)
+    expect(capturedPrompt).toContain('Your task:');
+    expect(capturedPrompt).toContain('research topic');
+  });
+
+  it('parallel A2A: abort during poll loop stops waiting', async () => {
+    const managerSess = createMockSession();
+    sessions.set('manager', managerSess);
+
+    autoIdleWithSequence(managerSess, [
+      '{"action": "update-plan", "plan": [{"id": "1", "description": "task A"}, {"id": "2", "description": "task B"}]}',
+      '{"action": "assign", "assignments": [{"assignee": "Worker A", "task_id": "1"}, {"assignee": "Worker B", "task_id": "2"}]}',
+    ]);
+
+    const mockDispatch = vi.fn(async (_mindId: string) => ({
+      id: `task-${_mindId}`, contextId: 'ctx', status: { state: 'submitted' as const },
+    }));
+    // Always return 'working' — never completes
+    const mockPoll = vi.fn(async () => ({
+      id: 'task-1', contextId: 'ctx', status: { state: 'working' as const },
+    }));
+
+    const strategy = new MagenticStrategy({ managerMindId: 'manager', maxSteps: 10 });
+    const ctx = createContext(sessions, { dispatchTask: mockDispatch, pollTask: mockPoll });
+    const minds = [makeMind('manager', 'Manager'), makeMind('worker-a', 'Worker A'), makeMind('worker-b', 'Worker B')];
+
+    const promise = strategy.execute('Test', minds, 'round-1', ctx);
+
+    // Wait for dispatches to happen, then abort
+    await vi.waitFor(() => expect(mockDispatch).toHaveBeenCalledTimes(2));
+    strategy.stop();
+
+    await promise; // Should resolve without waiting 300s
+  });
+
+  it('parallel A2A: falls back to sequential when all dispatches fail (e.g. no AgentCard)', async () => {
+    const managerSess = createMockSession();
+    const workerASess = createMockSession();
+    const workerBSess = createMockSession();
+    sessions.set('manager', managerSess);
+    sessions.set('worker-a', workerASess);
+    sessions.set('worker-b', workerBSess);
+
+    autoIdleWithSequence(managerSess, [
+      '{"action": "update-plan", "plan": [{"id": "1", "description": "task A"}, {"id": "2", "description": "task B"}]}',
+      '{"action": "assign", "assignments": [{"assignee": "Worker A", "task_id": "1"}, {"assignee": "Worker B", "task_id": "2"}]}',
+      '{"action": "complete", "summary": "done"}',
+    ]);
+
+    autoIdleWith(workerASess, 'A done');
+    autoIdleWith(workerBSess, 'B done');
+
+    // dispatchTask always throws (simulates minds without AgentCard)
+    const mockDispatch = vi.fn(async () => { throw new Error('Unknown recipient: worker-a'); });
+    const mockPoll = vi.fn(async () => null);
+
+    const strategy = new MagenticStrategy({ managerMindId: 'manager', maxSteps: 10 });
+    const ctx = createContext(sessions, { dispatchTask: mockDispatch, pollTask: mockPoll });
+    const minds = [makeMind('manager', 'Manager'), makeMind('worker-a', 'Worker A'), makeMind('worker-b', 'Worker B')];
+
+    await strategy.execute('Test', minds, 'round-1', ctx);
+
+    // A2A dispatch attempted but failed
+    expect(mockDispatch).toHaveBeenCalledTimes(2);
+    // Fell back to sequential — both workers called via sendToAgentWithRetry
+    expect(workerASess.send).toHaveBeenCalledTimes(1);
+    expect(workerBSess.send).toHaveBeenCalledTimes(1);
+  });
 });

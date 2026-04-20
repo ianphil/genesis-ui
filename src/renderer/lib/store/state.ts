@@ -1,6 +1,6 @@
 import type { ChatMessage, ChatEvent, ModelInfo, LensViewManifest, MindContext } from '../../../shared/types';
 import type { Message, Task, TaskStatusUpdateEvent, TaskArtifactUpdateEvent } from '../../../shared/a2a-types';
-import type { ChatroomMessage, ChatroomStreamEvent, OrchestrationMode, GroupChatConfig, HandoffConfig, MagenticConfig } from '../../../shared/chatroom-types';
+import type { ChatroomMessage, ChatroomStreamEvent, OrchestrationMode, GroupChatConfig, HandoffConfig, MagenticConfig, TaskLedgerItem } from '../../../shared/chatroom-types';
 
 export type LensView = 'chat' | string;
 
@@ -27,6 +27,8 @@ export interface AppState {
   chatroomMagenticConfig: MagenticConfig | null;
   /** Who is currently speaking / being selected — shown as typing indicator */
   chatroomActiveSpeaker: { mindId: string; mindName: string; phase: 'speaking' | 'moderating' | 'synthesizing' } | null;
+  /** Live task ledger from Magentic orchestration */
+  chatroomTaskLedger: TaskLedgerItem[];
 }
 
 export type AppAction =
@@ -85,4 +87,5 @@ export const initialState: AppState = {
   chatroomHandoffConfig: null,
   chatroomMagenticConfig: null,
   chatroomActiveSpeaker: null,
+  chatroomTaskLedger: [],
 };

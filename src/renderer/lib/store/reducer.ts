@@ -1,6 +1,6 @@
 import type { ChatMessage, ChatEvent, ContentBlock } from '../../../shared/types';
 import type { Task, TaskState } from '../../../shared/a2a-types';
-import type { ChatroomMessage } from '../../../shared/chatroom-types';
+import type { ChatroomMessage, TaskLedgerItem } from '../../../shared/chatroom-types';
 import { isOrchestrationEvent } from '../../../shared/chatroom-types';
 import type { AppState, AppAction } from './state';
 
@@ -266,6 +266,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         chatroomMessages: [],
         chatroomStreamingByMind: {},
         chatroomActiveSpeaker: null,
+        chatroomTaskLedger: [],
       };
 
     case 'A2A_INCOMING': {
@@ -425,6 +426,9 @@ export function appReducer(state: AppState, action: AppAction): AppState {
                 mindName,
                 phase: 'moderating',
               },
+              ...(event.type === 'orchestration:task-ledger-update' && event.data.ledger
+                ? { chatroomTaskLedger: event.data.ledger as TaskLedgerItem[] }
+                : {}),
             };
 
           case 'orchestration:approval-requested':
@@ -470,7 +474,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     }
 
     case 'CHATROOM_CLEAR':
-      return { ...state, chatroomMessages: [], chatroomStreamingByMind: {}, chatroomActiveSpeaker: null };
+      return { ...state, chatroomMessages: [], chatroomStreamingByMind: {}, chatroomActiveSpeaker: null, chatroomTaskLedger: [] };
 
     case 'SET_ORCHESTRATION':
       return { ...state, chatroomOrchestration: action.payload };
