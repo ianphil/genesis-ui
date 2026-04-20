@@ -14,12 +14,20 @@ import type {
 } from '../../../shared/chatroom-types';
 import type { MindContext } from '../../../shared/types';
 import type { CopilotSession } from '../mind';
+import type { Task, SendMessageRequest } from '../../../shared/a2a-types';
 import { createStrategy } from './orchestration';
 import type { OrchestrationStrategy, OrchestrationContext } from './orchestration';
+import { stripControlJson } from './orchestration/shared';
 
 // ---------------------------------------------------------------------------
 // Interfaces
 // ---------------------------------------------------------------------------
+
+/** A2A task dispatch — provided by TaskManager, optional */
+export interface TaskDispatcher {
+  sendTask(request: SendMessageRequest): Promise<Task>;
+  getTask(id: string): Task | null;
+}
 
 export interface ChatroomSessionFactory {
   createChatroomSession(mindId: string): Promise<CopilotSession>;
@@ -68,7 +76,10 @@ export class ChatroomService extends EventEmitter {
   private readonly persistPath: string;
   private readonly persistDir: string;
 
-  constructor(private readonly sessionFactory: ChatroomSessionFactory) {
+  constructor(
+    private readonly sessionFactory: ChatroomSessionFactory,
+    private readonly taskDispatcher?: TaskDispatcher,
+  ) {
     super();
 
     const chamberDir = app.getPath('userData');
@@ -139,6 +150,25 @@ export class ChatroomService extends EventEmitter {
       },
       getHistory: () => [...this.messages],
       orchestrationMode: this.orchestrationMode,
+      ...(this.taskDispatcher ? {
+        dispatchTask: (mindId: string, description: string, contextId: string) =>
+          this.taskDispatcher!.sendTask({
+            recipient: mindId,
+            message: {
+              messageId: randomUUID(),
+              role: 'user',
+              parts: [{ text: description, mediaType: 'text/plain' }],
+              contextId,
+            },
+          }),
+        pollTask: (taskId: string) => {
+          try {
+            return Promise.resolve(this.taskDispatcher!.getTask(taskId));
+          } catch {
+            return Promise.resolve(null);
+          }
+        },
+      } : {}),
     };
 
     try {
@@ -259,7 +289,13 @@ export class ChatroomService extends EventEmitter {
     xml += `<chatroom-history participants="${escapeXml(participantNames)}">\n`;
     for (const msg of historyRounds) {
       const sender = msg.sender.name;
-      xml += `  <message sender="${escapeXml(sender)}">${escapeXml(textContent(msg))}</message>\n`;
+      // Strip orchestration control JSON (manager directives, handoff decisions)
+      // so workers don't see structured commands from other agents in their context
+      const content = stripControlJson(
+        textContent(msg),
+        (a) => ['assign', 'complete', 'update-plan', 'handoff', 'done', 'direct', 'close'].includes(a as string),
+      );
+      xml += `  <message sender="${escapeXml(sender)}">${escapeXml(content)}</message>\n`;
     }
     xml += `</chatroom-history>\n`;
     xml += `Respond only to the following message. The chatroom history above is for context only.\n\n`;

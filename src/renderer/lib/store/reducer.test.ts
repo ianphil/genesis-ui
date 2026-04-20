@@ -444,6 +444,15 @@ describe('appReducer', () => {
       const state = appReducer(prev, { type: 'NEW_CONVERSATION' });
       expect(state.streamingByMind[mindId]).toBe(false);
     });
+
+    it('NEW_CONVERSATION clears chatroomTaskLedger', () => {
+      const prev = {
+        ...withActiveMind,
+        chatroomTaskLedger: [{ id: '1', description: 'task', status: 'completed' as const }],
+      };
+      const state = appReducer(prev, { type: 'NEW_CONVERSATION' });
+      expect(state.chatroomTaskLedger).toEqual([]);
+    });
   });
 
   // -------------------------------------------------------------------------

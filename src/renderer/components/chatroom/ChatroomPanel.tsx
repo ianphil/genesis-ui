@@ -3,6 +3,7 @@ import { useAppState, useAppDispatch, getPlainContent } from '../../lib/store';
 import { ChatInput } from '../chat/ChatInput';
 import { StreamingMessage } from '../chat/StreamingMessage';
 import { OrchestrationPicker } from './OrchestrationPicker';
+import { TaskLedgerPanel } from './TaskLedgerPanel';
 import { cn, formatTime } from '../../lib/utils';
 import type { MindContext } from '../../../shared/types';
 import type { ChatroomMessage } from '../../../shared/chatroom-types';
@@ -117,13 +118,14 @@ function ModeratorDecisionBubble({ message, minds }: { message: ChatroomMessage;
 // TypingIndicator — shows who is currently speaking/thinking
 // ---------------------------------------------------------------------------
 
-function TypingIndicator({ speaker, minds }: {
+function TypingIndicator({ speaker, minds, orchestrationMode }: {
   speaker: { mindId: string; mindName: string; phase: 'speaking' | 'moderating' | 'synthesizing' };
   minds: MindContext[];
+  orchestrationMode?: string;
 }) {
   const color = agentColor(minds, speaker.mindId);
   const phaseText = speaker.phase === 'moderating'
-    ? 'is deciding who speaks next…'
+    ? (orchestrationMode === 'magentic' ? 'is planning…' : 'is deciding who speaks next…')
     : speaker.phase === 'synthesizing'
       ? 'is synthesizing the discussion…'
       : 'is speaking…';
@@ -155,11 +157,13 @@ function ChatroomMessageList({
   minds,
   moderatorMindId,
   activeSpeaker,
+  orchestrationMode,
 }: {
   messages: ChatroomMessage[];
   minds: MindContext[];
   moderatorMindId?: string;
   activeSpeaker: { mindId: string; mindName: string; phase: 'speaking' | 'moderating' | 'synthesizing' } | null;
+  orchestrationMode?: string;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const isAutoScrolling = useRef(true);
@@ -230,7 +234,7 @@ function ChatroomMessageList({
 
         {/* Typing indicator */}
         {activeSpeaker && (
-          <TypingIndicator speaker={activeSpeaker} minds={minds} />
+          <TypingIndicator speaker={activeSpeaker} minds={minds} orchestrationMode={orchestrationMode} />
         )}
       </div>
     </div>
@@ -269,6 +273,7 @@ export function ChatroomPanel() {
     chatroomHandoffConfig,
     chatroomMagenticConfig,
     chatroomActiveSpeaker,
+    chatroomTaskLedger,
   } = useAppState();
   const dispatch = useAppDispatch();
   const isStreaming = Object.values(chatroomStreamingByMind).some(Boolean);
@@ -342,6 +347,10 @@ export function ChatroomPanel() {
         }}
       />
 
+      {chatroomTaskLedger.length > 0 && (
+        <TaskLedgerPanel ledger={chatroomTaskLedger} minds={minds} />
+      )}
+
       {chatroomMessages.length === 0 ? (
         <ChatroomEmptyState connected={connected} />
       ) : (
@@ -350,6 +359,7 @@ export function ChatroomPanel() {
           minds={minds}
           moderatorMindId={chatroomOrchestration === 'group-chat' ? chatroomGroupChatConfig?.moderatorMindId : undefined}
           activeSpeaker={chatroomActiveSpeaker}
+          orchestrationMode={chatroomOrchestration}
         />
       )}
 

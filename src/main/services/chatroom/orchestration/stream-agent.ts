@@ -18,6 +18,8 @@ export interface StreamAgentOptions {
   abortSignal: AbortSignal;
   unsubs: (() => void)[];
   orchestrationMode: OrchestrationMode;
+  /** If true, suppress all renderer-visible events (chunks, tool calls, etc.) */
+  silent?: boolean;
 }
 
 export interface StreamAgentResult {
@@ -36,7 +38,7 @@ export async function streamAgentTurn(opts: StreamAgentOptions): Promise<StreamA
   const messageId = randomUUID();
 
   const emitEvent = (event: ChatroomStreamEvent['event']) => {
-    if (!abortSignal.aborted) {
+    if (!abortSignal.aborted && !opts.silent) {
       context.emitEvent({
         mindId: mind.mindId,
         mindName: mind.identity.name,
@@ -182,6 +184,8 @@ export interface SendToAgentOptions {
   orchestrationMode: OrchestrationMode;
   /** Optional content transform (e.g. stripControlJson) applied to display content */
   transformContent?: (raw: string) => string;
+  /** If true, do not persist message or emit done — used for internal coordinator calls */
+  silent?: boolean;
 }
 
 export interface SendToAgentResult {
@@ -203,6 +207,7 @@ export async function sendToAgentWithRetry(opts: SendToAgentOptions): Promise<Se
       const { finalContent, messageId } = await streamAgentTurn({
         session, mind, prompt, roundId, context,
         abortSignal, unsubs: opts.unsubs, orchestrationMode,
+        silent: opts.silent,
       });
 
       if (abortSignal.aborted) return { message: null, rawContent: finalContent };
@@ -218,9 +223,10 @@ export async function sendToAgentWithRetry(opts: SendToAgentOptions): Promise<Se
           roundId,
           orchestrationMode,
         };
-        context.persistMessage(msg);
 
-        const emitDone = () => {
+        if (!opts.silent) {
+          context.persistMessage(msg);
+
           if (!abortSignal.aborted) {
             context.emitEvent({
               mindId: mind.mindId,
@@ -230,8 +236,7 @@ export async function sendToAgentWithRetry(opts: SendToAgentOptions): Promise<Se
               event: { type: 'done' },
             });
           }
-        };
-        emitDone();
+        }
 
         return {
           message: msg,
