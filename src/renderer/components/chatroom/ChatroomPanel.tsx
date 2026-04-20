@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef } from 'react';
 import { useAppState, useAppDispatch, getPlainContent } from '../../lib/store';
 import { ChatInput } from '../chat/ChatInput';
 import { StreamingMessage } from '../chat/StreamingMessage';
+import { OrchestrationPicker } from './OrchestrationPicker';
 import { cn, formatTime } from '../../lib/utils';
 import type { MindContext } from '../../../shared/types';
 import type { ChatroomMessage } from '../../../shared/chatroom-types';
@@ -15,6 +16,38 @@ const AGENT_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#e
 function agentColor(minds: MindContext[], mindId: string): string {
   const idx = minds.findIndex(m => m.mindId === mindId);
   return AGENT_COLORS[(idx >= 0 ? idx : 0) % AGENT_COLORS.length];
+}
+
+// ---------------------------------------------------------------------------
+// Moderator message detection & parsing
+// ---------------------------------------------------------------------------
+
+interface ModeratorDecision {
+  nextSpeaker: string;
+  direction: string;
+  action: string;
+}
+
+function parseModeratorJson(text: string): ModeratorDecision | null {
+  const match = text.match(/\{[\s\S]*?"next_speaker"[\s\S]*?\}/);
+  if (!match) return null;
+  try {
+    const parsed = JSON.parse(match[0]) as Record<string, unknown>;
+    return {
+      nextSpeaker: typeof parsed.next_speaker === 'string' ? parsed.next_speaker : '',
+      direction: typeof parsed.direction === 'string' ? parsed.direction : '',
+      action: typeof parsed.action === 'string' ? parsed.action : 'direct',
+    };
+  } catch {
+    return null;
+  }
+}
+
+function isModeratorMessage(message: ChatroomMessage, moderatorMindId?: string): boolean {
+  if (message.role !== 'assistant') return false;
+  if (moderatorMindId && message.sender?.mindId !== moderatorMindId) return false;
+  const text = getPlainContent(message);
+  return parseModeratorJson(text) !== null;
 }
 
 // ---------------------------------------------------------------------------
@@ -43,10 +76,91 @@ function ParticipantBar({ minds, streamingByMind }: { minds: MindContext[]; stre
 }
 
 // ---------------------------------------------------------------------------
+// ModeratorDecisionBubble — compact system message for moderator routing
+// ---------------------------------------------------------------------------
+
+function ModeratorDecisionBubble({ message, minds }: { message: ChatroomMessage; minds: MindContext[] }) {
+  const text = getPlainContent(message);
+  const decision = parseModeratorJson(text);
+  if (!decision) return null;
+
+  const color = agentColor(minds, message.sender?.mindId ?? '');
+  const moderatorName = message.sender?.name ?? 'Moderator';
+
+  if (decision.action === 'close') {
+    return (
+      <div className="flex justify-center py-2">
+        <span className="text-xs text-muted-foreground bg-secondary/50 rounded-full px-3 py-1 inline-flex items-center gap-1.5">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          <span style={{ color }}>{moderatorName}</span> closed the discussion
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex justify-center py-2">
+      <span className="text-xs text-muted-foreground bg-secondary/50 rounded-full px-3 py-1 inline-flex items-center gap-1.5 max-w-lg">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+        <span style={{ color }}>{moderatorName}</span>
+        <span className="text-muted-foreground">→</span>
+        <span className="font-medium text-foreground">{decision.nextSpeaker}</span>
+        {decision.direction && (
+          <span className="text-muted-foreground truncate">— {decision.direction}</span>
+        )}
+      </span>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// TypingIndicator — shows who is currently speaking/thinking
+// ---------------------------------------------------------------------------
+
+function TypingIndicator({ speaker, minds }: {
+  speaker: { mindId: string; mindName: string; phase: 'speaking' | 'moderating' | 'synthesizing' };
+  minds: MindContext[];
+}) {
+  const color = agentColor(minds, speaker.mindId);
+  const phaseText = speaker.phase === 'moderating'
+    ? 'is deciding who speaks next…'
+    : speaker.phase === 'synthesizing'
+      ? 'is synthesizing the discussion…'
+      : 'is speaking…';
+
+  return (
+    <div className="flex gap-3">
+      {/* Spacer matching avatar width */}
+      <div className="w-7 shrink-0" />
+      <div className="flex items-center gap-1.5 text-muted-foreground">
+        <div className="flex gap-1">
+          <span className="h-1.5 w-1.5 rounded-full animate-bounce" style={{ backgroundColor: color, animationDelay: '0ms' }} />
+          <span className="h-1.5 w-1.5 rounded-full animate-bounce" style={{ backgroundColor: color, animationDelay: '150ms' }} />
+          <span className="h-1.5 w-1.5 rounded-full animate-bounce" style={{ backgroundColor: color, animationDelay: '300ms' }} />
+        </div>
+        <span className="text-xs">
+          <span className="font-medium" style={{ color }}>{speaker.mindName}</span> {phaseText}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // ChatroomMessageList
 // ---------------------------------------------------------------------------
 
-function ChatroomMessageList({ messages, minds }: { messages: ChatroomMessage[]; minds: MindContext[] }) {
+function ChatroomMessageList({
+  messages,
+  minds,
+  moderatorMindId,
+  activeSpeaker,
+}: {
+  messages: ChatroomMessage[];
+  minds: MindContext[];
+  moderatorMindId?: string;
+  activeSpeaker: { mindId: string; mindName: string; phase: 'speaking' | 'moderating' | 'synthesizing' } | null;
+}) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const isAutoScrolling = useRef(true);
 
@@ -54,7 +168,7 @@ function ChatroomMessageList({ messages, minds }: { messages: ChatroomMessage[];
     if (isAutoScrolling.current && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, activeSpeaker]);
 
   const handleScroll = () => {
     if (!scrollRef.current) return;
@@ -66,6 +180,11 @@ function ChatroomMessageList({ messages, minds }: { messages: ChatroomMessage[];
     <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 py-4">
       <div className="max-w-3xl mx-auto space-y-6">
         {messages.map((message) => {
+          // Moderator routing messages → compact system bubble
+          if (moderatorMindId && isModeratorMessage(message, moderatorMindId)) {
+            return <ModeratorDecisionBubble key={message.id} message={message} minds={minds} />;
+          }
+
           const isUser = message.role === 'user';
           const senderName = message.sender?.name ?? 'Unknown';
           const color = isUser ? undefined : agentColor(minds, message.sender?.mindId ?? '');
@@ -108,6 +227,11 @@ function ChatroomMessageList({ messages, minds }: { messages: ChatroomMessage[];
             </div>
           );
         })}
+
+        {/* Typing indicator */}
+        {activeSpeaker && (
+          <TypingIndicator speaker={activeSpeaker} minds={minds} />
+        )}
       </div>
     </div>
   );
@@ -134,7 +258,18 @@ function ChatroomEmptyState({ connected }: { connected: boolean }) {
 // ---------------------------------------------------------------------------
 
 export function ChatroomPanel() {
-  const { chatroomMessages, minds, chatroomStreamingByMind, availableModels, selectedModel } = useAppState();
+  const {
+    chatroomMessages,
+    minds,
+    chatroomStreamingByMind,
+    availableModels,
+    selectedModel,
+    chatroomOrchestration,
+    chatroomGroupChatConfig,
+    chatroomHandoffConfig,
+    chatroomMagenticConfig,
+    chatroomActiveSpeaker,
+  } = useAppState();
   const dispatch = useAppDispatch();
   const isStreaming = Object.values(chatroomStreamingByMind).some(Boolean);
   const connected = minds.length > 0;
@@ -178,10 +313,44 @@ export function ChatroomPanel() {
     <div className="flex-1 flex flex-col min-h-0">
       <ParticipantBar minds={minds} streamingByMind={chatroomStreamingByMind} />
 
+      <OrchestrationPicker
+        mode={chatroomOrchestration}
+        groupChatConfig={chatroomGroupChatConfig}
+        handoffConfig={chatroomHandoffConfig}
+        magneticConfig={chatroomMagenticConfig}
+        minds={minds}
+        disabled={isStreaming}
+        onModeChange={(mode) => {
+          dispatch({ type: 'SET_ORCHESTRATION', payload: mode });
+          const config = mode === 'group-chat' ? chatroomGroupChatConfig
+            : mode === 'handoff' ? chatroomHandoffConfig
+            : mode === 'magentic' ? chatroomMagenticConfig
+            : undefined;
+          window.electronAPI.chatroom.setOrchestration(mode, config ?? undefined);
+        }}
+        onGroupChatConfigChange={(config) => {
+          dispatch({ type: 'SET_GROUP_CHAT_CONFIG', payload: config });
+          window.electronAPI.chatroom.setOrchestration('group-chat', config);
+        }}
+        onHandoffConfigChange={(config) => {
+          dispatch({ type: 'SET_HANDOFF_CONFIG', payload: config });
+          window.electronAPI.chatroom.setOrchestration('handoff', config);
+        }}
+        onMagneticConfigChange={(config) => {
+          dispatch({ type: 'SET_MAGENTIC_CONFIG', payload: config });
+          window.electronAPI.chatroom.setOrchestration('magentic', config);
+        }}
+      />
+
       {chatroomMessages.length === 0 ? (
         <ChatroomEmptyState connected={connected} />
       ) : (
-        <ChatroomMessageList messages={chatroomMessages} minds={minds} />
+        <ChatroomMessageList
+          messages={chatroomMessages}
+          minds={minds}
+          moderatorMindId={chatroomOrchestration === 'group-chat' ? chatroomGroupChatConfig?.moderatorMindId : undefined}
+          activeSpeaker={chatroomActiveSpeaker}
+        />
       )}
 
       <ChatInput

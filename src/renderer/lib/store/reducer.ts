@@ -1,6 +1,7 @@
 import type { ChatMessage, ChatEvent, ContentBlock } from '../../../shared/types';
 import type { Task, TaskState } from '../../../shared/a2a-types';
 import type { ChatroomMessage } from '../../../shared/chatroom-types';
+import { isOrchestrationEvent } from '../../../shared/chatroom-types';
 import type { AppState, AppAction } from './state';
 
 /** Extract plain text from content blocks (for search, accessibility, etc.) */
@@ -262,6 +263,9 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         streamingByMind: state.activeMindId
           ? { ...state.streamingByMind, [state.activeMindId]: false }
           : state.streamingByMind,
+        chatroomMessages: [],
+        chatroomStreamingByMind: {},
+        chatroomActiveSpeaker: null,
       };
 
     case 'A2A_INCOMING': {
@@ -363,6 +367,76 @@ export function appReducer(state: AppState, action: AppAction): AppState {
 
     case 'CHATROOM_EVENT': {
       const { mindId, mindName, messageId, roundId, event } = action.payload;
+
+      // Orchestration events update the active speaker indicator
+      if (isOrchestrationEvent(event)) {
+        switch (event.type) {
+          case 'orchestration:turn-start':
+            return {
+              ...state,
+              chatroomActiveSpeaker: {
+                mindId: event.data.speakerMindId ?? mindId,
+                mindName: event.data.speaker ?? mindName,
+                phase: 'speaking',
+              },
+            };
+
+          case 'orchestration:moderator-decision':
+            return {
+              ...state,
+              chatroomActiveSpeaker: {
+                mindId,
+                mindName,
+                phase: 'moderating',
+              },
+            };
+
+          case 'orchestration:synthesis':
+            return {
+              ...state,
+              chatroomActiveSpeaker: {
+                mindId,
+                mindName,
+                phase: 'synthesizing',
+              },
+            };
+
+          case 'orchestration:convergence':
+          case 'orchestration:handoff-terminated':
+          case 'orchestration:magentic-terminated':
+            return { ...state, chatroomActiveSpeaker: null };
+
+          case 'orchestration:handoff':
+            return {
+              ...state,
+              chatroomActiveSpeaker: {
+                mindId: event.data.toMindId ?? mindId,
+                mindName: event.data.to ?? mindName,
+                phase: 'speaking',
+              },
+            };
+
+          case 'orchestration:manager-plan':
+          case 'orchestration:task-ledger-update':
+            return {
+              ...state,
+              chatroomActiveSpeaker: {
+                mindId,
+                mindName,
+                phase: 'moderating',
+              },
+            };
+
+          case 'orchestration:approval-requested':
+          case 'orchestration:approval-decided':
+          default:
+            return state;
+        }
+      }
+
+      // At this point, event is a ChatEvent (not an OrchestrationEvent)
+      const chatEvent = event as ChatEvent;
+
       let messages = state.chatroomMessages;
 
       // Auto-create placeholder if this is the first event for an unknown message
@@ -380,19 +454,38 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         messages = [...messages, placeholder];
       }
 
-      const newMessages = handleChatEvent(messages, messageId, event);
-      const isDone = event.type === 'done' || event.type === 'error';
+      const newMessages = handleChatEvent(messages, messageId, chatEvent);
+      const isDone = chatEvent.type === 'done' || chatEvent.type === 'error';
       return {
         ...state,
         chatroomMessages: newMessages as ChatroomMessage[],
         chatroomStreamingByMind: isDone
           ? { ...state.chatroomStreamingByMind, [mindId]: false }
           : { ...state.chatroomStreamingByMind, [mindId]: true },
+        // Clear active speaker when all streaming stops
+        ...(isDone && !Object.entries(state.chatroomStreamingByMind).some(
+          ([id, s]) => s && id !== mindId,
+        ) ? { chatroomActiveSpeaker: null } : {}),
       };
     }
 
     case 'CHATROOM_CLEAR':
-      return { ...state, chatroomMessages: [], chatroomStreamingByMind: {} };
+      return { ...state, chatroomMessages: [], chatroomStreamingByMind: {}, chatroomActiveSpeaker: null };
+
+    case 'SET_ORCHESTRATION':
+      return { ...state, chatroomOrchestration: action.payload };
+
+    case 'SET_GROUP_CHAT_CONFIG':
+      return { ...state, chatroomGroupChatConfig: action.payload };
+
+    case 'SET_HANDOFF_CONFIG':
+      return { ...state, chatroomHandoffConfig: action.payload };
+
+    case 'SET_MAGENTIC_CONFIG':
+      return { ...state, chatroomMagenticConfig: action.payload };
+
+    case 'CHATROOM_ACTIVE_SPEAKER':
+      return { ...state, chatroomActiveSpeaker: action.payload };
 
     default:
       return state;
