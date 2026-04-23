@@ -75,6 +75,8 @@
   "overrides": {
     "@electron-forge/plugin-fuses": {
       "@electron/fuses": "$@electron/fuses"
-    }
+    },
+    "@electron/rebuild": "^4.0.4",
+    "tmp": "^0.2.5"
   }
 }
