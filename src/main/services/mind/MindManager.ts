@@ -6,7 +6,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { BrowserWindow } from 'electron';
 import type { MindContext, AppConfig, MindRecord } from '../../../shared/types';
-import type { InternalMindContext, CopilotClient, CopilotSession, Tool } from './types';
+import type { InternalMindContext, CopilotClient, CopilotSession, Tool, UserInputHandler } from './types';
 import { generateMindId } from './generateMindId';
 import type { CopilotClientFactory } from '../sdk/CopilotClientFactory';
 import type { IdentityLoader } from '../chat/IdentityLoader';
@@ -281,7 +281,7 @@ export class MindManager extends EventEmitter {
   async createTaskSession(
     mindId: string,
     taskId: string,
-    onUserInputRequest?: (prompt: string) => Promise<{ answer: string; wasFreeform: boolean }>,
+    onUserInputRequest?: UserInputHandler,
   ): Promise<CopilotSession> {
     const context = this.minds.get(mindId);
     if (!context) throw new Error(`Mind ${mindId} not found`);
@@ -318,7 +318,7 @@ export class MindManager extends EventEmitter {
     mindPath: string,
     systemMessage: string,
     tools: Tool[],
-    onUserInputRequest?: (prompt: string) => Promise<{ answer: string; wasFreeform: boolean }>,
+    onUserInputRequest?: UserInputHandler,
   ): Promise<CopilotSession> {
     return client.createSession({
       workingDirectory: mindPath,
@@ -326,10 +326,10 @@ export class MindManager extends EventEmitter {
       tools,
       systemMessage: {
         mode: 'customize',
-        sectionOverrides: [
-          { section: 'identity', override: { type: 'replace', content: systemMessage } },
-          { section: 'tone', override: { type: 'remove' } },
-        ],
+        sections: {
+          identity: { action: 'replace', content: systemMessage },
+          tone: { action: 'remove' },
+        },
       },
       onPermissionRequest: async () => ({ kind: 'approved' }),
       onUserInputRequest: onUserInputRequest ?? (async () => ({ answer: 'Not available in this context', wasFreeform: true })),

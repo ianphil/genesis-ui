@@ -154,6 +154,18 @@ describe('A2A IPC', () => {
     expect(result).toEqual(response);
   });
 
+  it('a2a:listTasks drops invalid status values at the IPC boundary', async () => {
+    const response = { tasks: [], nextPageToken: '', pageSize: 0, totalSize: 0 };
+    mockTaskManager.listTasks.mockReturnValue(response);
+
+    const handleCalls = vi.mocked(ipcMain.handle).mock.calls;
+    const handler = handleCalls.find((c) => c[0] === 'a2a:listTasks');
+    expect(handler).toBeDefined();
+
+    await handler[1]({}, { contextId: 'ctx-1', status: 'bogus-status' });
+    expect(mockTaskManager.listTasks).toHaveBeenCalledWith({ contextId: 'ctx-1', status: undefined });
+  });
+
   it('a2a:cancelTask handle returns updated task', async () => {
     const task = { id: 'task-1', contextId: 'ctx-1', status: { state: 'canceled' } };
     mockTaskManager.cancelTask.mockReturnValue(task);

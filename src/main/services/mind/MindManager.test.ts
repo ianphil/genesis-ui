@@ -384,12 +384,11 @@ describe('MindManager', () => {
       expect(mockCreateSession).toHaveBeenCalledWith(
         expect.objectContaining({
           systemMessage: expect.objectContaining({
-            sectionOverrides: expect.arrayContaining([
-              expect.objectContaining({
-                section: 'identity',
-                override: { type: 'replace', content: 'Identity for /tmp/agents/q' },
-              }),
-            ]),
+            mode: 'customize',
+            sections: expect.objectContaining({
+              identity: { action: 'replace', content: 'Identity for /tmp/agents/q' },
+              tone: { action: 'remove' },
+            }),
           }),
         }),
       );
@@ -423,7 +422,11 @@ describe('MindManager', () => {
 
     it('accepts custom onUserInputRequest callback', async () => {
       const mind = await manager.loadMind('/tmp/agents/q');
-      const customCallback = vi.fn(async () => ({ answer: 'custom', wasFreeform: false }));
+      // New SDK UserInputHandler signature: (request: UserInputRequest, invocation) => UserInputResponse
+      const customCallback = vi.fn(async () => ({
+        answer: 'custom',
+        wasFreeform: false,
+      }));
       mockCreateSession.mockClear();
 
       await manager.createTaskSession(mind.mindId, 'task-1', customCallback);

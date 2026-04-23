@@ -2,7 +2,24 @@ import { ipcMain, BrowserWindow } from 'electron';
 import type { EventEmitter } from 'events';
 import type { AgentCardRegistry } from '../services/a2a/AgentCardRegistry';
 import type { TaskManager } from '../services/a2a/TaskManager';
-import type { TaskStatusUpdateEvent, TaskArtifactUpdateEvent } from '../services/a2a/types';
+import type { TaskStatusUpdateEvent, TaskArtifactUpdateEvent, TaskState } from '../services/a2a/types';
+
+const VALID_TASK_STATES: ReadonlySet<TaskState> = new Set([
+  'submitted',
+  'working',
+  'completed',
+  'failed',
+  'canceled',
+  'input-required',
+  'rejected',
+  'auth-required',
+]);
+
+function narrowTaskState(value: unknown): TaskState | undefined {
+  return typeof value === 'string' && VALID_TASK_STATES.has(value as TaskState)
+    ? (value as TaskState)
+    : undefined;
+}
 
 export function setupA2AIPC(
   ipcEmitter: EventEmitter,
@@ -46,7 +63,9 @@ export function setupA2AIPC(
   });
 
   ipcMain.handle('a2a:listTasks', async (_, filter?: { contextId?: string; status?: string }) => {
-    return taskManager.listTasks(filter);
+    return taskManager.listTasks(
+      filter ? { contextId: filter.contextId, status: narrowTaskState(filter.status) } : undefined,
+    );
   });
 
   ipcMain.handle('a2a:cancelTask', async (_, taskId: string) => {

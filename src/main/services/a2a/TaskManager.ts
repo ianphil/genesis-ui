@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events';
 import type { AgentCardRegistry } from './AgentCardRegistry';
-import type { CopilotSession } from '../mind';
+import type { CopilotSession, UserInputHandler, UserInputResponse } from '../mind/types';
 import type {
   SendMessageRequest,
   Task,
@@ -16,7 +16,7 @@ export interface TaskSessionFactory {
   createTaskSession(
     mindId: string,
     taskId: string,
-    onUserInputRequest?: (prompt: string) => Promise<{ answer: string; wasFreeform: boolean }>,
+    onUserInputRequest?: UserInputHandler,
   ): Promise<CopilotSession>;
 }
 import {
@@ -36,7 +36,7 @@ export class TaskManager extends EventEmitter {
 
   private tasks = new Map<string, Task>();
   private sessions = new Map<string, CopilotSession>();
-  private pendingInputs = new Map<string, (answer: { answer: string; wasFreeform: boolean }) => void>();
+  private pendingInputs = new Map<string, (answer: UserInputResponse) => void>();
   private taskTargets = new Map<string, string>();
 
   constructor(
@@ -189,8 +189,8 @@ export class TaskManager extends EventEmitter {
     this.transitionState(task, 'working');
 
     // b. Create isolated session with input-required callback
-    const onUserInputRequest = async (prompt: string): Promise<{ answer: string; wasFreeform: boolean }> => {
-      const statusMessage = createTextMessage(targetMindId, prompt, { contextId: task.contextId });
+    const onUserInputRequest: UserInputHandler = async (request): Promise<UserInputResponse> => {
+      const statusMessage = createTextMessage(targetMindId, request.question, { contextId: task.contextId });
       task.status = createTaskStatus('input-required', statusMessage);
       task.history = [...(task.history ?? []), statusMessage];
       this.emitStatusUpdate(task);
