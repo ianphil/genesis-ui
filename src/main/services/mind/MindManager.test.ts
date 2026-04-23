@@ -5,6 +5,9 @@ import type { IdentityLoader } from '../chat/IdentityLoader';
 import type { ExtensionLoader } from '../extensions/ExtensionLoader';
 import type { ConfigService } from '../config/ConfigService';
 import type { ViewDiscovery } from '../lens/ViewDiscovery';
+import type { AppConfig } from '../../../shared/types';
+import type { ToolBuilder } from './MindManager';
+import type { BrowserWindow } from 'electron';
 
 // --- Mocks ---
 
@@ -18,7 +21,8 @@ import * as fs from 'fs';
 
 const mockStart = vi.fn();
 const mockStop = vi.fn();
-const mockCreateSession = vi.fn(() => ({
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const mockCreateSession = vi.fn((_config: Record<string, unknown>) => ({
   send: vi.fn(),
   sendAndWait: vi.fn(),
   on: vi.fn(),
@@ -48,16 +52,16 @@ const mockIdentityLoader = {
 const mockExtensionLoader = {
   registerAdapter: vi.fn(),
   discoverExtensions: vi.fn(() => []),
-  loadTools: vi.fn(async () => ({ tools: [], loaded: [] })),
+  loadTools: vi.fn(async (): Promise<{ tools: unknown[]; loaded: unknown[] }> => ({ tools: [], loaded: [] })),
   cleanupExtensions: vi.fn(),
 };
 
-let currentConfig = {
-  version: 2 as const,
+let currentConfig: AppConfig = {
+  version: 2,
   minds: [],
   activeMindId: null,
   activeLogin: null,
-  theme: 'dark' as const,
+  theme: 'dark',
 };
 
 const mockConfigService = {
@@ -88,11 +92,11 @@ describe('MindManager', () => {
       currentConfig = config;
     });
     currentConfig = {
-      version: 2 as const,
+      version: 2,
       minds: [],
       activeMindId: null,
       activeLogin: null,
-      theme: 'dark' as const,
+      theme: 'dark',
     };
     vi.mocked(fs.existsSync).mockReturnValue(true);
     vi.mocked(fs.readFileSync).mockReturnValue('# TestAgent\nSome content');
@@ -403,7 +407,7 @@ describe('MindManager', () => {
         mockExtensionLoader as unknown as ExtensionLoader,
         mockConfigService as unknown as ConfigService,
         mockViewDiscovery as unknown as ViewDiscovery,
-        toolBuilder,
+        toolBuilder as unknown as ToolBuilder,
       );
 
       const mind = await mgr.loadMind('/tmp/agents/q');
@@ -431,8 +435,9 @@ describe('MindManager', () => {
 
       await manager.createTaskSession(mind.mindId, 'task-1', customCallback);
 
-      const callArg = mockCreateSession.mock.calls[0][0];
-      expect(callArg.onUserInputRequest).toBe(customCallback);
+      const callArg = mockCreateSession.mock.calls[0]?.[0];
+      expect(callArg).toBeDefined();
+      expect((callArg as { onUserInputRequest: unknown }).onUserInputRequest).toBe(customCallback);
     });
   });
 
@@ -450,7 +455,7 @@ describe('MindManager', () => {
     it('attachWindow associates a window with a mind', async () => {
       const mind = await manager.loadMind('/tmp/agents/q');
       const mockWin = { focus: vi.fn(), close: vi.fn(), on: vi.fn() };
-      manager.attachWindow(mind.mindId, mockWin);
+      manager.attachWindow(mind.mindId, mockWin as unknown as BrowserWindow);
       expect(manager.isWindowed(mind.mindId)).toBe(true);
       expect(manager.getWindow(mind.mindId)).toBe(mockWin);
     });
@@ -458,7 +463,7 @@ describe('MindManager', () => {
     it('detachWindow removes association, mind stays loaded', async () => {
       const mind = await manager.loadMind('/tmp/agents/q');
       const mockWin = { focus: vi.fn(), close: vi.fn(), on: vi.fn() };
-      manager.attachWindow(mind.mindId, mockWin);
+      manager.attachWindow(mind.mindId, mockWin as unknown as BrowserWindow);
       manager.detachWindow(mind.mindId);
       expect(manager.isWindowed(mind.mindId)).toBe(false);
       expect(manager.getWindow(mind.mindId)).toBeNull();
@@ -473,7 +478,7 @@ describe('MindManager', () => {
     it('listMinds includes windowed flag', async () => {
       const mind = await manager.loadMind('/tmp/agents/q');
       expect(manager.listMinds()[0].windowed).toBe(false);
-      manager.attachWindow(mind.mindId, { focus: vi.fn(), close: vi.fn(), on: vi.fn() });
+      manager.attachWindow(mind.mindId, { focus: vi.fn(), close: vi.fn(), on: vi.fn() } as unknown as BrowserWindow);
       expect(manager.listMinds()[0].windowed).toBe(true);
     });
 
@@ -485,12 +490,12 @@ describe('MindManager', () => {
         close: vi.fn(),
         on: vi.fn((event: string, cb: () => void) => { if (event === 'closed') closeHandler = cb; }),
       };
-      manager.attachWindow(mind.mindId, mockWin);
+      manager.attachWindow(mind.mindId, mockWin as unknown as BrowserWindow);
       expect(manager.isWindowed(mind.mindId)).toBe(true);
 
       // Simulate window close
       if (!closeHandler) throw new Error('expected close handler');
-      closeHandler();
+      (closeHandler as () => void)();
       expect(manager.isWindowed(mind.mindId)).toBe(false);
     });
 
@@ -501,7 +506,7 @@ describe('MindManager', () => {
       manager.on('mind:windowed', windowed);
       manager.on('mind:unwindowed', unwindowed);
 
-      manager.attachWindow(mind.mindId, { focus: vi.fn(), close: vi.fn(), on: vi.fn() });
+      manager.attachWindow(mind.mindId, { focus: vi.fn(), close: vi.fn(), on: vi.fn() } as unknown as BrowserWindow);
       expect(windowed).toHaveBeenCalledWith(mind.mindId);
 
       manager.detachWindow(mind.mindId);
@@ -518,7 +523,7 @@ describe('MindManager', () => {
         mockExtensionLoader as unknown as ExtensionLoader,
         mockConfigService as unknown as ConfigService,
         mockViewDiscovery as unknown as ViewDiscovery,
-        toolBuilder,
+        toolBuilder as unknown as ToolBuilder,
       );
 
       const mockTool= { name: 'canvas_show' };
@@ -542,7 +547,7 @@ describe('MindManager', () => {
         mockExtensionLoader as unknown as ExtensionLoader,
         mockConfigService as unknown as ConfigService,
         mockViewDiscovery as unknown as ViewDiscovery,
-        toolBuilder,
+        toolBuilder as unknown as ToolBuilder,
       );
 
       await mgr.loadMind('/tmp/agents/q');
@@ -562,7 +567,7 @@ describe('MindManager', () => {
         mockExtensionLoader as unknown as ExtensionLoader,
         mockConfigService as unknown as ConfigService,
         mockViewDiscovery as unknown as ViewDiscovery,
-        toolBuilder,
+        toolBuilder as unknown as ToolBuilder,
       );
 
       const mind = await mgr.loadMind('/tmp/agents/q');
@@ -582,7 +587,7 @@ describe('MindManager', () => {
         mockExtensionLoader as unknown as ExtensionLoader,
         mockConfigService as unknown as ConfigService,
         mockViewDiscovery as unknown as ViewDiscovery,
-        toolBuilder,
+        toolBuilder as unknown as ToolBuilder,
       );
 
       const mind = await mgr.loadMind('/tmp/agents/q');

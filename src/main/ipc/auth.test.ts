@@ -51,7 +51,7 @@ describe('setupAuthIPC', () => {
     setupAuthIPC(fakeAuth, createFakeMindManager());
 
     const listCall = vi.mocked(ipcMain.handle).mock.calls.find(c => c[0] === 'auth:listAccounts');
-    await expect(listCall![1]({} as never, ...([] as never))).resolves.toEqual([{ login: 'alice' }]);
+    await expect(listCall![1]({} as never, ...([] as unknown[]))).resolves.toEqual([{ login: 'alice' }]);
   });
 
   it('auth:switchAccount sets activeLogin via authService, reloads minds, and broadcasts accountSwitched', async () => {
@@ -95,7 +95,7 @@ describe('setupAuthIPC', () => {
     setupAuthIPC(fakeAuth, fakeMindManager);
 
     const startLoginCall = vi.mocked(ipcMain.handle).mock.calls.find(c => c[0] === 'auth:startLogin');
-    await expect(startLoginCall![1]({ sender: {} } as never, ...([] as never))).resolves.toEqual({ success: true, login: 'alice' });
+    await expect(startLoginCall![1]({ sender: {} } as never, ...([] as unknown[]))).resolves.toEqual({ success: true, login: 'alice' });
 
     expect(fakeAuth.setActiveLogin).toHaveBeenCalledWith('alice');
     expect(fakeMindManager.reloadAllMinds).toHaveBeenCalled();
@@ -136,7 +136,7 @@ describe('setupAuthIPC', () => {
     // Find and invoke the auth:logout handler
     const logoutCall = vi.mocked(ipcMain.handle).mock.calls.find(c => c[0] === 'auth:logout');
     expect(logoutCall).toBeDefined();
-    await logoutCall![1]({} as never, ...([] as never));
+    await logoutCall![1]({} as never, ...([] as unknown[]));
 
     expect(fakeAuth.logout).toHaveBeenCalled();
     expect(mockSend).toHaveBeenCalledWith('auth:loggedOut');

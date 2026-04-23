@@ -7,7 +7,8 @@ const mockSession = {
   send: vi.fn().mockResolvedValue(undefined),
   abort: vi.fn().mockResolvedValue(undefined),
   destroy: vi.fn().mockResolvedValue(undefined),
-  on: vi.fn(() => vi.fn()),
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  on: vi.fn((_event: string, _cb?: (...args: unknown[]) => void) => vi.fn()),
 };
 
 const mockMindManager = {

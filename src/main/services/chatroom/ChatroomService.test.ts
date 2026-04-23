@@ -19,7 +19,7 @@ vi.mock('node:fs', () => ({
 // Mock node:crypto for UUID generation
 const mockRandomUUID = vi.fn(() => 'test-uuid');
 vi.mock('node:crypto', () => ({
-  randomUUID: (...args: unknown[]) => mockRandomUUID(...args),
+  randomUUID: () => mockRandomUUID(),
 }));
 
 import * as fs from 'node:fs';
@@ -69,7 +69,7 @@ function makeMind(id: string, name: string, status: 'ready' | 'loading' = 'ready
 
 function createFactory(minds: MindContext[], sessions: Map<string, ReturnType<typeof createMockSession>>) {
   const emitter = new EventEmitter();
-  const factory: ChatroomSessionFactory & EventEmitter = Object.assign(emitter, {
+  const factory = Object.assign(emitter, {
     createChatroomSession: vi.fn(async (mindId: string) => {
       if (!sessions.has(mindId)) sessions.set(mindId, createMockSession());
       const sess = sessions.get(mindId);
@@ -77,7 +77,7 @@ function createFactory(minds: MindContext[], sessions: Map<string, ReturnType<ty
       return sess;
     }),
     listMinds: vi.fn(() => minds),
-  });
+  }) as unknown as ChatroomSessionFactory & EventEmitter;
   return factory;
 }
 

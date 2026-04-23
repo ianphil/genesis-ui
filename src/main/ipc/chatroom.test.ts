@@ -9,14 +9,19 @@ vi.mock('electron', () => ({
 }));
 
 import { ipcMain, BrowserWindow } from 'electron';
+import type { IpcMainInvokeEvent } from 'electron';
 import { setupChatroomIPC } from './chatroom';
 import type { ChatroomService } from '../services/chatroom/ChatroomService';
 
-function getHandler(channel: string): (...args: unknown[]) => unknown {
+const EVT = {} as IpcMainInvokeEvent;
+const asWindows = (wins: unknown[]): Electron.BrowserWindow[] => wins as unknown as Electron.BrowserWindow[];
+type InvokeHandler = (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown;
+
+function getHandler(channel: string): InvokeHandler {
   const calls = vi.mocked(ipcMain.handle).mock.calls;
   const match = calls.find((c) => c[0] === channel);
   if (!match) throw new Error(`No handler registered for ${channel}`);
-  return match[1];
+  return match[1] as InvokeHandler;
 }
 
 describe('Chatroom IPC', () => {
@@ -41,13 +46,13 @@ describe('Chatroom IPC', () => {
 
   it('chatroom:send invokes broadcast with message and model', async () => {
     const handler = getHandler('chatroom:send');
-    await handler({}, 'Hello agents', 'gpt-4');
+    await handler(EVT, 'Hello agents', 'gpt-4');
     expect(mockService.broadcast).toHaveBeenCalledWith('Hello agents', 'gpt-4');
   });
 
   it('chatroom:send works without model', async () => {
     const handler = getHandler('chatroom:send');
-    await handler({}, 'Hello agents');
+    await handler(EVT, 'Hello agents');
     expect(mockService.broadcast).toHaveBeenCalledWith('Hello agents', undefined);
   });
 
@@ -56,30 +61,30 @@ describe('Chatroom IPC', () => {
     mockService.getHistory.mockReturnValue(messages);
 
     const handler = getHandler('chatroom:history');
-    const result = await handler({});
+    const result = await handler(EVT);
     expect(result).toEqual(messages);
     expect(mockService.getHistory).toHaveBeenCalled();
   });
 
   it('chatroom:clear calls clearHistory', async () => {
     const handler = getHandler('chatroom:clear');
-    await handler({});
+    await handler(EVT);
     expect(mockService.clearHistory).toHaveBeenCalled();
   });
 
   it('chatroom:stop calls stopAll', async () => {
     const handler = getHandler('chatroom:stop');
-    await handler({});
+    await handler(EVT);
     expect(mockService.stopAll).toHaveBeenCalled();
   });
 
   it('chatroom:event forwarding sends to all windows', () => {
     const wc1 = { send: vi.fn() };
     const wc2 = { send: vi.fn() };
-    vi.mocked(BrowserWindow.getAllWindows).mockReturnValue([
+    vi.mocked(BrowserWindow.getAllWindows).mockReturnValue(asWindows([
       { isDestroyed: () => false, webContents: wc1 },
       { isDestroyed: () => false, webContents: wc2 },
-    ]);
+    ]));
 
     const event = { mindId: 'agent-a', mindName: 'Agent A', messageId: 'msg-1', roundId: 'r-1', event: { type: 'chunk', content: 'hi' } };
     mockService.emit('chatroom:event', event);
@@ -91,10 +96,10 @@ describe('Chatroom IPC', () => {
   it('chatroom:event skips destroyed windows', () => {
     const wc1 = { send: vi.fn() };
     const wc2 = { send: vi.fn() };
-    vi.mocked(BrowserWindow.getAllWindows).mockReturnValue([
+    vi.mocked(BrowserWindow.getAllWindows).mockReturnValue(asWindows([
       { isDestroyed: () => true, webContents: wc1 },
       { isDestroyed: () => false, webContents: wc2 },
-    ]);
+    ]));
 
     const event = { mindId: 'agent-a', mindName: 'Agent A', messageId: 'msg-1', roundId: 'r-1', event: { type: 'done' } };
     mockService.emit('chatroom:event', event);

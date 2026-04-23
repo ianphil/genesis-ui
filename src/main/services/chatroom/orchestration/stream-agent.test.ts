@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 // Mock node:crypto for UUID generation
 const mockRandomUUID = vi.fn(() => 'test-uuid');
 vi.mock('node:crypto', () => ({
-  randomUUID: (...args: unknown[]) => mockRandomUUID(...args),
+  randomUUID: () => mockRandomUUID(),
 }));
 
 import { streamAgentTurn, sendToAgentWithRetry } from './stream-agent';
@@ -63,7 +63,7 @@ function createContext(
   return {
     getOrCreateSession: vi.fn(async (mindId: string) => {
       if (!sessions.has(mindId)) sessions.set(mindId, createMockSession());
-      return sessions.get(mindId)!;
+      return sessions.get(mindId)! as unknown as import('../../mind/types').CopilotSession;
     }),
     evictSession: vi.fn((mindId: string) => {
       sessions.delete(mindId);

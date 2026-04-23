@@ -9,10 +9,23 @@ vi.mock('electron', () => ({
 }));
 
 import { ipcMain, BrowserWindow } from 'electron';
+import type { IpcMainInvokeEvent } from 'electron';
 import { setupA2AIPC } from './a2a';
 import type { TaskStatusUpdateEvent, TaskArtifactUpdateEvent } from '../services/a2a/types';
 import type { AgentCardRegistry } from '../services/a2a/AgentCardRegistry';
 import type { TaskManager } from '../services/a2a/TaskManager';
+
+// Helper to keep test ergonomics — the IPC handler signature demands
+// IpcMainInvokeEvent / BrowserWindow instances we don't need in unit tests.
+const EVT = {} as IpcMainInvokeEvent;
+const asWindows = (wins: { webContents: { send: unknown } }[]): Electron.BrowserWindow[] =>
+  wins as unknown as Electron.BrowserWindow[];
+type InvokeHandler = (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown;
+const getHandler = (name: string): InvokeHandler => {
+  const call = vi.mocked(ipcMain.handle).mock.calls.find((c) => c[0] === name);
+  if (!call) throw new Error(`no handler registered for ${name}`);
+  return call[1] as InvokeHandler;
+};
 
 const mockRegistry = {
   getCards: vi.fn(() => [
@@ -39,10 +52,10 @@ describe('A2A IPC', () => {
   it('a2a:incoming forwards to all windows', () => {
     const mockWebContents1 = { send: vi.fn() };
     const mockWebContents2 = { send: vi.fn() };
-    vi.mocked(BrowserWindow.getAllWindows).mockReturnValue([
+    vi.mocked(BrowserWindow.getAllWindows).mockReturnValue(asWindows([
       { webContents: mockWebContents1 },
       { webContents: mockWebContents2 },
-    ]);
+    ]));
 
     const payload = {
       targetMindId: 'agent-b',
@@ -57,7 +70,7 @@ describe('A2A IPC', () => {
 
   it('a2a:incoming payload includes message and replyMessageId', () => {
     const mockWebContents = { send: vi.fn() };
-    vi.mocked(BrowserWindow.getAllWindows).mockReturnValue([{ webContents: mockWebContents }]);
+    vi.mocked(BrowserWindow.getAllWindows).mockReturnValue(asWindows([{ webContents: mockWebContents }]));
 
     const payload = {
       targetMindId: 'agent-b',
@@ -74,11 +87,7 @@ describe('A2A IPC', () => {
   });
 
   it('a2a:listAgents returns cards from registry', async () => {
-    const handleCalls = vi.mocked(ipcMain.handle).mock.calls;
-    const listHandler = handleCalls.find((c) => c[0] === 'a2a:listAgents');
-    expect(listHandler).toBeDefined();
-
-    const result = await listHandler[1]({});
+    const result = await getHandler('a2a:listAgents')(EVT);
     expect(result).toEqual([
       { mindId: 'agent-a', name: 'Agent A' },
       { mindId: 'agent-b', name: 'Agent B' },
@@ -91,10 +100,10 @@ describe('A2A IPC', () => {
   it('task:status-update event forwarded to all BrowserWindows', () => {
     const wc1 = { send: vi.fn() };
     const wc2 = { send: vi.fn() };
-    vi.mocked(BrowserWindow.getAllWindows).mockReturnValue([
+    vi.mocked(BrowserWindow.getAllWindows).mockReturnValue(asWindows([
       { webContents: wc1 },
       { webContents: wc2 },
-    ]);
+    ]));
 
     const payload: TaskStatusUpdateEvent = {
       taskId: 'task-1',
@@ -110,10 +119,10 @@ describe('A2A IPC', () => {
   it('task:artifact-update event forwarded to all BrowserWindows', () => {
     const wc1 = { send: vi.fn() };
     const wc2 = { send: vi.fn() };
-    vi.mocked(BrowserWindow.getAllWindows).mockReturnValue([
+    vi.mocked(BrowserWindow.getAllWindows).mockReturnValue(asWindows([
       { webContents: wc1 },
       { webContents: wc2 },
-    ]);
+    ]));
 
     const payload: TaskArtifactUpdateEvent = {
       taskId: 'task-1',
@@ -131,11 +140,7 @@ describe('A2A IPC', () => {
     const task = { id: 'task-1', contextId: 'ctx-1', status: { state: 'completed' } };
     mockTaskManager.getTask.mockReturnValue(task);
 
-    const handleCalls = vi.mocked(ipcMain.handle).mock.calls;
-    const handler = handleCalls.find((c) => c[0] === 'a2a:getTask');
-    expect(handler).toBeDefined();
-
-    const result = await handler[1]({}, 'task-1', 5);
+    const result = await getHandler('a2a:getTask')(EVT, 'task-1', 5);
     expect(mockTaskManager.getTask).toHaveBeenCalledWith('task-1', 5);
     expect(result).toEqual(task);
   });
@@ -144,12 +149,8 @@ describe('A2A IPC', () => {
     const response = { tasks: [], nextPageToken: '', pageSize: 0, totalSize: 0 };
     mockTaskManager.listTasks.mockReturnValue(response);
 
-    const handleCalls = vi.mocked(ipcMain.handle).mock.calls;
-    const handler = handleCalls.find((c) => c[0] === 'a2a:listTasks');
-    expect(handler).toBeDefined();
-
     const filter = { contextId: 'ctx-1', status: 'working' };
-    const result = await handler[1]({}, filter);
+    const result = await getHandler('a2a:listTasks')(EVT, filter);
     expect(mockTaskManager.listTasks).toHaveBeenCalledWith(filter);
     expect(result).toEqual(response);
   });
@@ -158,11 +159,7 @@ describe('A2A IPC', () => {
     const response = { tasks: [], nextPageToken: '', pageSize: 0, totalSize: 0 };
     mockTaskManager.listTasks.mockReturnValue(response);
 
-    const handleCalls = vi.mocked(ipcMain.handle).mock.calls;
-    const handler = handleCalls.find((c) => c[0] === 'a2a:listTasks');
-    expect(handler).toBeDefined();
-
-    await handler[1]({}, { contextId: 'ctx-1', status: 'bogus-status' });
+    await getHandler('a2a:listTasks')(EVT, { contextId: 'ctx-1', status: 'bogus-status' });
     expect(mockTaskManager.listTasks).toHaveBeenCalledWith({ contextId: 'ctx-1', status: undefined });
   });
 
@@ -170,11 +167,7 @@ describe('A2A IPC', () => {
     const task = { id: 'task-1', contextId: 'ctx-1', status: { state: 'canceled' } };
     mockTaskManager.cancelTask.mockReturnValue(task);
 
-    const handleCalls = vi.mocked(ipcMain.handle).mock.calls;
-    const handler = handleCalls.find((c) => c[0] === 'a2a:cancelTask');
-    expect(handler).toBeDefined();
-
-    const result = await handler[1]({}, 'task-1');
+    const result = await getHandler('a2a:cancelTask')(EVT, 'task-1');
     expect(mockTaskManager.cancelTask).toHaveBeenCalledWith('task-1');
     expect(result).toEqual(task);
   });
@@ -184,10 +177,6 @@ describe('A2A IPC', () => {
       throw new Error('Task task-1 not found');
     });
 
-    const handleCalls = vi.mocked(ipcMain.handle).mock.calls;
-    const handler = handleCalls.find((c) => c[0] === 'a2a:cancelTask');
-    expect(handler).toBeDefined();
-
-    await expect(handler[1]({}, 'task-1')).rejects.toThrow('Task task-1 not found');
+    await expect(getHandler('a2a:cancelTask')(EVT, 'task-1')).rejects.toThrow('Task task-1 not found');
   });
 });

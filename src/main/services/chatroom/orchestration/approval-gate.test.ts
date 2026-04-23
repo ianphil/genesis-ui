@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Mock node:crypto for UUID generation
 const mockRandomUUID = vi.fn(() => 'approval-uuid');
 vi.mock('node:crypto', () => ({
-  randomUUID: (...args: unknown[]) => mockRandomUUID(...args),
+  randomUUID: () => mockRandomUUID(),
 }));
 
 import { ApprovalGate } from './approval-gate';

@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { EventEmitter } from 'events';
 import type { MindContext } from '../../../shared/types';
 
 // Mock fs before importing the module under test
@@ -28,13 +27,11 @@ function makeMindContext(overrides: Partial<MindContext> = {}): MindContext {
 }
 
 describe('AgentCardRegistry', () => {
-  let emitter: EventEmitter;
   let registry: AgentCardRegistry;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    emitter = new EventEmitter();
-    registry = new AgentCardRegistry(emitter);
+    registry = new AgentCardRegistry();
   });
 
   it('registers card when mind:loaded fires', () => {
@@ -122,7 +119,7 @@ describe('AgentCardRegistry', () => {
         ] as unknown as fs.Dirent[];
       }
       return [];
-    }) as typeof fs.readdirSync);
+    }) as unknown as typeof fs.readdirSync);
 
     vi.mocked(fs.readFileSync).mockImplementation(((p: string) => {
       if (String(p).endsWith(path.join('commit', 'SKILL.md'))) return '# Commit\nCommits changes to git.';

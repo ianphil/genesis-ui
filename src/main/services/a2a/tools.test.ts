@@ -125,7 +125,7 @@ describe('A2A Tools', () => {
     const sendTool = tools.find((t) => t.name === 'a2a_send_message');
     if (!sendTool) throw new Error('Expected to find a2a_send_message tool');
     expect(sendTool.parameters).toBeDefined();
-    const params = sendTool.parameters as ToolParameterSchema;
+    const params = sendTool.parameters as unknown as ToolParameterSchema;
     expect(params.properties.recipient).toBeDefined();
     expect(params.properties.message).toBeDefined();
     expect(params.required).toContain('recipient');
@@ -149,8 +149,8 @@ describe('A2A Tools', () => {
     expect(req.message.role).toBe('user');
     expect(req.message.parts[0].text).toBe('Hello B');
     expect(req.message.parts[0].mediaType).toBe('text/plain');
-    expect(req.message.metadata.fromId).toBe('mind-a');
-    expect(req.message.metadata.hopCount).toBe(0);
+    expect(req.message.metadata!.fromId).toBe('mind-a');
+    expect(req.message.metadata!.hopCount).toBe(0);
   });
 
   it('send_message handler constructs SendMessageRequest with returnImmediately', async () => {
@@ -167,7 +167,7 @@ describe('A2A Tools', () => {
 
     const req = mockRouter.sendMessage.mock.calls[0][0];
     expect(req.recipient).toBe('mind-b');
-    expect(req.configuration.returnImmediately).toBe(true);
+    expect(req.configuration!.returnImmediately).toBe(true);
   });
 
   it('send_message handler returns SendMessageResponse shape', async () => {
@@ -256,8 +256,8 @@ describe('A2A Tools', () => {
     await sendA.handler({ recipient: 'mind-c', message: 'From A' });
     await sendB.handler({ recipient: 'mind-c', message: 'From B' });
 
-    expect(mockRouter.sendMessage.mock.calls[0][0].message.metadata.fromId).toBe('mind-a');
-    expect(mockRouter.sendMessage.mock.calls[1][0].message.metadata.fromId).toBe('mind-b');
+    expect(mockRouter.sendMessage.mock.calls[0][0].message.metadata!.fromId).toBe('mind-a');
+    expect(mockRouter.sendMessage.mock.calls[1][0].message.metadata!.fromId).toBe('mind-b');
   });
 });
 
@@ -425,7 +425,7 @@ describe('A2A Task Tools', () => {
 
     const sendTask = tools.find((t) => t.name === 'a2a_send_task');
     if (!sendTask) throw new Error('Expected to find a2a_send_task tool');
-    const sendParams = sendTask.parameters as ToolParameterSchema;
+    const sendParams = sendTask.parameters as unknown as ToolParameterSchema;
     expect(sendParams.required).toContain('recipient');
     expect(sendParams.required).toContain('message');
     expect(sendParams.properties.context_id).toBeDefined();
@@ -434,21 +434,21 @@ describe('A2A Task Tools', () => {
 
     const getTask = tools.find((t) => t.name === 'a2a_get_task');
     if (!getTask) throw new Error('Expected to find a2a_get_task tool');
-    const getParams = getTask.parameters as ToolParameterSchema;
+    const getParams = getTask.parameters as unknown as ToolParameterSchema;
     expect(getParams.required).toContain('task_id');
     expect(getParams.properties.history_length).toBeDefined();
     expect(getParams.properties.history_length.type).toBe('number');
 
     const listTasks = tools.find((t) => t.name === 'a2a_list_tasks');
     if (!listTasks) throw new Error('Expected to find a2a_list_tasks tool');
-    const listParams = listTasks.parameters as ToolParameterSchema;
+    const listParams = listTasks.parameters as unknown as ToolParameterSchema;
     expect(listParams.properties.context_id).toBeDefined();
     expect(listParams.properties.status).toBeDefined();
     expect(listParams.required).toBeUndefined();
 
     const cancelTask = tools.find((t) => t.name === 'a2a_cancel_task');
     if (!cancelTask) throw new Error('Expected to find a2a_cancel_task tool');
-    const cancelParams = cancelTask.parameters as ToolParameterSchema;
+    const cancelParams = cancelTask.parameters as unknown as ToolParameterSchema;
     expect(cancelParams.required).toContain('task_id');
   });
 });

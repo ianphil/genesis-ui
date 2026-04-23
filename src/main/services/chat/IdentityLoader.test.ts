@@ -55,7 +55,7 @@ describe('IdentityLoader', () => {
       vi.mocked(fs.readFileSync)
         .mockReturnValueOnce('# Soul')
         .mockReturnValueOnce('---\nname: test\n---\nInstructions');
-      vi.mocked(fs.readdirSync).mockReturnValue(['main.agent.md'] as unknown as fs.Dirent[]);
+      (vi.mocked(fs.readdirSync) as unknown as { mockReturnValue: (v: unknown) => void }).mockReturnValue(['main.agent.md']);
       const result = loader.load('/tmp/test');
       expect(result?.systemMessage).toContain('Instructions');
       expect(result?.systemMessage).not.toContain('name: test');

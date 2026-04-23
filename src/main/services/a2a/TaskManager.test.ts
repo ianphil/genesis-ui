@@ -455,8 +455,8 @@ describe('TaskManager', () => {
 
       const inputRequiredEvent = events.find((e) => e.status.state === 'input-required');
       expect(inputRequiredEvent).toBeDefined();
-      expect(inputRequiredEvent.status.message).toBeDefined();
-      expect(inputRequiredEvent.status.message.parts[0].text).toBe('Need info');
+      expect(inputRequiredEvent!.status.message).toBeDefined();
+      expect(inputRequiredEvent!.status.message!.parts[0].text).toBe('Need info');
     });
 
 
@@ -489,7 +489,7 @@ describe('TaskManager', () => {
       await flushPromises();
 
       if (!capturedOnUserInputRequest) throw new Error('Expected callback');
-      capturedOnUserInputRequest('Confirm?');
+      capturedOnUserInputRequest({ question: 'Confirm?' }, { sessionId: 'sess-1' });
       await flushPromises();
 
       const answerMessage: Message = {
@@ -534,7 +534,7 @@ describe('TaskManager', () => {
       await flushPromises();
 
       if (!capturedOnUserInputRequest) throw new Error('Expected callback');
-      capturedOnUserInputRequest('Pick a color');
+      capturedOnUserInputRequest({ question: 'Pick a color' }, { sessionId: 'sess-1' });
       await flushPromises();
 
       const answerMessage: Message = {
@@ -572,7 +572,7 @@ describe('TaskManager', () => {
 
       // Agent asks for input
       if (!capturedOnUserInputRequest) throw new Error('Expected callback');
-      const inputPromise = capturedOnUserInputRequest('What color?');
+      const inputPromise = capturedOnUserInputRequest({ question: 'What color?' }, { sessionId: 'sess-1' });
       await flushPromises();
 
       const taskAfterInput = tm.getTask(task.id);

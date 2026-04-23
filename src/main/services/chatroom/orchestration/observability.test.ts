@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Mock node:crypto
 const mockRandomUUID = vi.fn(() => 'obs-uuid');
 vi.mock('node:crypto', () => ({
-  randomUUID: (...args: unknown[]) => mockRandomUUID(...args),
+  randomUUID: () => mockRandomUUID(),
 }));
 
 import { ObservabilityEmitter, redactParameters } from './observability';

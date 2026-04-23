@@ -6,7 +6,10 @@ import { AgentCardRegistry } from '../services/a2a/AgentCardRegistry';
 import { MessageRouter } from '../services/a2a/MessageRouter';
 import { buildSessionTools } from '../services/a2a/tools';
 import type { MindManager } from '../services/mind';
+import type { TaskManager } from '../services/a2a/TaskManager';
 import type { MindContext } from '../../shared/types';
+
+const stubTaskManager = {} as unknown as TaskManager;
 
 // --- Mock SDK primitives ---
 
@@ -84,7 +87,7 @@ describe('A2A Integration', () => {
     expect(agentCardRegistry.getCard('agent-b')).toBeTruthy();
 
     // Build tools for Agent A
-    const tools = buildSessionTools('agent-a', [], messageRouter, agentCardRegistry);
+    const tools = buildSessionTools('agent-a', [], messageRouter, agentCardRegistry, stubTaskManager);
     const sendTool = tools.find(t => t.name === 'a2a_send_message');
     if (!sendTool) throw new Error('Expected a2a_send_message tool');
 
@@ -109,7 +112,7 @@ describe('A2A Integration', () => {
     // Verify ChatService was called for Agent B
     const bMind1 = mindManager.getMind('agent-b');
     if (!bMind1) throw new Error('Expected agent-b mind');
-    const bSession = bMind1.session;
+    const bSession = bMind1.session!;
     expect(bSession.send).toHaveBeenCalled();
     const prompt = bSession.send.mock.calls[0][0].prompt;
     expect(prompt).toContain('<agent-message');
@@ -123,8 +126,8 @@ describe('A2A Integration', () => {
     // Start a long-running user turn on Agent B
     const bMind2 = mindManager.getMind('agent-b');
     if (!bMind2) throw new Error('Expected agent-b mind');
-    const bSession = bMind2.session;
-    let resolveUserTurn: () => void;
+    const bSession = bMind2.session!;
+    let resolveUserTurn: (() => void) | undefined;
     const userTurnDone = new Promise<void>(r => { resolveUserTurn = r; });
 
     bSession.send.mockImplementationOnce(async () => {
