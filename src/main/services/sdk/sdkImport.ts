@@ -14,7 +14,7 @@ export async function loadSdkModule(): Promise<SdkModule> {
   await ensureSdkInstalled();
   const modulesDir = resolveNodeModulesDir();
   const sdkEntry = path.join(modulesDir, '@github', 'copilot-sdk', 'dist', 'index.js');
-  // eslint-disable-next-line @typescript-eslint/no-implied-eval
+   
   cached = await (new Function('url', 'return import(url)')(
     pathToFileURL(sdkEntry).href
   ) as Promise<SdkModule>);

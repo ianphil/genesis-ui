@@ -6,7 +6,7 @@ import * as fs from 'fs';
 import { pathToFileURL } from 'url';
 import type { LoadedExtension } from '../ExtensionLoader';
 
-// eslint-disable-next-line @typescript-eslint/no-implied-eval
+ 
 const dynamicImport = new Function('url', 'return import(url)') as (url: string) => Promise<unknown>;
 
 interface CronToolFactory {

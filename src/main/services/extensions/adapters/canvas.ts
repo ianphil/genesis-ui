@@ -7,7 +7,7 @@ import { pathToFileURL } from 'url';
 import type { LoadedExtension } from '../ExtensionLoader';
 
 // Dynamic import helper — hides import() from Vite/webpack static analysis
-// eslint-disable-next-line @typescript-eslint/no-implied-eval
+ 
 const dynamicImport = new Function('url', 'return import(url)') as (url: string) => Promise<unknown>;
 
 interface CanvasServer {
