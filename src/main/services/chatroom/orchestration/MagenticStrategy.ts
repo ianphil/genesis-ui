@@ -8,10 +8,13 @@ import type { OrchestrationContext } from './types';
 import { BaseStrategy } from './types';
 import { ObservabilityEmitter } from './observability';
 import { textContent, extractJsonObject } from './shared';
-import { sendToAgentWithRetry } from './stream-agent';
+import { sendToAgentWithRetry, TurnTimeoutError } from './stream-agent';
 
 /** Max characters stored in task.result (safe summary only) */
 const MAX_RESULT_LENGTH = 500;
+
+/** Max time (ms) a worker agent has to complete its turn before being timed out */
+const WORKER_TIMEOUT_MS = 120_000;
 
 /** Mark a task as failed and emit observability event */
 function failTask(
@@ -43,6 +46,25 @@ function formatManagerResponse(raw: string): string {
       return lines.join('\n');
     }
 
+    if (action === 'plan-and-assign') {
+      const parts: string[] = [];
+      if (Array.isArray(parsed.plan)) {
+        const tasks = parsed.plan as Array<{ id: string; description: string }>;
+        parts.push('**Planning:** Breaking this into tasks:\n');
+        for (const t of tasks) {
+          parts.push(`${t.id}. ${t.description}`);
+        }
+      }
+      if (Array.isArray(parsed.assignments)) {
+        if (parts.length > 0) parts.push('');
+        parts.push('**Assigning tasks:**\n');
+        for (const a of parsed.assignments as Array<{ assignee: string; task_description?: string }>) {
+          parts.push(`- **${a.assignee}**: ${a.task_description ?? 'assigned task'}`);
+        }
+      }
+      return parts.length > 0 ? parts.join('\n') : raw;
+    }
+
     if (action === 'assign') {
       const assignments = Array.isArray(parsed.assignments)
         ? (parsed.assignments as Array<{ assignee: string; task_description?: string }>)
@@ -72,7 +94,7 @@ function formatManagerResponse(raw: string): string {
 // ---------------------------------------------------------------------------
 
 interface ManagerDecision {
-  action: 'assign' | 'complete' | 'update-plan';
+  action: 'assign' | 'complete' | 'update-plan' | 'plan-and-assign';
   assignments?: Array<{ assignee: string; taskId?: string; taskDescription?: string }>;
   assignee?: string;
   taskDescription?: string;
@@ -87,10 +109,9 @@ function parseManagerResponse(text: string): ManagerDecision | null {
 
   try {
     const parsed = JSON.parse(json) as Record<string, unknown>;
-    const action = (['assign', 'complete', 'update-plan'] as const).includes(
-      parsed.action as 'assign' | 'complete' | 'update-plan',
-    )
-      ? (parsed.action as 'assign' | 'complete' | 'update-plan')
+    const validActions = ['assign', 'complete', 'update-plan', 'plan-and-assign'] as const;
+    const action = validActions.includes(parsed.action as typeof validActions[number])
+      ? (parsed.action as typeof validActions[number])
       : 'assign';
     return {
       action,
@@ -145,6 +166,7 @@ export class MagenticStrategy extends BaseStrategy {
 
     this.begin();
 
+    const startTime = Date.now();
     const obs = new ObservabilityEmitter('magentic');
     obs.start({ participantCount: participants.length, maxSteps: this.config.maxSteps });
 
@@ -232,22 +254,30 @@ export class MagenticStrategy extends BaseStrategy {
     // Emit a formatted plan message so the user sees what the manager decided
     const planSummary = formatManagerResponse(planRawContent);
     if (planSummary !== planRawContent) {
-      context.persistMessage({
-        id: randomUUID(),
-        role: 'assistant',
-        blocks: [{ type: 'text', content: planSummary }],
-        timestamp: Date.now(),
-        sender: { mindId: manager.mindId, name: manager.identity.name },
-        roundId,
-        orchestrationMode: 'magentic',
-      });
-      context.emitEvent({
-        mindId: manager.mindId,
-        mindName: manager.identity.name,
-        messageId: '',
-        roundId,
-        event: { type: 'done' },
-      });
+      this.emitSyntheticMessage(manager, roundId, planSummary, context);
+    }
+
+    // ── Phase 1b: Execute initial assignments if plan-and-assign ──
+
+    if (planDecision?.action === 'plan-and-assign' && planDecision.assignments?.length) {
+      const resolved = this.resolveAssignments(planDecision.assignments, workers, ledger, obs, 0);
+      if (resolved.length > 0) {
+        this.emitLedgerUpdate(manager, roundId, ledger, context);
+
+        // Emit formatted assignment message
+        const assignSummary = formatManagerResponse(planRawContent);
+        // Only emit if different from plan (avoid duplicate)
+        if (assignSummary === planSummary) {
+          const assignLines = ['**Assigning tasks:**\n'];
+          for (const { worker, task } of resolved) {
+            assignLines.push(`- **${worker.identity.name}**: ${task.description}`);
+          }
+          this.emitSyntheticMessage(manager, roundId, assignLines.join('\n'), context);
+        }
+
+        await this.executeConcurrent(resolved, userMessage, participants, ledger, roundId, context, obs, 0);
+        this.emitLedgerUpdate(manager, roundId, ledger, context);
+      }
     }
 
     // ── Phase 2: Manager-driven execution loop ──
@@ -261,6 +291,10 @@ export class MagenticStrategy extends BaseStrategy {
       );
       if (allDone) {
         obs.terminationReason('ALL_TASKS_COMPLETE', { step });
+
+        // Ask manager for a brief synthesis instead of a generic completion message
+        await this.emitManagerSynthesis(manager, userMessage, ledger, roundId, context);
+
         break;
       }
 
@@ -288,13 +322,29 @@ export class MagenticStrategy extends BaseStrategy {
       if (!assignDecision) {
         // Manager didn't produce a valid decision — treat as complete
         obs.terminationReason('MANAGER_NO_DECISION', { step });
+        context.emitEvent({
+          mindId: manager.mindId,
+          mindName: manager.identity.name,
+          messageId: '',
+          roundId,
+          event: {
+            type: 'orchestration:magentic-terminated',
+            data: { reason: 'MANAGER_NO_DECISION', step },
+          },
+        });
         break;
       }
 
       if (assignDecision.action === 'complete') {
         obs.terminationReason('MANAGER_COMPLETE', { step, summary: assignDecision.summary });
 
-        // Emit synthesis
+        // Emit summary message so the user sees the manager's conclusion
+        const summaryText = assignDecision.summary
+          ? `**Summary:** ${assignDecision.summary}`
+          : '**All tasks completed.**';
+        this.emitSyntheticMessage(manager, roundId, summaryText, context);
+
+        // Emit synthesis orchestration event
         context.emitEvent({
           mindId: manager.mindId,
           mindName: manager.identity.name,
@@ -320,84 +370,21 @@ export class MagenticStrategy extends BaseStrategy {
           continue;
         }
 
-        // Resolve workers and tasks for each assignment
-        const resolved: Array<{ worker: MindContext; task: TaskLedgerItem }> = [];
-        for (const a of assignments) {
-          const worker = workers.find(
-            (w) => w.identity.name.toLowerCase() === a.assignee.toLowerCase(),
-          );
-          if (!worker) {
-            obs.failure(`Manager selected unknown agent: ${a.assignee}`, { step });
-            continue;
-          }
-
-          let task = a.taskId
-            ? ledger.find((t) => t.id === a.taskId)
-            : ledger.find((t) => t.status === 'pending');
-
-          if (!task) {
-            task = {
-              id: a.taskId || randomUUID().slice(0, 8),
-              description: a.taskDescription || 'Task assigned by manager',
-              status: 'pending',
-            };
-            ledger.push(task);
-          }
-
-          task.status = 'in-progress';
-          task.assignee = worker.mindId;
-          resolved.push({ worker, task });
-        }
+        const resolved = this.resolveAssignments(assignments, workers, ledger, obs, step);
 
         this.emitLedgerUpdate(manager, roundId, ledger, context);
 
         // Emit formatted assignment message
         const assignSummary = formatManagerResponse(assignRawContent);
         if (assignSummary !== assignRawContent) {
-          context.persistMessage({
-            id: randomUUID(),
-            role: 'assistant',
-            blocks: [{ type: 'text', content: assignSummary }],
-            timestamp: Date.now(),
-            sender: { mindId: manager.mindId, name: manager.identity.name },
-            roundId,
-            orchestrationMode: 'magentic',
-          });
-          context.emitEvent({
-            mindId: manager.mindId,
-            mindName: manager.identity.name,
-            messageId: '',
-            roundId,
-            event: { type: 'done' },
-          });
+          this.emitSyntheticMessage(manager, roundId, assignSummary, context);
         }
 
-        // Execute: parallel via A2A if available + multiple tasks, else sequential.
-        // If parallel dispatch fails for all tasks (e.g. minds lack AgentCard
-        // entries), reset and fall back to sequential transparently.
-        const canTryA2A = resolved.length > 1
-          && typeof context.dispatchTask === 'function'
-          && typeof context.pollTask === 'function';
-
-        let usedParallel = false;
-        if (canTryA2A) {
-          const anyDispatched = await this.executeParallel(resolved, roundId, context, obs, step);
-          if (anyDispatched) {
-            usedParallel = true;
-          } else {
-            // All dispatches failed — reset tasks to in-progress for sequential retry
-            for (const { task } of resolved) {
-              if (task.status === 'failed') {
-                task.status = 'in-progress';
-                task.result = undefined;
-              }
-            }
-          }
-        }
-
-        if (!usedParallel) {
-          await this.executeSequential(resolved, userMessage, participants, ledger, roundId, context, obs, step);
-        }
+        // Execute workers: run independent tasks concurrently via separate
+        // SDK sessions (each worker has its own mindId → own session).
+        // Dependent tasks (those whose prompt references completed results)
+        // are held until their dependencies finish.
+        await this.executeConcurrent(resolved, userMessage, participants, ledger, roundId, context, obs, step);
 
         this.emitLedgerUpdate(manager, roundId, ledger, context);
       }
@@ -418,6 +405,29 @@ export class MagenticStrategy extends BaseStrategy {
         },
       });
     }
+
+    // Emit orchestration metrics for the renderer
+    const elapsedMs = Date.now() - startTime;
+    const completedCount = ledger.filter((t) => t.status === 'completed').length;
+    const failedCount = ledger.filter((t) => t.status === 'failed').length;
+    const workerIds = new Set(ledger.map((t) => t.assignee).filter(Boolean));
+    context.emitEvent({
+      mindId: manager.mindId,
+      mindName: manager.identity.name,
+      messageId: '',
+      roundId,
+      event: {
+        type: 'orchestration:metrics',
+        data: {
+          elapsedMs,
+          totalTasks: ledger.length,
+          completedTasks: completedCount,
+          failedTasks: failedCount,
+          agentsUsed: workerIds.size,
+          orchestrationMode: 'magentic',
+        },
+      },
+    });
 
     obs.end({ totalSteps: step, ledgerSize: ledger.length });
   }
@@ -455,81 +465,206 @@ export class MagenticStrategy extends BaseStrategy {
   }
 
   // -------------------------------------------------------------------------
-  // Task execution — parallel (A2A) and sequential (fallback)
+  // Assignment resolution — maps manager decisions to worker+task pairs
   // -------------------------------------------------------------------------
 
-  /** Returns true if at least one task was dispatched successfully */
-  private async executeParallel(
+  private resolveAssignments(
+    assignments: Array<{ assignee: string; taskId?: string; taskDescription?: string }>,
+    workers: MindContext[],
+    ledger: TaskLedgerItem[],
+    obs: ObservabilityEmitter,
+    step: number,
+  ): Array<{ worker: MindContext; task: TaskLedgerItem }> {
+    const resolved: Array<{ worker: MindContext; task: TaskLedgerItem }> = [];
+    for (const a of assignments) {
+      const worker = workers.find(
+        (w) => w.identity.name.toLowerCase() === a.assignee.toLowerCase(),
+      );
+      if (!worker) {
+        obs.failure(`Manager selected unknown agent: ${a.assignee}`, { step });
+        continue;
+      }
+
+      let task = a.taskId
+        ? ledger.find((t) => t.id === a.taskId)
+        : ledger.find((t) => t.status === 'pending');
+
+      if (!task) {
+        task = {
+          id: a.taskId || randomUUID().slice(0, 8),
+          description: a.taskDescription || 'Task assigned by manager',
+          status: 'pending',
+        };
+        ledger.push(task);
+      }
+
+      task.status = 'in-progress';
+      task.assignee = worker.mindId;
+      resolved.push({ worker, task });
+    }
+    return resolved;
+  }
+
+  // -------------------------------------------------------------------------
+  // Synthetic message emission — renders manager decisions in the chatroom
+  // -------------------------------------------------------------------------
+
+  /**
+   * Emit a fully-formed message from the manager into the renderer.
+   * Sends `message_final` (which auto-creates a placeholder in the reducer)
+   * then `done` to mark streaming complete, using a consistent messageId.
+   */
+  private emitSyntheticMessage(
+    mind: MindContext,
+    roundId: string,
+    content: string,
+    context: OrchestrationContext,
+  ): void {
+    const messageId = randomUUID();
+
+    // message_final triggers auto-placeholder creation + content population
+    context.emitEvent({
+      mindId: mind.mindId,
+      mindName: mind.identity.name,
+      messageId,
+      roundId,
+      event: { type: 'message_final', sdkMessageId: messageId, content },
+    });
+
+    // Persist for storage consistency
+    context.persistMessage({
+      id: messageId,
+      role: 'assistant',
+      blocks: [{ type: 'text', content }],
+      timestamp: Date.now(),
+      sender: { mindId: mind.mindId, name: mind.identity.name },
+      roundId,
+      orchestrationMode: 'magentic',
+    });
+
+    // Mark streaming complete
+    context.emitEvent({
+      mindId: mind.mindId,
+      mindName: mind.identity.name,
+      messageId,
+      roundId,
+      event: { type: 'done' },
+    });
+  }
+
+  /**
+   * Ask the manager for a brief synthesis of all completed work.
+   * Falls back to a generic message if the synthesis call fails.
+   */
+  private async emitManagerSynthesis(
+    manager: MindContext,
+    userMessage: string,
+    ledger: TaskLedgerItem[],
+    roundId: string,
+    context: OrchestrationContext,
+  ): Promise<void> {
+    const completed = ledger.filter((t) => t.status === 'completed').length;
+    const failed = ledger.filter((t) => t.status === 'failed').length;
+
+    try {
+      const prompt = this.buildSynthesisPrompt(userMessage, ledger);
+
+      // Emit turn-start so the typing indicator shows the manager synthesizing
+      context.emitEvent({
+        mindId: manager.mindId,
+        mindName: manager.identity.name,
+        messageId: '',
+        roundId,
+        event: { type: 'orchestration:synthesis', data: { synthesizer: manager.identity.name } },
+      });
+
+      // Stream synthesis visibly — the user sees the manager composing the summary
+      const { rawContent } = await sendToAgentWithRetry({
+        mind: manager,
+        prompt,
+        roundId,
+        context,
+        abortSignal: this.abortController!.signal,
+        unsubs: this.currentUnsubs,
+        orchestrationMode: 'magentic',
+      });
+      // rawContent captured but message already persisted by sendToAgentWithRetry
+      void rawContent;
+    } catch {
+      // Synthesis failed — emit a generic completion message
+      const fallback = failed > 0
+        ? `**Orchestration complete.** ${completed} of ${ledger.length} tasks finished (${failed} failed).`
+        : `**All ${completed} tasks completed successfully.**`;
+      this.emitSyntheticMessage(manager, roundId, fallback, context);
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Task execution — concurrent (SDK sessions) and sequential (fallback)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Run workers concurrently via separate SDK sessions (each mindId gets
+   * its own session from the cache). Each worker gets its own unsubs array
+   * to avoid cross-contamination. Ledger is updated as each worker finishes.
+   */
+  private async executeConcurrent(
     resolved: Array<{ worker: MindContext; task: TaskLedgerItem }>,
+    userMessage: string,
+    participants: MindContext[],
+    ledger: TaskLedgerItem[],
     roundId: string,
     context: OrchestrationContext,
     obs: ObservabilityEmitter,
     step: number,
-  ): Promise<boolean> {
-    const contextId = `magentic-${roundId}`;
-    const POLL_INTERVAL_MS = 2_000;
-    const POLL_TIMEOUT_MS = 300_000;
+  ): Promise<void> {
+    // If only one task, skip the overhead of Promise.all
+    if (resolved.length <= 1) {
+      return this.executeSequential(resolved, userMessage, participants, ledger, roundId, context, obs, step);
+    }
 
-    // Dispatch all tasks concurrently via A2A
-    const dispatched = await Promise.all(
+    const manager = participants.find((p) => p.mindId === this.config.managerMindId);
+
+    await Promise.all(
       resolved.map(async ({ worker, task }) => {
-        if (this.isAborted) {
-          return { worker, task, a2aTaskId: null as string | null };
-        }
+        if (this.isAborted) return;
 
         this.emitTurnStart(worker, roundId, context, step, true);
         obs.agentStep(worker.mindId, { step, taskId: task.id, parallel: true });
 
+        const workerPrompt = this.buildWorkerPrompt(userMessage, participants, task, ledger, context, worker);
+        const workerUnsubs: (() => void)[] = [];
+
         try {
-          const a2aTask = await context.dispatchTask!(worker.mindId, task.description, contextId);
-          return { worker, task, a2aTaskId: a2aTask.id };
+          const { message: workerResponse } = await sendToAgentWithRetry({
+            mind: worker,
+            prompt: workerPrompt,
+            roundId,
+            context,
+            abortSignal: this.abortController!.signal,
+            unsubs: workerUnsubs,
+            orchestrationMode: 'magentic',
+            turnTimeout: WORKER_TIMEOUT_MS,
+          });
+          const workerText = workerResponse ? textContent(workerResponse) : '';
+          task.status = 'completed';
+          task.result = workerText.slice(0, MAX_RESULT_LENGTH);
         } catch (err) {
-          failTask(task, err, obs, { step, mindId: worker.mindId, taskId: task.id });
-          return { worker, task, a2aTaskId: null as string | null };
+          if (err instanceof TurnTimeoutError) {
+            task.status = 'failed';
+            task.result = `Timed out after ${WORKER_TIMEOUT_MS / 1000}s`;
+            obs.failure(task.result, { step, mindId: worker.mindId, taskId: task.id });
+          } else {
+            failTask(task, err, obs, { step, mindId: worker.mindId, taskId: task.id });
+          }
+        }
+
+        // Emit ledger update as each worker finishes (shows live progress)
+        if (manager) {
+          this.emitLedgerUpdate(manager, roundId, ledger, context);
         }
       }),
     );
-
-    // Poll for completion
-    const pending = dispatched.filter((d) => d.a2aTaskId !== null);
-    const startTime = Date.now();
-
-    while (pending.length > 0 && !this.isAborted) {
-      if (Date.now() - startTime > POLL_TIMEOUT_MS) {
-        for (const d of pending) {
-          d.task.status = 'failed';
-          d.task.result = 'Timed out waiting for A2A task completion';
-        }
-        break;
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
-
-      for (let i = pending.length - 1; i >= 0; i--) {
-        const d = pending[i];
-        try {
-          const polled = await context.pollTask!(d.a2aTaskId!);
-          if (!polled) continue;
-
-          if (polled.status.state === 'completed') {
-            const resultText = polled.artifacts?.[0]?.parts?.find((p) => p.text)?.text ?? '';
-            d.task.status = 'completed';
-            d.task.result = resultText.slice(0, MAX_RESULT_LENGTH);
-            pending.splice(i, 1);
-          } else if (polled.status.state === 'failed' || polled.status.state === 'canceled') {
-            d.task.status = 'failed';
-            d.task.result = polled.status.message?.parts?.[0]?.text ?? polled.status.state;
-            obs.failure(d.task.result, { step, mindId: d.worker.mindId, taskId: d.task.id });
-            pending.splice(i, 1);
-          }
-        } catch {
-          // Poll error — will retry next cycle
-        }
-      }
-    }
-
-    // Return true if any task was dispatched (even if some failed)
-    return dispatched.some((d) => d.a2aTaskId !== null);
   }
 
   private async executeSequential(
@@ -545,6 +680,8 @@ export class MagenticStrategy extends BaseStrategy {
     for (const { worker, task } of resolved) {
       if (this.isAborted) break;
 
+      console.log(`[Magentic:seq] starting worker=${worker.identity.name} task=${task.id}`);
+
       this.emitTurnStart(worker, roundId, context, step, false);
       obs.agentStep(worker.mindId, { step, taskId: task.id });
 
@@ -559,12 +696,21 @@ export class MagenticStrategy extends BaseStrategy {
           abortSignal: this.abortController!.signal,
           unsubs: this.currentUnsubs,
           orchestrationMode: 'magentic',
+          turnTimeout: WORKER_TIMEOUT_MS,
         });
         const workerText = workerResponse ? textContent(workerResponse) : '';
         task.status = 'completed';
         task.result = workerText.slice(0, MAX_RESULT_LENGTH);
+        console.log(`[Magentic:seq] completed worker=${worker.identity.name} task=${task.id}`);
       } catch (err) {
-        failTask(task, err, obs, { step, mindId: worker.mindId, taskId: task.id });
+        console.log(`[Magentic:seq] error worker=${worker.identity.name} task=${task.id}:`, err instanceof Error ? err.message : String(err));
+        if (err instanceof TurnTimeoutError) {
+          task.status = 'failed';
+          task.result = `Timed out after ${WORKER_TIMEOUT_MS / 1000}s`;
+          obs.failure(task.result, { step, mindId: worker.mindId, taskId: task.id });
+        } else {
+          failTask(task, err, obs, { step, mindId: worker.mindId, taskId: task.id });
+        }
       }
     }
   }
@@ -592,11 +738,11 @@ export class MagenticStrategy extends BaseStrategy {
   private buildPlanPrompt(userMessage: string, workers: MindContext[]): string {
     const workerList = workers.map((w) => `  - ${w.identity.name}`).join('\n');
 
-    // This prompt must be strong enough to override the agent's natural helpfulness.
+    // Combined plan + first assignment in a single call to save one LLM round trip.
     // The agent has tools and will try to answer directly — we must prevent that.
     return [
       `You are acting as a COORDINATOR in a multi-agent system. You do NOT answer questions yourself.`,
-      `Your ONLY job is to break the user's request into tasks and output a JSON plan.`,
+      `Your ONLY job is to break the user's request into tasks, then assign ALL of them immediately.`,
       ``,
       `DO NOT use any tools. DO NOT answer the question. DO NOT provide analysis.`,
       `DO NOT write files, search, or run commands. ONLY output the JSON below.`,
@@ -606,14 +752,17 @@ export class MagenticStrategy extends BaseStrategy {
       `Available agents who will do the actual work:`,
       workerList,
       ``,
-      `Break the request into 2-5 concrete tasks. Each task should be a self-contained unit of work`,
-      `that one agent can complete independently.`,
+      `Break the request into 2-5 concrete tasks and assign each to the best-suited agent.`,
+      `Each task should be a self-contained unit of work that one agent can complete independently.`,
+      `Independent tasks will be executed in parallel, so assign them all at once.`,
       ``,
       `Output ONLY this JSON, nothing else:`,
-      `{"action": "update-plan", "plan": [{"id": "1", "description": "first task"}, {"id": "2", "description": "second task"}]}`,
+      `{"action": "plan-and-assign", "plan": [{"id": "1", "description": "first task"}], "assignments": [{"assignee": "agent name", "task_id": "1", "task_description": "detailed instructions"}]}`,
       ``,
       `Example for "Compare Redis vs Memcached and write a recommendation":`,
-      `{"action": "update-plan", "plan": [{"id": "1", "description": "Research Redis features, performance, and use cases"}, {"id": "2", "description": "Research Memcached features, performance, and use cases"}, {"id": "3", "description": "Write a comparison and recommendation based on the research"}]}`,
+      `{"action": "plan-and-assign", "plan": [{"id": "1", "description": "Research Redis"}, {"id": "2", "description": "Research Memcached"}, {"id": "3", "description": "Write comparison"}], "assignments": [{"assignee": "Agent A", "task_id": "1", "task_description": "Research Redis features, performance, and use cases"}, {"assignee": "Agent B", "task_id": "2", "task_description": "Research Memcached features, performance, and use cases"}]}`,
+      ``,
+      `Note: Only assign independent tasks now. Tasks that depend on other tasks' results (like task 3 above) should NOT be assigned yet — they will be assigned after their dependencies complete.`,
     ].join('\n');
   }
 
@@ -675,7 +824,31 @@ export class MagenticStrategy extends BaseStrategy {
 
     parts.push(`Your task: ${task.description}`);
     parts.push('');
+    parts.push('Respond concisely and directly. Focus only on this task — do not explore unrelated topics.');
+    parts.push('Prefer answering from your knowledge before using tools. Limit tool usage to at most 3 calls.');
+    parts.push('');
 
     return parts.join('\n') + basePrompt;
+  }
+
+  private buildSynthesisPrompt(userMessage: string, ledger: TaskLedgerItem[]): string {
+    const results = ledger.map((t) => {
+      const status = t.status === 'completed' ? '✓' : '✗';
+      return `  ${status} [${t.id}] ${t.description}${t.result ? `: ${t.result.slice(0, 200)}` : ''}`;
+    }).join('\n');
+
+    return [
+      `You are a COORDINATOR wrapping up a multi-agent task. All work is done.`,
+      `Write a brief 2-4 sentence synthesis for the user summarizing what was accomplished.`,
+      ``,
+      `DO NOT use any tools. DO NOT start new work. Just summarize concisely.`,
+      ``,
+      `Original request: ${userMessage}`,
+      ``,
+      `Task results:`,
+      results,
+      ``,
+      `Write your synthesis now (plain text, not JSON):`,
+    ].join('\n');
   }
 }

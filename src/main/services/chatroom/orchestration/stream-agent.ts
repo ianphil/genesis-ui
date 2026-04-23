@@ -6,6 +6,17 @@ import type { CopilotSession } from '../../mind';
 import { isStaleSessionError } from '../../../../shared/sessionErrors';
 
 // ---------------------------------------------------------------------------
+// TurnTimeoutError — distinguishable timeout for callers
+// ---------------------------------------------------------------------------
+
+export class TurnTimeoutError extends Error {
+  constructor(public readonly timeoutMs: number) {
+    super(`Agent turn timed out after ${timeoutMs}ms`);
+    this.name = 'TurnTimeoutError';
+  }
+}
+
+// ---------------------------------------------------------------------------
 // streamAgentTurn — shared SDK event wiring for all orchestration strategies
 // ---------------------------------------------------------------------------
 
@@ -20,6 +31,8 @@ export interface StreamAgentOptions {
   orchestrationMode: OrchestrationMode;
   /** If true, suppress all renderer-visible events (chunks, tool calls, etc.) */
   silent?: boolean;
+  /** Max ms to wait for session.idle before rejecting with TurnTimeoutError (default: 300_000) */
+  turnTimeout?: number;
 }
 
 export interface StreamAgentResult {
@@ -128,8 +141,12 @@ export async function streamAgentTurn(opts: StreamAgentOptions): Promise<StreamA
   // The turnDone timeout ID is hoisted so it can be cleared on any exit path
   // (send timeout, abort, or normal completion) to prevent 5-minute timer leaks.
   let turnDoneTimeoutId: ReturnType<typeof setTimeout> | undefined;
+  const turnTimeoutMs = opts.turnTimeout ?? 300_000;
   const turnDone = new Promise<void>((resolve, reject) => {
-    turnDoneTimeoutId = setTimeout(resolve, 300_000);
+    turnDoneTimeoutId = setTimeout(
+      () => reject(new TurnTimeoutError(turnTimeoutMs)),
+      turnTimeoutMs,
+    );
 
     const unsubIdle = session.on('session.idle', () => {
       clearTimeout(turnDoneTimeoutId);
@@ -165,7 +182,15 @@ export async function streamAgentTurn(opts: StreamAgentOptions): Promise<StreamA
     clearTimeout(sendTimerId);
   }
 
-  await turnDone;
+  await turnDone.catch((err) => {
+    // Emit error event so the renderer clears the streaming state / active
+    // speaker for the auto-created message placeholder.
+    emitEvent({
+      type: 'error',
+      message: err instanceof Error ? err.message : String(err),
+    });
+    throw err;
+  });
 
   return { finalContent, messageId };
 }
@@ -186,6 +211,8 @@ export interface SendToAgentOptions {
   transformContent?: (raw: string) => string;
   /** If true, do not persist message or emit done — used for internal coordinator calls */
   silent?: boolean;
+  /** Max ms to wait for session.idle before rejecting with TurnTimeoutError */
+  turnTimeout?: number;
 }
 
 export interface SendToAgentResult {
@@ -208,6 +235,7 @@ export async function sendToAgentWithRetry(opts: SendToAgentOptions): Promise<Se
         session, mind, prompt, roundId, context,
         abortSignal, unsubs: opts.unsubs, orchestrationMode,
         silent: opts.silent,
+        turnTimeout: opts.turnTimeout,
       });
 
       if (abortSignal.aborted) return { message: null, rawContent: finalContent };

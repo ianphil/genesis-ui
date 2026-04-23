@@ -267,6 +267,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         chatroomStreamingByMind: {},
         chatroomActiveSpeaker: null,
         chatroomTaskLedger: [],
+        chatroomMetrics: null,
       };
 
     case 'A2A_INCOMING': {
@@ -346,7 +347,14 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, chatroomMessages: action.payload };
 
     case 'CHATROOM_USER_MESSAGE':
-      return { ...state, chatroomMessages: [...state.chatroomMessages, action.payload] };
+      return {
+        ...state,
+        chatroomMessages: [...state.chatroomMessages, action.payload],
+        // Clear stale orchestration state from previous round
+        chatroomActiveSpeaker: null,
+        chatroomMetrics: null,
+        chatroomTaskLedger: [],
+      };
 
     case 'CHATROOM_AGENT_MESSAGE': {
       const { messageId, mindId, mindName, roundId, timestamp } = action.payload;
@@ -431,6 +439,12 @@ export function appReducer(state: AppState, action: AppAction): AppState {
                 : {}),
             };
 
+          case 'orchestration:metrics':
+            return {
+              ...state,
+              chatroomMetrics: event.data as AppState['chatroomMetrics'],
+            };
+
           case 'orchestration:approval-requested':
           case 'orchestration:approval-decided':
           default:
@@ -466,15 +480,18 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         chatroomStreamingByMind: isDone
           ? { ...state.chatroomStreamingByMind, [mindId]: false }
           : { ...state.chatroomStreamingByMind, [mindId]: true },
-        // Clear active speaker when all streaming stops
-        ...(isDone && !Object.entries(state.chatroomStreamingByMind).some(
-          ([id, s]) => s && id !== mindId,
-        ) ? { chatroomActiveSpeaker: null } : {}),
+        // Clear active speaker when the active speaker finishes
+        ...(isDone && state.chatroomActiveSpeaker?.mindId === mindId
+          ? { chatroomActiveSpeaker: null }
+          : {}),
       };
     }
 
     case 'CHATROOM_CLEAR':
-      return { ...state, chatroomMessages: [], chatroomStreamingByMind: {}, chatroomActiveSpeaker: null, chatroomTaskLedger: [] };
+      return { ...state, chatroomMessages: [], chatroomStreamingByMind: {}, chatroomActiveSpeaker: null, chatroomTaskLedger: [], chatroomMetrics: null };
+
+    case 'SET_CHATROOM_TASK_LEDGER':
+      return { ...state, chatroomTaskLedger: action.payload };
 
     case 'SET_ORCHESTRATION':
       return { ...state, chatroomOrchestration: action.payload };

@@ -35,26 +35,27 @@ describe('TaskLedgerPanel', () => {
     expect(screen.getByText('Alpha')).toBeDefined();
   });
 
-  it('shows Unassigned for tasks without assignee', () => {
+  it('shows no assignee label for tasks without assignee', () => {
     const ledger = [
       { id: '1', description: 'Pending task', status: 'pending' },
     ];
     render(<TaskLedgerPanel ledger={ledger} minds={minds} />);
-    expect(screen.queryByText('Unassigned')).toBeNull(); // No assignee = no label
+    expect(screen.queryByText('Alpha')).toBeNull();
+    expect(screen.queryByText('Beta')).toBeNull();
   });
 
-  it('shows status icons for each state', () => {
+  it('shows status labels for each state', () => {
     const ledger = [
-      { id: '1', description: 'Pending', status: 'pending' },
-      { id: '2', description: 'Working', status: 'in-progress' },
-      { id: '3', description: 'Done', status: 'completed' },
-      { id: '4', description: 'Broken', status: 'failed' },
+      { id: '1', description: 'Task alpha', status: 'pending' },
+      { id: '2', description: 'Task beta', status: 'in-progress' },
+      { id: '3', description: 'Task gamma', status: 'completed' },
+      { id: '4', description: 'Task delta', status: 'failed' },
     ];
     render(<TaskLedgerPanel ledger={ledger} minds={minds} />);
-    expect(screen.getByText('○')).toBeDefined();
-    expect(screen.getByText('◉')).toBeDefined();
-    expect(screen.getByText('✓')).toBeDefined();
-    expect(screen.getByText('✗')).toBeDefined();
+    expect(screen.getByText('Pending')).toBeDefined();
+    expect(screen.getByText('In Progress')).toBeDefined();
+    expect(screen.getByText('Done')).toBeDefined();
+    expect(screen.getByText('Failed')).toBeDefined();
   });
 
   it('renders Task Ledger heading', () => {

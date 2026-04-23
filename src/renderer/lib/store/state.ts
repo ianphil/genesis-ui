@@ -29,6 +29,8 @@ export interface AppState {
   chatroomActiveSpeaker: { mindId: string; mindName: string; phase: 'speaking' | 'moderating' | 'synthesizing' } | null;
   /** Live task ledger from Magentic orchestration */
   chatroomTaskLedger: TaskLedgerItem[];
+  /** Orchestration completion metrics */
+  chatroomMetrics: { elapsedMs: number; totalTasks: number; completedTasks: number; failedTasks: number; agentsUsed: number; orchestrationMode: string } | null;
 }
 
 export type AppAction =
@@ -59,6 +61,7 @@ export type AppAction =
   | { type: 'CHATROOM_AGENT_MESSAGE'; payload: { messageId: string; mindId: string; mindName: string; roundId: string; timestamp: number } }
   | { type: 'CHATROOM_EVENT'; payload: ChatroomStreamEvent }
   | { type: 'CHATROOM_CLEAR' }
+  | { type: 'SET_CHATROOM_TASK_LEDGER'; payload: TaskLedgerItem[] }
   | { type: 'SET_ORCHESTRATION'; payload: OrchestrationMode }
   | { type: 'SET_GROUP_CHAT_CONFIG'; payload: GroupChatConfig | null }
   | { type: 'SET_HANDOFF_CONFIG'; payload: HandoffConfig | null }
@@ -88,4 +91,5 @@ export const initialState: AppState = {
   chatroomMagenticConfig: null,
   chatroomActiveSpeaker: null,
   chatroomTaskLedger: [],
+  chatroomMetrics: null,
 };
