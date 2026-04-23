@@ -132,31 +132,50 @@ export class ChatService {
         }));
       }));
 
-      await session.send({ prompt });
-
-      // Wait for idle
-      await new Promise<void>((resolve, reject) => {
-        const timeout = setTimeout(resolve, 300_000);
+      // Set up idle/error listeners BEFORE send to avoid missing events
+      // that fire synchronously inside session.send (regression-test guarded).
+      let turnDoneTimerId: ReturnType<typeof setTimeout> | undefined;
+      const turnDone = new Promise<void>((resolve, reject) => {
+        turnDoneTimerId = setTimeout(resolve, 300_000);
 
         const unsubIdle = session.on('session.idle', () => {
-          clearTimeout(timeout);
+          if (turnDoneTimerId) clearTimeout(turnDoneTimerId);
           unsubIdle();
           resolve();
         });
         unsubs.push(unsubIdle);
 
         const unsubError = session.on('session.error', (event) => {
-          clearTimeout(timeout);
+          if (turnDoneTimerId) clearTimeout(turnDoneTimerId);
           unsubError();
           reject(new Error(event.data.message));
         });
         unsubs.push(unsubError);
 
         abortController.signal.addEventListener('abort', () => {
-          clearTimeout(timeout);
+          if (turnDoneTimerId) clearTimeout(turnDoneTimerId);
           resolve();
         }, { once: true });
       });
+
+      // Send with a timeout guard — if session.send() itself hangs (dead
+      // WebSocket, killed CLI), surface as a stale-session error so the
+      // outer catch can recreate the session and retry.
+      let sendTimerId: ReturnType<typeof setTimeout> | undefined;
+      const sendTimeout = new Promise<never>((_, reject) => {
+        sendTimerId = setTimeout(
+          () => reject(new Error('Session not found: send() timed out')),
+          30_000,
+        );
+      });
+      try {
+        await Promise.race([session.send({ prompt }), sendTimeout]);
+      } finally {
+        if (sendTimerId) clearTimeout(sendTimerId);
+      }
+
+      // Wait for idle (listeners already active from before send)
+      await turnDone;
 
       if (abortController.signal.aborted) return;
       emit({ type: 'done' });

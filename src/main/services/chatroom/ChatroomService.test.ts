@@ -330,6 +330,36 @@ describe('ChatroomService', () => {
       expect(lastWrite.messages.some((m) => m.role === 'user')).toBe(true);
       expect(lastWrite.messages.some((m) => m.role === 'assistant')).toBe(true);
     });
+
+    it('debounces ledger-update persistence into a single write', async () => {
+      vi.useFakeTimers();
+      try {
+        vi.mocked(fs.writeFileSync).mockClear();
+        vi.mocked(fs.renameSync).mockImplementation(vi.fn());
+
+        // Fire a burst of task-ledger-update events (Magentic emits one per
+        // task transition + per parallel-worker completion).
+        for (let i = 0; i < 25; i++) {
+          svc.emit('chatroom:event', {
+            roundId: 'r1',
+            mindId: 'magentic-orchestrator',
+            event: {
+              type: 'orchestration:task-ledger-update',
+              data: { ledger: [{ id: `t${i}`, description: `task ${i}`, status: 'pending' }] },
+            },
+          });
+        }
+
+        // Synchronous burst MUST NOT have triggered a write.
+        expect(fs.writeFileSync).not.toHaveBeenCalled();
+
+        // Advance past the debounce window — exactly one write should land.
+        await vi.advanceTimersByTimeAsync(600);
+        expect(fs.writeFileSync).toHaveBeenCalledTimes(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 
   // 8. Persistence cap

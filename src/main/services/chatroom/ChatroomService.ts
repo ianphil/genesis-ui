@@ -58,6 +58,8 @@ export class ChatroomService extends EventEmitter {
   private magneticConfig: MagenticConfig | null = null;
   private readonly persistPath: string;
   private readonly persistDir: string;
+  private ledgerPersistTimer: ReturnType<typeof setTimeout> | null = null;
+  private static readonly LEDGER_PERSIST_DEBOUNCE_MS = 500;
 
   constructor(
     private readonly sessionFactory: ChatroomSessionFactory,
@@ -72,13 +74,16 @@ export class ChatroomService extends EventEmitter {
     this.loadTranscript();
     this.listenToFactoryEvents();
 
-    // Track ledger updates for persistence across view switches
+    // Track ledger updates for persistence across view switches.
+    // Magentic orchestration emits one task-ledger-update per task transition
+    // and per parallel-worker completion — debounce to avoid blocking the
+    // main thread with sync writeFileSync on every event.
     this.on('chatroom:event', (event: ChatroomStreamEvent) => {
       if (event.event.type === 'orchestration:task-ledger-update') {
         const data = event.event.data as { ledger?: TaskLedgerItem[] };
         if (data.ledger) {
           this.lastLedger = data.ledger;
-          this.persist();
+          this.schedulePersist();
         }
       }
     });
@@ -92,6 +97,10 @@ export class ChatroomService extends EventEmitter {
     void _model;
     // Cancel any in-flight agents from previous round
     this.stopAll();
+
+    // Drop any pending debounced ledger write — we're starting a new round
+    // and will write the cleared ledger below.
+    this.flushLedgerPersist();
 
     // Clear stale task ledger from previous orchestration round
     // (persisted alongside user message below)
@@ -231,6 +240,7 @@ export class ChatroomService extends EventEmitter {
   }
 
   async clearHistory(): Promise<void> {
+    this.flushLedgerPersist();
     this.messages = [];
     this.lastLedger = [];
     this.persist();
@@ -361,6 +371,28 @@ export class ChatroomService extends EventEmitter {
       fs.renameSync(tmpPath, this.persistPath);
     } catch {
       // Persistence failure is non-fatal
+    }
+  }
+
+  /**
+   * Schedules a debounced persist for ledger updates so a burst of
+   * orchestration:task-ledger-update events results in at most one disk write.
+   */
+  private schedulePersist(): void {
+    if (this.ledgerPersistTimer) return;
+    this.ledgerPersistTimer = setTimeout(() => {
+      this.ledgerPersistTimer = null;
+      this.persist();
+    }, ChatroomService.LEDGER_PERSIST_DEBOUNCE_MS);
+    // Don't keep the event loop alive for a pending ledger flush.
+    this.ledgerPersistTimer.unref?.();
+  }
+
+  /** Flush any pending debounced ledger persist immediately. */
+  private flushLedgerPersist(): void {
+    if (this.ledgerPersistTimer) {
+      clearTimeout(this.ledgerPersistTimer);
+      this.ledgerPersistTimer = null;
     }
   }
 
