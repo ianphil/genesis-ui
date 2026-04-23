@@ -7,12 +7,13 @@
     "esModuleInterop": true,
     "noImplicitAny": true,
     "sourceMap": true,
-    "baseUrl": ".",
     "outDir": "dist",
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "jsx": "react-jsx",
     "strict": true,
+    // INVARIANT: DO NOT RE-ENABLE ignoreDeprecations — fix the deprecations instead.
+    // "ignoreDeprecations": "6.0",
     "paths": {
       "@/*": ["./src/*"]
     }

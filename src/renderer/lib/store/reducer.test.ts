@@ -5,6 +5,7 @@ import { describe, it, expect } from 'vitest';
 import { handleChatEvent, appReducer, initialState } from '.';
 import type { AppState, AppAction } from '.';
 import type { ChatMessage } from '../../../shared/types';
+import type { ChatroomMessage } from '../../../shared/chatroom-types';
 import type { Message, Task, TaskStatus, Artifact } from '../../../shared/a2a-types';
 import {
   makeMessage,
@@ -367,10 +368,10 @@ describe('appReducer', () => {
       targetMindId: mindId,
       message: {
         messageId: 'msg-a2a-1',
-        role: 'user',
+        role: 'user' as const,
         parts: [{ text: 'Hello from Agent A', mediaType: 'text/plain' }],
         metadata: { fromId: 'agent-a', fromName: 'Agent A', hopCount: 1 },
-      },
+      } satisfies Message,
       replyMessageId: 'reply-1',
       ...overrides,
     });
@@ -816,7 +817,7 @@ describe('appReducer — chatroom actions', () => {
       type: 'CHATROOM_EVENT',
       payload: {
         mindId: 'mind-1', mindName: 'Agent A', messageId: '', roundId: 'r1',
-        event: { type: 'orchestration:handoff', data: { from: 'Agent A', fromMindId: 'mind-1', to: 'Agent B', toMindId: 'mind-2' } },
+        event: { type: 'orchestration:handoff', data: { from: 'Agent A', fromMindId: 'mind-1', to: 'Agent B', toMindId: 'mind-2', reason: 'test handoff' } },
       },
     });
     expect(state.chatroomActiveSpeaker).toEqual({ mindId: 'mind-2', mindName: 'Agent B', phase: 'speaking' });

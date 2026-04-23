@@ -11,6 +11,7 @@
     "make": "node scripts/prepare-node-runtime.js && electron-forge make",
     "publish": "node scripts/prepare-node-runtime.js && electron-forge publish",
     "lint": "eslint --ext .ts,.tsx .",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -52,7 +53,7 @@
     "postcss": "^8.5.9",
     "rehype-highlight": "^7.0.2",
     "tailwindcss": "^4.2.2",
-    "typescript": "~5.7.0",
+    "typescript": "^6.0.3",
     "vite": "^5.4.21",
     "vitest": "^4.1.4"
   },
