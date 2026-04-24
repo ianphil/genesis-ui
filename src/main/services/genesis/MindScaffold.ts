@@ -136,7 +136,7 @@ export class MindScaffold {
     const sessionConfig: Record<string, unknown> = {
       streaming: true,
       workingDirectory: mindPath,
-      onPermissionRequest: async () => ({ kind: 'approved' }),
+      onPermissionRequest: async () => ({ kind: 'approve-once' }),
       onUserInputRequest: async () => ({ answer: 'Proceed with genesis.', wasFreeform: true }),
     };
 

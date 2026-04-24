@@ -345,7 +345,7 @@ export class MindManager extends EventEmitter {
           tone: { action: 'remove' },
         },
       },
-      onPermissionRequest: async () => ({ kind: 'approved' }),
+      onPermissionRequest: async () => ({ kind: 'approve-once' }),
       onUserInputRequest: onUserInputRequest ?? (async () => ({ answer: 'Not available in this context', wasFreeform: true })),
     });
   }
