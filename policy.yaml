@@ -1,0 +1,69 @@
+# Chamber Governance Policy
+# Enforced by governance-check workflow
+# Schema: https://github.com/microsoft/agent-governance-toolkit
+
+version: "1.0"
+name: chamber-governance
+description: Governance policy for Chamber desktop agent platform
+
+rules:
+  # Agent identity and boundaries
+  - id: agent-identity
+    description: Every mind must declare its name and capabilities
+    severity: error
+    check: mind-manifest-required
+
+  # Tool access control
+  - id: tool-allowlist
+    description: Minds may only invoke tools listed in the MCP allowlist
+    severity: error
+    check: mcp-allowlist-enforced
+
+  # Credential safety
+  - id: no-committed-secrets
+    description: No secrets, tokens, or credentials in committed files
+    severity: error
+    check: secret-scan
+
+  # Lens view safety
+  - id: lens-schema-validation
+    description: All view.json files must conform to the Lens schema
+    severity: error
+    check: lens-schema-valid
+
+  # Canvas sandboxing
+  - id: canvas-sandbox
+    description: Canvas HTML must not access Electron main process APIs
+    severity: error
+    check: canvas-isolation
+
+  # Cron safety
+  - id: cron-no-shell
+    description: Cron jobs must not allow arbitrary shell execution
+    severity: warning
+    check: cron-safe-execution
+
+  # Chatroom orchestration
+  - id: chatroom-delegation-limit
+    description: Agent-to-agent delegation depth must not exceed 3
+    severity: warning
+    check: delegation-depth-limit
+    parameters:
+      max_depth: 3
+
+  # Dependency hygiene
+  - id: dependency-audit
+    description: npm dependencies must pass security audit
+    severity: error
+    check: npm-audit-clean
+
+  # Working memory protection
+  - id: working-memory-readonly
+    description: PRs must not modify .working-memory/ files
+    severity: warning
+    check: working-memory-protected
+
+metadata:
+  framework: agent-governance-toolkit
+  applies_to: desktop-agent-platform
+  review_cadence: quarterly

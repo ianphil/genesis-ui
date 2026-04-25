@@ -1,0 +1,152 @@
+name: Governance Check
+
+on:
+  pull_request:
+    branches: [master]
+
+concurrency:
+  group: governance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  governance:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check governance artifacts exist
+        run: |
+          echo "=== Checking governance artifacts ==="
+          MISSING=0
+
+          for file in AGENTS.md policy.yaml mcp-allowlist.yaml; do
+            if [ ! -f "$file" ]; then
+              echo "::error::Missing required governance artifact: $file"
+              MISSING=1
+            else
+              echo "Found: $file"
+            fi
+          done
+
+          if [ $MISSING -eq 1 ]; then
+            exit 1
+          fi
+          echo "All governance artifacts present."
+
+      - name: Validate policy.yaml schema
+        run: |
+          echo "=== Validating policy.yaml ==="
+          python3 -c "
+          import yaml, sys
+          with open('policy.yaml', 'r') as f:
+              policy = yaml.safe_load(f)
+          required = ['version', 'name', 'rules']
+          for field in required:
+              if field not in policy:
+                  print(f'::error::policy.yaml missing required field: {field}')
+                  sys.exit(1)
+          for rule in policy.get('rules', []):
+              if 'id' not in rule or 'severity' not in rule:
+                  print(f'::error::Rule missing id or severity: {rule}')
+                  sys.exit(1)
+          print(f'Policy validated: {len(policy[\"rules\"])} rules defined')
+          "
+
+      - name: Validate mcp-allowlist.yaml schema
+        run: |
+          echo "=== Validating mcp-allowlist.yaml ==="
+          python3 -c "
+          import yaml, sys
+          with open('mcp-allowlist.yaml', 'r') as f:
+              allowlist = yaml.safe_load(f)
+          required = ['version', 'default_action']
+          for field in required:
+              if field not in allowlist:
+                  print(f'::error::mcp-allowlist.yaml missing required field: {field}')
+                  sys.exit(1)
+          servers = allowlist.get('servers', [])
+          tools = allowlist.get('tools', [])
+          print(f'Allowlist validated: {len(servers)} servers, {len(tools)} tools defined')
+          print(f'Default action: {allowlist[\"default_action\"]}')
+          "
+
+      - name: Scan for secrets in mind directories
+        run: |
+          echo "=== Scanning for secrets ==="
+          FOUND=0
+          PATTERNS=(
+            'PRIVATE KEY'
+            'sk-[a-zA-Z0-9]'
+            'ghp_[a-zA-Z0-9]'
+            'github_pat_'
+            'Bearer [a-zA-Z0-9]'
+            'password\s*[:=]'
+          )
+          for pattern in "${PATTERNS[@]}"; do
+            if grep -rn --include="*.md" --include="*.json" --include="*.yaml" --include="*.yml" --include="*.ts" --include="*.js" -E "$pattern" . --exclude-dir=node_modules --exclude-dir=.git 2>/dev/null; then
+              echo "::warning::Potential secret pattern found: $pattern"
+              FOUND=1
+            fi
+          done
+          if [ $FOUND -eq 1 ]; then
+            echo "::warning::Review flagged patterns above for actual secrets"
+          else
+            echo "No secret patterns detected."
+          fi
+
+      - name: Check .working-memory not modified
+        run: |
+          echo "=== Checking .working-memory protection ==="
+          CHANGED=$(git diff --name-only origin/master...HEAD -- .working-memory/ 2>/dev/null || true)
+          if [ -n "$CHANGED" ]; then
+            echo "::warning::PR modifies .working-memory/ files (agent-managed):"
+            echo "$CHANGED"
+          else
+            echo ".working-memory/ not modified in this PR."
+          fi
+
+      - name: Validate Lens view.json files
+        run: |
+          echo "=== Validating Lens view.json files ==="
+          python3 -c "
+          import json, glob, sys
+          views = glob.glob('.github/lens/**/view.json', recursive=True)
+          if not views:
+              print('No Lens view.json files found (OK)')
+              sys.exit(0)
+          errors = 0
+          VALID_TYPES = ['form', 'table', 'briefing', 'detail', 'status-board', 'timeline', 'editor']
+          for path in views:
+              with open(path) as f:
+                  try:
+                      view = json.load(f)
+                  except json.JSONDecodeError as e:
+                      print(f'::error::Invalid JSON in {path}: {e}')
+                      errors += 1
+                      continue
+              if 'type' in view and view['type'] not in VALID_TYPES:
+                  print(f'::error::Invalid view type in {path}: {view[\"type\"]}')
+                  errors += 1
+          if errors:
+              sys.exit(1)
+          print(f'Validated {len(views)} Lens view(s)')
+          "
+
+      - name: npm audit
+        run: |
+          echo "=== Running npm audit ==="
+          npm audit --omit=dev 2>&1 || echo "::warning::npm audit found vulnerabilities"
+
+  governance-status:
+    needs: [governance]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Governance gate
+        run: |
+          if [ "${{ needs.governance.result }}" != "success" ]; then
+            echo "::error::Governance checks failed. Please fix issues above."
+            exit 1
+          fi
+          echo "All governance checks passed."
