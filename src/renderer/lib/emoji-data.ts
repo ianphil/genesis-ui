@@ -123,11 +123,14 @@ const cache = new Map<string, unknown>();
 async function loadFrimousseAsset(locale: string, file: string): Promise<unknown> {
   const key = `${locale}/${file}`;
   if (cache.has(key)) return cache.get(key);
+  if (locale !== 'en') {
+    throw new Error(`unsupported locale: ${locale}`);
+  }
   let mod: { default: unknown };
   if (file === 'data') {
-    mod = (await import(`emojibase-data/${locale}/data.json`)) as { default: unknown };
+    mod = (await import('emojibase-data/en/data.json')) as { default: unknown };
   } else if (file === 'messages') {
-    mod = (await import(`emojibase-data/${locale}/messages.json`)) as { default: unknown };
+    mod = (await import('emojibase-data/en/messages.json')) as { default: unknown };
   } else {
     throw new Error(`unsupported frimousse asset: ${file}`);
   }
@@ -141,7 +144,10 @@ export function installFrimousseDataInterceptor(): void {
   if (interceptorInstalled) return;
   if (typeof window === 'undefined') return;
   const orig = window.fetch.bind(window);
-  window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+  const shim = async (
+    input: RequestInfo | URL,
+    init?: RequestInit,
+  ): Promise<Response> => {
     const url =
       typeof input === 'string'
         ? input
@@ -171,6 +177,9 @@ export function installFrimousseDataInterceptor(): void {
     }
     return orig(input, init);
   };
+  window.fetch = shim;
+  // Frimousse may also reach for globalThis.fetch directly.
+  (globalThis as unknown as { fetch: typeof shim }).fetch = shim;
   interceptorInstalled = true;
 }
 

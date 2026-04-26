@@ -11,16 +11,16 @@ import {
   type EmojiSkinTone,
 } from '@/renderer/lib/emoji-skin-tone';
 
+// Install the offline data interceptor at module load (before the picker
+// renders) so frimousse's internal fetch sees our shim from the first call.
+installFrimousseDataInterceptor();
+
 export interface EmojiPickerProps {
   onSelect: (emoji: string, label: string) => void;
   className?: string;
 }
 
 export function EmojiPicker({ onSelect, className }: EmojiPickerProps) {
-  React.useEffect(() => {
-    installFrimousseDataInterceptor();
-  }, []);
-
   const [skinTone, setSkinToneState] = React.useState<EmojiSkinTone>(() =>
     getEmojiSkinTone(),
   );
