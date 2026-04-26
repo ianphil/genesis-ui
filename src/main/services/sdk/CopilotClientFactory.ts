@@ -33,7 +33,18 @@ export class CopilotClientFactory {
     fs.mkdirSync(logDir, { recursive: true });
 
     let resolvedCliPath = cliPath;
-    const cliArgs = ['--log-dir', logDir];
+    // SDK 0.3.0 enforces server-side permission rules (path verification, tool
+    // gates, URL gates) that fire before our `onPermissionRequest` handler.
+    // Chamber owns the security boundary itself (Electron sandbox + the
+    // chatroom ApprovalGate), so we tell the underlying CLI to defer all
+    // permission decisions to the SDK handler — which auto-approves.
+    // See: https://github.com/github/copilot-sdk/releases/tag/v0.3.0
+    const cliArgs = [
+      '--log-dir', logDir,
+      '--allow-all-tools',
+      '--allow-all-paths',
+      '--allow-all-urls',
+    ];
 
     if (cliPath.endsWith('.js')) {
       const systemNode = findSystemNode();
