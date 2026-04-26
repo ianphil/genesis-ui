@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, Suspense } from 'react';
 import { cn } from '../../lib/utils';
 import type { ModelInfo, ChatImageAttachment } from '../../../shared/types';
 import {
@@ -8,6 +8,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../ui/select';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '../ui/popover';
+import { pushRecentEmoji } from '../../lib/emoji-recents';
+
+const EmojiPickerLazy = React.lazy(() =>
+  import('../ui/emoji-picker').then((m) => ({ default: m.EmojiPicker })),
+);
 
 interface Props {
   onSend: (message: string, attachments?: ChatImageAttachment[]) => void;
@@ -53,8 +63,21 @@ function readAsBase64(file: Blob): Promise<string> {
 export function ChatInput({ onSend, onStop, isStreaming, disabled, availableModels, selectedModel, onModelChange, placeholder }: Props) {
   const [input, setInput] = useState('');
   const [attachments, setAttachments] = useState<ChatImageAttachment[]>([]);
+  const [emojiOpen, setEmojiOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const pastedSeq = useRef(0);
+  // Last known textarea selection — preserved across blur (e.g., when the
+  // emoji popover steals focus) so insertAtCaret can land in the right place.
+  const selectionRef = useRef<{ start: number; end: number } | null>(null);
+
+  const updateSelectionRef = useCallback(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    selectionRef.current = {
+      start: el.selectionStart ?? el.value.length,
+      end: el.selectionEnd ?? el.value.length,
+    };
+  }, []);
 
   const getMaxHeight = useCallback((el: HTMLTextAreaElement) => {
     const lineHeight = parseFloat(getComputedStyle(el).lineHeight) || 20;
@@ -78,14 +101,17 @@ export function ChatInput({ onSend, onStop, isStreaming, disabled, availableMode
       setInput((v) => v + text);
       return;
     }
-    const start = el.selectionStart ?? el.value.length;
-    const end = el.selectionEnd ?? el.value.length;
+    const focused = document.activeElement === el;
+    const saved = selectionRef.current;
+    const start = focused ? (el.selectionStart ?? el.value.length) : (saved?.start ?? el.value.length);
+    const end = focused ? (el.selectionEnd ?? el.value.length) : (saved?.end ?? start);
     const next = el.value.slice(0, start) + text + el.value.slice(end);
     setInput(next);
+    const caret = start + text.length;
+    selectionRef.current = { start: caret, end: caret };
     // Restore caret after React commits
     requestAnimationFrame(() => {
       if (!textareaRef.current) return;
-      const caret = start + text.length;
       textareaRef.current.setSelectionRange(caret, caret);
       resize(textareaRef.current);
     });
@@ -135,10 +161,23 @@ export function ChatInput({ onSend, onStop, isStreaming, disabled, availableMode
     onSend(input, kept.length > 0 ? kept : undefined);
     setInput('');
     setAttachments([]);
+    setEmojiOpen(false);
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
   }, [input, attachments, isStreaming, disabled, onSend, onStop]);
+
+  const handleEmojiSelect = useCallback(
+    (emoji: string) => {
+      insertAtCaret(emoji);
+      pushRecentEmoji(emoji);
+      setEmojiOpen(false);
+      requestAnimationFrame(() => {
+        textareaRef.current?.focus();
+      });
+    },
+    [insertAtCaret],
+  );
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -174,6 +213,8 @@ export function ChatInput({ onSend, onStop, isStreaming, disabled, availableMode
             onChange={handleInput}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
+            onSelect={updateSelectionRef}
+            onBlur={updateSelectionRef}
             placeholder={disabled ? 'Select a mind directory to start…' : (placeholder ?? 'Message your agent… (paste an image to attach)')}
             disabled={disabled}
             rows={1}
@@ -181,28 +222,64 @@ export function ChatInput({ onSend, onStop, isStreaming, disabled, availableMode
           />
 
           <div className="flex items-center justify-between">
-            {availableModels.length > 0 ? (
-              <Select
-                value={selectedModel ?? undefined}
-                onValueChange={onModelChange}
-                disabled={isStreaming}
-              >
-                <SelectTrigger className="h-6 w-auto gap-1.5 border-none bg-transparent px-0 text-xs text-muted-foreground shadow-none hover:text-foreground focus:ring-0">
-                  <SelectValue placeholder="Select model" />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableModels.map((model) => (
-                    <SelectItem key={model.id} value={model.id} className="text-xs">
-                      {model.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <span className="text-xs text-muted-foreground">
-                {disabled ? '' : 'Loading models…'}
-              </span>
-            )}
+            <div className="flex items-center gap-1">
+              <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label="Insert emoji"
+                    aria-haspopup="dialog"
+                    aria-expanded={emojiOpen}
+                    disabled={disabled}
+                    onMouseDown={(e) => {
+                      // Preserve textarea selection across the focus shift.
+                      updateSelectionRef();
+                      e.preventDefault();
+                    }}
+                    onClick={() => setEmojiOpen((v) => !v)}
+                    className="h-6 w-6 shrink-0 rounded-md text-base text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-50 disabled:hover:bg-transparent flex items-center justify-center"
+                  >
+                    😀
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent
+                  align="start"
+                  side="top"
+                  className="p-0"
+                  onCloseAutoFocus={(e) => {
+                    e.preventDefault();
+                    textareaRef.current?.focus();
+                  }}
+                >
+                  <Suspense fallback={<div className="h-[340px] w-[320px] flex items-center justify-center text-xs text-muted-foreground">Loading emoji…</div>}>
+                    <EmojiPickerLazy onSelect={handleEmojiSelect} />
+                  </Suspense>
+                </PopoverContent>
+              </Popover>
+
+              {availableModels.length > 0 ? (
+                <Select
+                  value={selectedModel ?? undefined}
+                  onValueChange={onModelChange}
+                  disabled={isStreaming}
+                >
+                  <SelectTrigger className="h-6 w-auto gap-1.5 border-none bg-transparent px-0 text-xs text-muted-foreground shadow-none hover:text-foreground focus:ring-0">
+                    <SelectValue placeholder="Select model" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableModels.map((model) => (
+                      <SelectItem key={model.id} value={model.id} className="text-xs">
+                        {model.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <span className="text-xs text-muted-foreground">
+                  {disabled ? '' : 'Loading models…'}
+                </span>
+              )}
+            </div>
 
             <button
               onClick={handleSubmit}
