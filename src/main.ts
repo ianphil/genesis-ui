@@ -17,6 +17,7 @@ import { ChatroomService } from './main/services/chatroom';
 import { CanvasService } from './main/services/canvas';
 import { CronService } from './main/services/cron';
 import { createAppTray, loadAppIcon } from './main/tray/Tray';
+import { installContextMenu } from './main/contextMenu/ContextMenu';
 
 // IPC adapters
 import { setupChatIPC } from './main/ipc/chat';
@@ -138,6 +139,8 @@ const createWindow = () => {
       sandbox: false,
     },
   });
+
+  installContextMenu(mainWindow.webContents);
 
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
