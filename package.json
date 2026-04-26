@@ -1,7 +1,7 @@
 {
   "name": "chamber",
   "productName": "chamber",
-  "version": "0.29.2",
+  "version": "0.30.0",
   "description": "Genesis Mind Interface — desktop chat UI for Genesis agents",
   "main": ".vite/build/main.js",
   "private": true,
@@ -63,8 +63,11 @@
   "dependencies": {
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "cmdk": "^1.1.1",
     "croner": "^10.0.1",
     "electron-squirrel-startup": "^1.0.1",
+    "emojibase-data": "^17.0.0",
+    "frimousse": "^0.3.0",
     "highlight.js": "^11.11.1",
     "keytar": "^7.9.0",
     "lucide-react": "^1.9.0",

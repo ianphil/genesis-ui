@@ -1,4 +1,5 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, Suspense, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { cn } from '../../lib/utils';
 import type { ModelInfo, ChatImageAttachment } from '../../../shared/types';
 import {
@@ -8,6 +9,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../ui/select';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '../ui/popover';
+import {
+  Command,
+  CommandList,
+  CommandItem,
+} from '../ui/command';
+import { pushRecentEmoji } from '../../lib/emoji-recents';
+import { loadEmojiData, type EmojiRecord } from '../../lib/emoji-data';
+import { getTextareaCaretCoords } from '../../lib/textarea-caret';
+
+const EmojiPickerLazy = React.lazy(() =>
+  import('../ui/emoji-picker').then((m) => ({ default: m.EmojiPicker })),
+);
 
 interface Props {
   onSend: (message: string, attachments?: ChatImageAttachment[]) => void;
@@ -21,6 +39,39 @@ interface Props {
 }
 
 const IMAGE_TOKEN_RE = /\[📷 ([^\]]+)\]/g;
+
+// Boundary-aware shortcode detector. Matches a `:foo` token at the caret
+// where:
+//   - it sits at start-of-string or after whitespace / `(` / `[` / `{`
+//   - the body has at least one letter (so `:30` does not trigger)
+//   - the body is 2+ chars total
+const SHORTCODE_RE = /(^|[\s([{])(:(?=[a-z0-9_+-]*[a-z])[a-z0-9_+-]{2,})$/i;
+
+interface ShortcodeMatch {
+  /** Start index of the `:` in the input. */
+  start: number;
+  /** Query text minus the leading colon. */
+  query: string;
+}
+
+function detectShortcode(text: string, caret: number): ShortcodeMatch | null {
+  const upToCaret = text.slice(0, caret);
+  const m = SHORTCODE_RE.exec(upToCaret);
+  if (!m) return null;
+  const token = m[2];
+  const start = caret - token.length;
+
+  // Suppress if caret is inside an existing image token span.
+  IMAGE_TOKEN_RE.lastIndex = 0;
+  let img: RegExpExecArray | null;
+  while ((img = IMAGE_TOKEN_RE.exec(text)) !== null) {
+    const imgStart = img.index;
+    const imgEnd = imgStart + img[0].length;
+    if (start >= imgStart && start < imgEnd) return null;
+  }
+
+  return { start, query: token.slice(1).toLowerCase() };
+}
 
 function mimeToExt(mime: string): string {
   const map: Record<string, string> = {
@@ -53,8 +104,33 @@ function readAsBase64(file: Blob): Promise<string> {
 export function ChatInput({ onSend, onStop, isStreaming, disabled, availableModels, selectedModel, onModelChange, placeholder }: Props) {
   const [input, setInput] = useState('');
   const [attachments, setAttachments] = useState<ChatImageAttachment[]>([]);
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const [shortcodeMatch, setShortcodeMatch] = useState<ShortcodeMatch | null>(null);
+  const [shortcodeResults, setShortcodeResults] = useState<EmojiRecord[]>([]);
+  const [shortcodeIndex, setShortcodeIndex] = useState(0);
+  const [shortcodeAnchor, setShortcodeAnchor] = useState<{ top: number; left: number; height: number } | null>(null);
+  const isComposingRef = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const pastedSeq = useRef(0);
+  // Last known textarea selection — preserved across blur (e.g., when the
+  // emoji popover steals focus) so insertAtCaret can land in the right place.
+  const selectionRef = useRef<{ start: number; end: number } | null>(null);
+
+  const updateSelectionRef = useCallback(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    selectionRef.current = {
+      start: el.selectionStart ?? el.value.length,
+      end: el.selectionEnd ?? el.value.length,
+    };
+  }, []);
+
+  const closeShortcode = useCallback(() => {
+    setShortcodeMatch(null);
+    setShortcodeResults([]);
+    setShortcodeIndex(0);
+    setShortcodeAnchor(null);
+  }, []);
 
   const getMaxHeight = useCallback((el: HTMLTextAreaElement) => {
     const lineHeight = parseFloat(getComputedStyle(el).lineHeight) || 20;
@@ -78,14 +154,17 @@ export function ChatInput({ onSend, onStop, isStreaming, disabled, availableMode
       setInput((v) => v + text);
       return;
     }
-    const start = el.selectionStart ?? el.value.length;
-    const end = el.selectionEnd ?? el.value.length;
+    const focused = document.activeElement === el;
+    const saved = selectionRef.current;
+    const start = focused ? (el.selectionStart ?? el.value.length) : (saved?.start ?? el.value.length);
+    const end = focused ? (el.selectionEnd ?? el.value.length) : (saved?.end ?? start);
     const next = el.value.slice(0, start) + text + el.value.slice(end);
     setInput(next);
+    const caret = start + text.length;
+    selectionRef.current = { start: caret, end: caret };
     // Restore caret after React commits
     requestAnimationFrame(() => {
       if (!textareaRef.current) return;
-      const caret = start + text.length;
       textareaRef.current.setSelectionRange(caret, caret);
       resize(textareaRef.current);
     });
@@ -135,12 +214,107 @@ export function ChatInput({ onSend, onStop, isStreaming, disabled, availableMode
     onSend(input, kept.length > 0 ? kept : undefined);
     setInput('');
     setAttachments([]);
+    setEmojiOpen(false);
+    closeShortcode();
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
-  }, [input, attachments, isStreaming, disabled, onSend, onStop]);
+  }, [input, attachments, isStreaming, disabled, onSend, onStop, closeShortcode]);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const acceptShortcode = useCallback(
+    (record: EmojiRecord) => {
+      const match = shortcodeMatch;
+      if (!match) return;
+      const el = textareaRef.current;
+      if (!el) return;
+      const before = el.value.slice(0, match.start);
+      const afterStart = match.start + 1 + match.query.length; // include the `:`
+      const after = el.value.slice(afterStart);
+      const next = before + record.emoji + after;
+      setInput(next);
+      pushRecentEmoji(record.emoji);
+      const caret = before.length + record.emoji.length;
+      selectionRef.current = { start: caret, end: caret };
+      // Prune attachments whose tokens may have been removed.
+      setAttachments((prev) => {
+        const tokens = new Set<string>();
+        let m: RegExpExecArray | null;
+        IMAGE_TOKEN_RE.lastIndex = 0;
+        while ((m = IMAGE_TOKEN_RE.exec(next)) !== null) tokens.add(m[1]);
+        const pruned = prev.filter((a) => tokens.has(a.name));
+        return pruned.length === prev.length ? prev : pruned;
+      });
+      closeShortcode();
+      requestAnimationFrame(() => {
+        if (!textareaRef.current) return;
+        textareaRef.current.focus();
+        textareaRef.current.setSelectionRange(caret, caret);
+        resize(textareaRef.current);
+      });
+    },
+    [shortcodeMatch, closeShortcode, resize],
+  );
+
+  const handleEmojiSelect = useCallback(
+    (emoji: string) => {
+      insertAtCaret(emoji);
+      pushRecentEmoji(emoji);
+      setEmojiOpen(false);
+      requestAnimationFrame(() => {
+        textareaRef.current?.focus();
+      });
+    },
+    [insertAtCaret],
+  );
+
+  // Load shortcode results when the query changes.
+  useEffect(() => {
+    if (!shortcodeMatch) return;
+    let cancelled = false;
+    loadEmojiData().then((ds) => {
+      if (cancelled) return;
+      const results = ds.search(shortcodeMatch.query, 10);
+      setShortcodeResults(results);
+      setShortcodeIndex(0);
+      if (results.length === 0) {
+        // Keep the match open so re-typing can re-trigger; just no results.
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [shortcodeMatch]);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // 1) IME composition — let the IME own the key.
+    if (isComposingRef.current || (e.nativeEvent as KeyboardEvent).isComposing) {
+      return;
+    }
+    // 2) Shortcode popover open — intercept navigation / accept / dismiss.
+    if (shortcodeMatch && shortcodeResults.length > 0) {
+      if ((e.key === 'Enter' && !e.shiftKey) || e.key === 'Tab') {
+        e.preventDefault();
+        const pick = shortcodeResults[shortcodeIndex] ?? shortcodeResults[0];
+        if (pick) acceptShortcode(pick);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeShortcode();
+        return;
+      }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setShortcodeIndex((i) => Math.min(i + 1, shortcodeResults.length - 1));
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setShortcodeIndex((i) => Math.max(i - 1, 0));
+        return;
+      }
+    }
+    // 3) Default Enter submit / Shift+Enter newline.
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
@@ -160,6 +334,22 @@ export function ChatInput({ onSend, onStop, isStreaming, disabled, availableMode
       const pruned = prev.filter((a) => tokens.has(a.name));
       return pruned.length === prev.length ? prev : pruned;
     });
+    // Shortcode detection — suppressed during IME composition.
+    if (isComposingRef.current) {
+      closeShortcode();
+      return;
+    }
+    const caret = e.target.selectionStart ?? next.length;
+    const match = detectShortcode(next, caret);
+    if (match) {
+      setShortcodeMatch(match);
+      setShortcodeIndex(0);
+      // Anchor at the caret in viewport coords.
+      const coords = getTextareaCaretCoords(e.target, caret);
+      setShortcodeAnchor(coords);
+    } else if (shortcodeMatch) {
+      closeShortcode();
+    }
   };
 
   const canSubmit = (input.trim().length > 0 || attachments.length > 0) && !disabled;
@@ -174,6 +364,15 @@ export function ChatInput({ onSend, onStop, isStreaming, disabled, availableMode
             onChange={handleInput}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
+            onSelect={updateSelectionRef}
+            onBlur={updateSelectionRef}
+            onCompositionStart={() => {
+              isComposingRef.current = true;
+              closeShortcode();
+            }}
+            onCompositionEnd={() => {
+              isComposingRef.current = false;
+            }}
             placeholder={disabled ? 'Select a mind directory to start…' : (placeholder ?? 'Message your agent… (paste an image to attach)')}
             disabled={disabled}
             rows={1}
@@ -181,28 +380,64 @@ export function ChatInput({ onSend, onStop, isStreaming, disabled, availableMode
           />
 
           <div className="flex items-center justify-between">
-            {availableModels.length > 0 ? (
-              <Select
-                value={selectedModel ?? undefined}
-                onValueChange={onModelChange}
-                disabled={isStreaming}
-              >
-                <SelectTrigger className="h-6 w-auto gap-1.5 border-none bg-transparent px-0 text-xs text-muted-foreground shadow-none hover:text-foreground focus:ring-0">
-                  <SelectValue placeholder="Select model" />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableModels.map((model) => (
-                    <SelectItem key={model.id} value={model.id} className="text-xs">
-                      {model.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <span className="text-xs text-muted-foreground">
-                {disabled ? '' : 'Loading models…'}
-              </span>
-            )}
+            <div className="flex items-center gap-1">
+              <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label="Insert emoji"
+                    aria-haspopup="dialog"
+                    aria-expanded={emojiOpen}
+                    disabled={disabled}
+                    onMouseDown={(e) => {
+                      // Preserve textarea selection across the focus shift.
+                      updateSelectionRef();
+                      e.preventDefault();
+                    }}
+                    onClick={() => setEmojiOpen((v) => !v)}
+                    className="h-6 w-6 shrink-0 rounded-md text-base text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-50 disabled:hover:bg-transparent flex items-center justify-center"
+                  >
+                    😀
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent
+                  align="start"
+                  side="top"
+                  className="p-0"
+                  onCloseAutoFocus={(e) => {
+                    e.preventDefault();
+                    textareaRef.current?.focus();
+                  }}
+                >
+                  <Suspense fallback={<div className="h-[340px] w-[320px] flex items-center justify-center text-xs text-muted-foreground">Loading emoji…</div>}>
+                    <EmojiPickerLazy onSelect={handleEmojiSelect} />
+                  </Suspense>
+                </PopoverContent>
+              </Popover>
+
+              {availableModels.length > 0 ? (
+                <Select
+                  value={selectedModel ?? undefined}
+                  onValueChange={onModelChange}
+                  disabled={isStreaming}
+                >
+                  <SelectTrigger className="h-6 w-auto gap-1.5 border-none bg-transparent px-0 text-xs text-muted-foreground shadow-none hover:text-foreground focus:ring-0">
+                    <SelectValue placeholder="Select model" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableModels.map((model) => (
+                      <SelectItem key={model.id} value={model.id} className="text-xs">
+                        {model.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <span className="text-xs text-muted-foreground">
+                  {disabled ? '' : 'Loading models…'}
+                </span>
+              )}
+            </div>
 
             <button
               onClick={handleSubmit}
@@ -234,6 +469,45 @@ export function ChatInput({ onSend, onStop, isStreaming, disabled, availableMode
           AI agents can make mistakes. Verify important information.
         </p>
       </div>
+      {shortcodeMatch && shortcodeAnchor && shortcodeResults.length > 0 && typeof document !== 'undefined'
+        ? createPortal(
+            <div
+              role="listbox"
+              aria-label="Emoji shortcode suggestions"
+              data-testid="shortcode-popover"
+              style={{
+                position: 'fixed',
+                top: shortcodeAnchor.top + shortcodeAnchor.height + 4,
+                left: shortcodeAnchor.left,
+                zIndex: 60,
+              }}
+              className="min-w-[220px] rounded-md bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10"
+            >
+              <Command shouldFilter={false}>
+                <CommandList>
+                  {shortcodeResults.map((rec, i) => (
+                    <CommandItem
+                      key={rec.hexcode}
+                      value={rec.shortcodes[0]}
+                      data-selected={i === shortcodeIndex || undefined}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        acceptShortcode(rec);
+                      }}
+                      onMouseEnter={() => setShortcodeIndex(i)}
+                    >
+                      <span className="text-base">{rec.emoji}</span>
+                      <span className="text-xs text-muted-foreground">
+                        :{rec.shortcodes[0]}
+                      </span>
+                    </CommandItem>
+                  ))}
+                </CommandList>
+              </Command>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
