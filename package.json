@@ -5,17 +5,27 @@
   "description": "Genesis Mind Interface — desktop chat UI for Genesis agents",
   "main": ".vite/build/main.js",
   "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "start": "electron-forge start",
     "package": "node scripts/prepare-node-runtime.js && electron-forge package",
     "make": "node scripts/prepare-node-runtime.js && electron-forge make",
     "make:sandbox": "npm run make && node scripts/sandbox-test.js",
+    "packaged:smoke": "npm --workspace @chamber/server run build && node scripts/packaged-smoke.js",
     "sandbox": "node scripts/sandbox-test.js",
     "publish": "node scripts/prepare-node-runtime.js && electron-forge publish",
-    "lint": "tsc --noEmit && eslint .",
+    "lint": "tsc --noEmit && eslint . && npm run deps:check",
+    "deps:check": "depcruise apps packages --config .dependency-cruiser.cjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:sdk-smoke": "node scripts/run-sdk-smoke-test.js",
+    "test:server-sdk-smoke": "npm --workspace @chamber/server run build && node scripts/run-server-sdk-smoke-test.js",
+    "test:ui:web": "playwright test --project=web",
+    "test:ui:electron": "playwright test --project=electron",
+    "test:ui:e2e": "playwright test",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:ui": "vitest --ui"
@@ -39,6 +49,7 @@
     "@eslint/js": "^10.0.1",
     "@github/copilot": "1.0.36",
     "@github/copilot-sdk": "0.3.0",
+    "@playwright/test": "^1.59.1",
     "@tailwindcss/typography": "^0.5.19",
     "@tailwindcss/vite": "^4.2.4",
     "@testing-library/jest-dom": "^6.9.1",
@@ -46,7 +57,9 @@
     "@types/electron-squirrel-startup": "^1.0.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@types/ws": "^8.18.1",
     "@vitest/coverage-v8": "^4.1.5",
+    "dependency-cruiser": "^17.3.10",
     "electron": "^41.3.0",
     "eslint": "^10.2.1",
     "eslint-import-resolver-typescript": "^4.4.4",
@@ -55,6 +68,7 @@
     "jsdom": "^29.0.2",
     "rehype-highlight": "^7.0.2",
     "tailwindcss": "^4.2.4",
+    "tsdown": "^0.21.10",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.59.0",
     "vite": "^8.0.10",
@@ -69,6 +83,7 @@
     "emojibase-data": "^17.0.0",
     "frimousse": "^0.3.0",
     "highlight.js": "^11.11.1",
+    "hono": "^4.12.15",
     "keytar": "^7.9.0",
     "lucide-react": "^1.9.0",
     "radix-ui": "^1.4.3",
@@ -77,7 +92,8 @@
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
     "tailwind-merge": "^3.5.0",
-    "tw-animate-css": "^1.4.0"
+    "tw-animate-css": "^1.4.0",
+    "ws": "^8.20.0"
   },
   "overrides": {
     "@electron-forge/plugin-fuses": {

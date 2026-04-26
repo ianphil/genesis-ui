@@ -1,0 +1,17 @@
+{
+  "name": "@chamber/server",
+  "version": "0.30.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/bin.mjs",
+  "scripts": {
+    "build": "tsdown",
+    "start": "node dist/bin.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "hono": "^4.10.6",
+    "ws": "^8.18.3"
+  }
+}

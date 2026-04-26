@@ -6,16 +6,17 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: [
-      'src/**/*.{test,spec}.{ts,tsx}',
+      'apps/**/*.{test,spec}.{ts,tsx}',
+      'packages/**/*.{test,spec}.{ts,tsx}',
       'test/**/*.{test,spec}.{ts,tsx}',
     ],
-    exclude: ['node_modules', 'dist', 'out', '.vite'],
+    exclude: ['node_modules', 'dist', 'out', '.vite', 'apps/*/dist', 'packages/*/dist'],
     testTimeout: 10_000,
     hookTimeout: 10_000,
   },
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
+      '@': path.resolve(__dirname, './apps/web/src'),
     },
   },
 });

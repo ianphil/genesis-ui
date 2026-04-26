@@ -1,0 +1,44 @@
+export const WIRE_PROTOCOL_VERSION = 1;
+
+export interface WireEnvelope<TType extends string, TPayload> {
+  version: typeof WIRE_PROTOCOL_VERSION;
+  type: TType;
+  payload: TPayload;
+}
+
+export interface PrivilegedEnvelope<TType extends string, TPayload> {
+  protoVersion: 1;
+  type: TType;
+  requestId: string;
+  payload: TPayload;
+}
+
+export interface MindIdentityDto {
+  readonly name: string;
+  readonly systemMessage: string;
+}
+
+export type MindStatusDto = 'loading' | 'ready' | 'error' | 'unloading';
+
+export interface MindDto {
+  readonly mindId: string;
+  readonly mindPath: string;
+  readonly identity: MindIdentityDto;
+  readonly status: MindStatusDto;
+  readonly error?: string;
+  readonly windowed?: boolean;
+}
+
+export interface ListMindsResponse {
+  readonly minds: MindDto[];
+}
+
+export interface CommandResponse {
+  readonly ok: true;
+}
+
+export type ServerEvent =
+  | WireEnvelope<'chat:event', unknown>
+  | WireEnvelope<'chatroom:event', unknown>
+  | WireEnvelope<'observability:event', unknown>
+  | WireEnvelope<'notification', unknown>;
