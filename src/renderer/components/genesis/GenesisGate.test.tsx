@@ -63,6 +63,25 @@ describe('GenesisGate', () => {
     });
   });
 
+  it('shows an error when opening an existing mind fails', async () => {
+    (api.mind.selectDirectory as ReturnType<typeof vi.fn>).mockResolvedValue('C:\\test\\mind\\domains');
+    (api.mind.add as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error('Invalid mind directory: C:\\test\\mind\\domains — must contain SOUL.md or .github/'),
+    );
+
+    renderWithProvider(<GenesisGate><div>App</div></GenesisGate>);
+
+    await waitFor(() => {
+      expect(screen.getByText('Open Existing', { exact: false })).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByText('Open Existing', { exact: false }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert').textContent).toContain('Invalid mind directory');
+    });
+  });
+
   it('shows Chamber loading screen during account switching instead of landing screen', async () => {
     render(
       <AppStateProvider testInitialState={{

@@ -1,12 +1,35 @@
 // Shared SDK path resolution — used by both sdkImport and CopilotClientFactory
 
+import * as fs from 'fs';
+import * as path from 'path';
 import { app } from 'electron';
-import { getGlobalNodeModules } from './SdkDiscovery';
 import { getLocalNodeModulesDir, isLocalInstallReady } from './SdkBootstrap';
 
+function getProjectNodeModulesDir(): string | null {
+  const modulesDir = path.join(process.cwd(), 'node_modules');
+  if (fs.existsSync(path.join(modulesDir, '@github', 'copilot-sdk', 'package.json'))) {
+    return modulesDir;
+  }
+  return null;
+}
+
 export function resolveNodeModulesDir(): string {
+  if (!app.isPackaged) {
+    const projectModulesDir = getProjectNodeModulesDir();
+    if (projectModulesDir) {
+      return projectModulesDir;
+    }
+
+    throw new Error(
+      'Chamber requires the repo-local @github/copilot-sdk install in dev mode. Run: npm install'
+    );
+  }
+
   if (app.isPackaged && isLocalInstallReady()) {
     return getLocalNodeModulesDir();
   }
-  return getGlobalNodeModules();
+
+  throw new Error(
+    'Chamber could not find its packaged Copilot SDK install. Reinstall the app or complete first-run setup.'
+  );
 }

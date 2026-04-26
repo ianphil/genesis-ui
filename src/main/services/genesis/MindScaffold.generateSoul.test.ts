@@ -31,6 +31,7 @@ const mockCreateSession = vi.fn(async () => ({
   send: mockSend,
   destroy: mockDestroy,
   on: mockOn,
+  rpc: { permissions: { setApproveAll: vi.fn(async () => ({ success: true })) } },
 }));
 
 const fakeClient = { createSession: mockCreateSession };

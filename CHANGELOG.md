@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.29.0 (2026-04-25)
+
+### SDK 0.3.0 permission compatibility
+
+- **Fix tool calls denied server-side** — `@github/copilot-sdk` 0.3.0 enforces server-side permission rules (path verification, tool gates, URL gates) that fire **before** chamber's `onPermissionRequest` handler. With the previous defaults, agent reads/shell calls were silently denied (e.g. Miss Moneypenny couldn't open her own `.working-memory/`). Chamber now passes `--allow-all-tools --allow-all-paths --allow-all-urls` to the underlying CLI so all permission decisions defer to the SDK handler, where chamber's auto-approve + chatroom `ApprovalGate` already enforce the security boundary.
+- **CopilotClientFactory** — explicit cliArgs documented inline; covered by a new unit test asserting all three flags are present.
+
 ## v0.28.0 (2026-04-24)
 
 ### Floating panel UI

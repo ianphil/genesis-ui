@@ -5,6 +5,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { execSync } from 'child_process';
 import { CopilotClientFactory } from '../sdk/CopilotClientFactory';
+import { approveAllCompat } from '../sdk/approveAllCompat';
 import { buildGenesisPrompt } from './genesisPrompt';
 import { GitHubRegistryClient } from './GitHubRegistryClient';
 
@@ -136,13 +137,15 @@ export class MindScaffold {
     const sessionConfig: Record<string, unknown> = {
       streaming: true,
       workingDirectory: mindPath,
-      onPermissionRequest: async () => ({ kind: 'approve-once' }),
+      onPermissionRequest: approveAllCompat,
       onUserInputRequest: async () => ({ answer: 'Proceed with genesis.', wasFreeform: true }),
     };
 
     const session = await client.createSession(
       sessionConfig as unknown as Parameters<typeof client.createSession>[0]
     );
+
+    await session.rpc.permissions.setApproveAll({ enabled: true });
 
     try {
       await session.send({ prompt });

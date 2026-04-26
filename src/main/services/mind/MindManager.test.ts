@@ -26,6 +26,7 @@ const mockCreateSession = vi.fn((_config: Record<string, unknown>) => ({
   sendAndWait: vi.fn(),
   on: vi.fn(),
   off: vi.fn(),
+  rpc: { permissions: { setApproveAll: vi.fn(async () => ({ success: true })) } },
 }));
 
 function makeMockClient() {
@@ -140,6 +141,22 @@ describe('MindManager', () => {
     it('throws on invalid directory (no SOUL.md or .github)', async () => {
       vi.mocked(fs.existsSync).mockReturnValue(false);
       await expect(manager.loadMind('/tmp/invalid')).rejects.toThrow();
+    });
+
+    it('resolves nested directories to the nearest mind root', async () => {
+      vi.mocked(fs.existsSync).mockImplementation((candidate) => {
+        const normalized = String(candidate).replace(/\\/g, '/');
+        return normalized === '/tmp/agents/q/SOUL.md' || normalized === '/tmp/agents/q/.github';
+      });
+
+      const mind = await manager.loadMind('/tmp/agents/q/domains');
+      const createClientCalls = (mockClientFactory.createClient as unknown as { mock: { calls: Array<[string]> } }).mock.calls;
+      const lastCreateClientPath = String(
+        createClientCalls[createClientCalls.length - 1]?.[0] ?? '',
+      );
+
+      expect(mind.mindPath.replace(/\\/g, '/')).toBe('/tmp/agents/q');
+      expect(lastCreateClientPath.replace(/\\/g, '/')).toBe('/tmp/agents/q');
     });
 
     it('deduplicates — same path loaded twice returns existing mind', async () => {
@@ -261,7 +278,8 @@ describe('MindManager', () => {
 
     it('skips invalid paths without blocking others', async () => {
       vi.mocked(fs.existsSync).mockImplementation((p: fs.PathLike) => {
-        return !String(p).includes('bad');
+        const normalized = String(p).replace(/\\/g, '/');
+        return normalized === '/tmp/agents/good/SOUL.md' || normalized === '/tmp/agents/good/.github';
       });
 
       mockConfigService.load.mockReturnValue({

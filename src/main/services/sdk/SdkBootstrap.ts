@@ -127,7 +127,7 @@ export function ensureCopilotShim(): void {
 }
 
 export async function ensureSdkInstalled(): Promise<void> {
-  if (!app.isPackaged) return; // dev mode — use global install
+  if (!app.isPackaged) return; // dev mode — use the repo-local install only
 
   if (isLocalInstallReady()) {
     ensureCopilotShim();

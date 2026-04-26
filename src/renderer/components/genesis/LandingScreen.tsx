@@ -5,9 +5,10 @@ interface Props {
   onNewAgent: () => void;
   onOpenExisting: () => void;
   onClose?: () => void;
+  error?: string;
 }
 
-export function LandingScreen({ onNewAgent, onOpenExisting, onClose }: Props) {
+export function LandingScreen({ onNewAgent, onOpenExisting, onClose, error }: Props) {
   return (
     <div className="fixed inset-0 bg-background flex flex-col items-center justify-center z-50">
       {onClose && (
@@ -43,6 +44,12 @@ export function LandingScreen({ onNewAgent, onOpenExisting, onClose }: Props) {
             <span>📂</span> Open Existing
           </button>
         </div>
+
+        {error && (
+          <p role="alert" className="max-w-md text-sm text-destructive">
+            {error}
+          </p>
+        )}
       </div>
     </div>
   );

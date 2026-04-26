@@ -1,7 +1,7 @@
 {
   "name": "chamber",
   "productName": "chamber",
-  "version": "0.28.0",
+  "version": "0.29.0",
   "description": "Genesis Mind Interface — desktop chat UI for Genesis agents",
   "main": ".vite/build/main.js",
   "private": true,
@@ -15,6 +15,7 @@
     "lint": "tsc --noEmit && eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:sdk-smoke": "node scripts/run-sdk-smoke-test.js",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:ui": "vitest --ui"

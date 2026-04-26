@@ -19,6 +19,8 @@ vi.mock('./nodeResolver', () => ({
 }));
 vi.mock('fs', () => ({
   mkdirSync: vi.fn(),
+  existsSync: vi.fn((candidate: string) =>
+    candidate === 'C:\\src\\chamber\\node_modules\\@github\\copilot-sdk\\package.json'),
 }));
 
 // Mock the dynamic SDK import
@@ -74,6 +76,16 @@ describe('CopilotClientFactory', () => {
       await factory.createClient('C:\\agents\\fox');
       // SDK module loaded once, cached
       expect(loadSdkModule).toHaveBeenCalledTimes(1);
+    });
+
+    it('passes --allow-all-tools/paths/urls so SDK 0.3.0 server-side rules defer to onPermissionRequest', async () => {
+      const client = await factory.createClient('C:\\agents\\q') as unknown as FakeCopilotClient;
+      const cliArgs = client.options.cliArgs as string[];
+      expect(cliArgs).toEqual(expect.arrayContaining([
+        '--allow-all-tools',
+        '--allow-all-paths',
+        '--allow-all-urls',
+      ]));
     });
   });
 

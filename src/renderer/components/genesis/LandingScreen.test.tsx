@@ -45,4 +45,9 @@ describe('LandingScreen', () => {
     fireEvent.click(screen.getByRole('button', { name: /close/i }));
     expect(onClose).toHaveBeenCalledOnce();
   });
+
+  it('renders an error message when provided', () => {
+    render(<LandingScreen onNewAgent={vi.fn()} onOpenExisting={vi.fn()} error="Could not open agent." />);
+    expect(screen.getByRole('alert').textContent).toContain('Could not open agent.');
+  });
 });

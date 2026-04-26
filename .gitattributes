@@ -1,0 +1,47 @@
+# Default: treat everything as text, normalized to LF in the repo, but let
+# Windows checkouts keep their native CRLF if `core.autocrlf=true`.
+* text=auto eol=lf
+
+# Source code — always LF (cross-platform tooling expects LF)
+*.ts        text eol=lf
+*.tsx       text eol=lf
+*.js        text eol=lf
+*.jsx       text eol=lf
+*.mjs       text eol=lf
+*.cjs       text eol=lf
+*.json      text eol=lf
+*.jsonc     text eol=lf
+*.md        text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.html      text eol=lf
+*.css       text eol=lf
+*.scss      text eol=lf
+*.svg       text eol=lf
+*.sh        text eol=lf
+
+# Windows-only scripts — keep CRLF
+*.bat       text eol=crlf
+*.cmd       text eol=crlf
+*.ps1       text eol=crlf
+
+# Binary assets — never normalize
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.gif       binary
+*.webp      binary
+*.ico       binary
+*.icns      binary
+*.woff      binary
+*.woff2     binary
+*.ttf       binary
+*.eot       binary
+*.zip       binary
+*.gz        binary
+*.tgz       binary
+*.7z        binary
+*.exe       binary
+*.dll       binary
+*.node      binary
+*.pdf       binary

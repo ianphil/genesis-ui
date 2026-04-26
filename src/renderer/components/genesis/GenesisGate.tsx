@@ -12,6 +12,7 @@ export function GenesisGate({ children }: Props) {
   const { minds, showLanding, mindsChecked, runtimePhase, switchingAccountLogin } = useAppState();
   const dispatch = useAppDispatch();
   const [mode, setMode] = useState<'idle' | 'genesis'>('idle');
+  const [openExistingError, setOpenExistingError] = useState<string | null>(null);
 
   // Popout windows skip the gate entirely
   const params = new URLSearchParams(window.location.search);
@@ -43,19 +44,33 @@ export function GenesisGate({ children }: Props) {
   if (showGate) {
     return (
       <LandingScreen
-        onNewAgent={() => setMode('genesis')}
+        onNewAgent={() => {
+          setOpenExistingError(null);
+          setMode('genesis');
+        }}
         onOpenExisting={async () => {
+          setOpenExistingError(null);
           const dirPath = await window.electronAPI.mind.selectDirectory();
-          if (dirPath) {
+          if (!dirPath) return;
+
+          try {
             await window.electronAPI.mind.add(dirPath);
             const loadedMinds = await window.electronAPI.mind.list();
             dispatch({ type: 'SET_MINDS', payload: loadedMinds });
             const newest = loadedMinds[loadedMinds.length - 1];
             if (newest) dispatch({ type: 'SET_ACTIVE_MIND', payload: newest.mindId });
             dispatch({ type: 'HIDE_LANDING' });
+          } catch (error) {
+            setOpenExistingError(error instanceof Error ? error.message : 'Failed to open existing agent.');
           }
         }}
-        onClose={showLanding && hasMinds ? () => dispatch({ type: 'HIDE_LANDING' }) : undefined}
+        onClose={showLanding && hasMinds
+          ? () => {
+            setOpenExistingError(null);
+            dispatch({ type: 'HIDE_LANDING' });
+          }
+          : undefined}
+        error={openExistingError ?? undefined}
       />
     );
   }

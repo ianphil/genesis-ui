@@ -9,6 +9,7 @@ import type { MindContext, AppConfig, MindRecord } from '../../../shared/types';
 import type { InternalMindContext, CopilotClient, CopilotSession, Tool, UserInputHandler } from './types';
 import { generateMindId } from './generateMindId';
 import type { CopilotClientFactory } from '../sdk/CopilotClientFactory';
+import { approveAllCompat } from '../sdk/approveAllCompat';
 import type { IdentityLoader } from '../chat/IdentityLoader';
 import type { ChamberToolProvider } from '../chamberTools';
 import type { ConfigService } from '../config/ConfigService';
@@ -38,8 +39,10 @@ export class MindManager extends EventEmitter {
   }
 
   async loadMind(mindPath: string, mindId?: string): Promise<MindContext> {
+    const resolvedMindPath = this.resolveMindPath(mindPath);
+
     // Deduplicate — return existing mind
-    const existingId = this.pathToId.get(mindPath);
+    const existingId = this.pathToId.get(resolvedMindPath);
     if (existingId && this.minds.has(existingId)) {
       const existing = this.minds.get(existingId);
       if (!existing) throw new Error(`Mind ${existingId} not found`);
@@ -47,42 +50,41 @@ export class MindManager extends EventEmitter {
     }
 
     // Concurrent guard — return in-flight promise
-    const inflight = this.loading.get(mindPath);
+    const inflight = this.loading.get(resolvedMindPath);
     if (inflight) return inflight;
 
-    const promise = this.doLoadMind(mindPath, mindId);
-    this.loading.set(mindPath, promise);
+    const promise = this.doLoadMind(resolvedMindPath, mindId);
+    this.loading.set(resolvedMindPath, promise);
     try {
       return await promise;
     } finally {
-      this.loading.delete(mindPath);
+      this.loading.delete(resolvedMindPath);
     }
   }
 
   private async doLoadMind(mindPath: string, mindId?: string): Promise<MindContext> {
-    // Validate
-    this.validateMindPath(mindPath);
+    const resolvedMindPath = this.resolveMindPath(mindPath);
 
     // Use provided ID or generate a new one
-    const id = mindId ?? generateMindId(mindPath);
+    const id = mindId ?? generateMindId(resolvedMindPath);
 
     // Load identity
-    const identity = this.identityLoader.load(mindPath);
+    const identity = this.identityLoader.load(resolvedMindPath);
     if (!identity) {
-      throw new Error(`Failed to load identity from ${mindPath}`);
+      throw new Error(`Failed to load identity from ${resolvedMindPath}`);
     }
 
     // Create client
-    const client = await this.clientFactory.createClient(mindPath);
+    const client = await this.clientFactory.createClient(resolvedMindPath);
 
-    const sessionTools = this.getSessionTools(id, mindPath);
+    const sessionTools = this.getSessionTools(id, resolvedMindPath);
 
     // Create session
-    const session = await this.createSessionForMind(client, mindPath, identity.systemMessage, sessionTools);
+    const session = await this.createSessionForMind(client, resolvedMindPath, identity.systemMessage, sessionTools);
 
     const context: InternalMindContext = {
       mindId: id,
-      mindPath,
+      mindPath: resolvedMindPath,
       identity,
       status: 'ready',
       client,
@@ -90,16 +92,16 @@ export class MindManager extends EventEmitter {
     };
 
     this.minds.set(id, context);
-    this.pathToId.set(mindPath, id);
+    this.pathToId.set(resolvedMindPath, id);
 
     try {
       await Promise.all([
-        this.activateProviders(id, mindPath),
-        this.viewDiscovery.scan(mindPath),
+        this.activateProviders(id, resolvedMindPath),
+        this.viewDiscovery.scan(resolvedMindPath),
       ]);
     } catch (err) {
       this.minds.delete(id);
-      this.pathToId.delete(mindPath);
+      this.pathToId.delete(resolvedMindPath);
       await this.releaseProviders(id).catch(() => { /* noop */ });
       await this.clientFactory.destroyClient(client);
       throw err;
@@ -263,12 +265,25 @@ export class MindManager extends EventEmitter {
 
   // --- Private helpers ---
 
-  private validateMindPath(mindPath: string): void {
+  private resolveMindPath(mindPath: string): string {
+    let current = mindPath;
+
+    while (true) {
+      if (this.isMindPath(current)) return current;
+
+      const parent = path.dirname(current);
+      if (parent === current) {
+        throw new Error(`Invalid mind directory: ${mindPath} — must contain SOUL.md or .github/`);
+      }
+
+      current = parent;
+    }
+  }
+
+  private isMindPath(mindPath: string): boolean {
     const hasSoul = fs.existsSync(path.join(mindPath, 'SOUL.md'));
     const hasGithub = fs.existsSync(path.join(mindPath, '.github'));
-    if (!hasSoul && !hasGithub) {
-      throw new Error(`Invalid mind directory: ${mindPath} — must contain SOUL.md or .github/`);
-    }
+    return hasSoul || hasGithub;
   }
 
   private toExternalContext(ctx: InternalMindContext): MindContext {
@@ -334,7 +349,7 @@ export class MindManager extends EventEmitter {
     tools: Tool[],
     onUserInputRequest?: UserInputHandler,
   ): Promise<CopilotSession> {
-    return client.createSession({
+    const session = await client.createSession({
       workingDirectory: mindPath,
       enableConfigDiscovery: true,
       tools,
@@ -345,9 +360,13 @@ export class MindManager extends EventEmitter {
           tone: { action: 'remove' },
         },
       },
-      onPermissionRequest: async () => ({ kind: 'approve-once' }),
+      onPermissionRequest: approveAllCompat,
       onUserInputRequest: onUserInputRequest ?? (async () => ({ answer: 'Not available in this context', wasFreeform: true })),
     });
+
+    await session.rpc.permissions.setApproveAll({ enabled: true });
+
+    return session;
   }
 
   async sendBackgroundPrompt(mindPath: string, prompt: string): Promise<void> {
