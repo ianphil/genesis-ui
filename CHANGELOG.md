@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.31.0 (2026-04-26)
+
+### Web/server transport migration
+
+- **Add workspace app boundaries** — Chamber now has `apps/web`, `apps/server`, and `apps/desktop` workspaces plus `packages/shared`, `packages/wire-contracts`, `packages/client`, and `packages/services` foundations so the React UI can run in a browser or inside Electron.
+- **Introduce loopback server delivery** — added a Hono-backed local server with authenticated HTTP routes, WebSocket upgrade checks, a versioned privileged protocol scaffold, and server smoke coverage.
+- **Preserve loopback POST and stream semantics** — the local server now uses Hono's Node adapter so request bodies reach POST handlers and browser auth receives device-flow progress before login completes.
+- **Thin the desktop shell** — Forge now targets the desktop workspace entry and a slim preload bridge while the renderer can fall back to the browser-safe client path.
+- **Fail closed on unimplemented chatroom approvals** — side-effect tool requests in chatroom mode now get an explicit approval-UI-not-wired denial instead of silently falling through the default approval gate.
+- **Harden service seams** — service-layer Electron imports were replaced with ports for app paths, credentials, notifications, external opening, runtime layout, time, randomness, IDs, and session publishing.
+- **Add UI automation coverage** — Playwright now smoke-tests both the browser UI and Electron shell, and the Chamber UI tester agent documents the workflow for future web and desktop validation. Follow-up browser parity work is tracked in #135.
+
 ## v0.29.1 (2026-04-25)
 
 ### Packaged Copilot runtime

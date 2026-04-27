@@ -38,7 +38,7 @@ const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
     executableName: 'chamber',
-    extraResource: ['./resources/node', './resources/copilot-runtime', './src/main/assets', './node_modules/keytar'],
+    extraResource: ['./resources/node', './resources/copilot-runtime', './apps/server/dist', './node_modules/keytar'],
     ...(enableMacOSSigning
       ? {
           osxSign: {},
@@ -92,20 +92,20 @@ const config: ForgeConfig = {
       build: [
         {
           // `entry` is just an alias for `build.lib.entry` in the corresponding file of `config`.
-          entry: 'src/main.ts',
-          config: 'vite.main.config.ts',
+          entry: 'apps/desktop/src/main.ts',
+          config: 'apps/desktop/vite.main.config.ts',
           target: 'main',
         },
         {
-          entry: 'src/preload.ts',
-          config: 'vite.preload.config.ts',
+          entry: 'apps/desktop/src/preload.ts',
+          config: 'apps/desktop/vite.preload.config.ts',
           target: 'preload',
         },
       ],
       renderer: [
         {
           name: 'main_window',
-          config: 'vite.renderer.config.ts',
+          config: 'apps/web/vite.electron.config.ts',
         },
       ],
     }),
