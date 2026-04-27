@@ -4,7 +4,7 @@ Where AI agents are born and operate.
 
 Chamber is a desktop app for AI agents that act as your Chief of Staff — managing priorities, surfacing context, and keeping operations moving. Connect a mind (an agent with memory, skills, and personality) and the agent extends the UI itself: drop a `view.json` into the mind and a new panel appears. No code changes, no deploys.
 
-Built with Electron, React, Tailwind CSS, and the GitHub Copilot SDK. Minds are created with [Genesis](https://github.com/ianphil/genesis).
+Built with Electron, React, Tailwind CSS, a local loopback server, and the GitHub Copilot SDK. Minds are created with [Genesis](https://github.com/ianphil/genesis).
 
 ## The Idea
 
@@ -47,6 +47,23 @@ npm start
 Select a mind directory from the sidebar. The agent connects, views appear, and you're ready.
 
 ## Architecture
+
+Chamber is being split into a transport-oriented workspace layout so the UI can run either in a browser or inside Electron:
+
+```
+apps/
+├── web      # Vite + React renderer, browser-runnable
+├── server   # Loopback HTTP + WebSocket server
+└── desktop  # Electron lifecycle shell and native bridge
+
+packages/
+├── shared
+├── wire-contracts
+├── client
+└── services
+```
+
+This is a transport migration rather than a full use-case refactor: services remain the business-logic package, while HTTP/WS routes and the browser client provide the new delivery boundary. Electron is now treated as the desktop wrapper around the same web app and local server.
 
 ```
 Electron Main Process
