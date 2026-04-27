@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.32.4 (2026-04-27)
+
+### Browser mode
+
+- **Surface unsupported write actions** — browser fallback APIs now throw explicit `Not available in browser mode` errors for unsupported write operations instead of silently resolving no-ops, while subscription handlers still return no-op unsubscribe functions. (#143)
+
 ## v0.32.3 (2026-04-27)
 
 ### Chat input
