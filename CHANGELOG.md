@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.32.0 (2026-04-27)
+
+### Browser loopback chat
+
+- **Route browser chat through real services** — browser mode can now add an existing local mind path through the loopback server and send chat turns through the same `MindManager` and `ChatService` path used by the desktop shell.
+- **Stream browser chat events** — the loopback WebSocket now supports browser token authentication, per-message subscriptions, and chat event fanout so renderer state updates from server-side SDK sessions.
+- **Expand browser client contracts** — `@chamber/client` and wire contracts now cover mind loading, chat send, new conversations, and model listing for the browser API adapter.
+
 ## v0.31.5 (2026-04-27)
 
 ### Agent lifecycle
