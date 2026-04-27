@@ -215,7 +215,9 @@ export function installBrowserApi(): void {
     genesis: {
       getDefaultPath: async () => '',
       pickPath: async () => null,
+      listTemplates: async () => [],
       create: async () => ({ success: false, error: 'Genesis setup is desktop-only in browser mode.' }),
+      createFromTemplate: async () => ({ success: false, error: 'Genesis template install is desktop-only in browser mode.' }),
       onProgress: () => noopUnsubscribe,
     },
     chatroom: createBrowserChatroomApi(),

@@ -2,11 +2,31 @@
 import { ipcMain, dialog, BrowserWindow } from 'electron';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { MindManager, MindScaffold, installLensSkill, seedLensDefaults, type GenesisConfig } from '@chamber/services';
+import {
+  GenesisMindTemplateCatalog,
+  GenesisMindTemplateInstaller,
+  MindManager,
+  MindScaffold,
+  installLensSkill,
+  seedLensDefaults,
+  type GenesisConfig,
+  type GenesisMindTemplate,
+  type GenesisMindTemplateInstallRequest,
+} from '@chamber/services';
+
+interface GenesisMindTemplateCatalogPort {
+  listTemplates(): GenesisMindTemplate[];
+}
+
+interface GenesisMindTemplateInstallerPort {
+  install(request: GenesisMindTemplateInstallRequest): Promise<string>;
+}
 
 export function setupGenesisIPC(
   mindManager: MindManager,
   scaffold: MindScaffold,
+  templateCatalog: GenesisMindTemplateCatalogPort = new GenesisMindTemplateCatalog(),
+  templateInstaller: GenesisMindTemplateInstallerPort = new GenesisMindTemplateInstaller(),
 ): void {
 
   ipcMain.handle('genesis:getDefaultPath', async () => {
@@ -27,6 +47,10 @@ export function setupGenesisIPC(
     return result.filePaths[0];
   });
 
+  ipcMain.handle('genesis:listTemplates', async () => {
+    return templateCatalog.listTemplates();
+  });
+
   ipcMain.handle('genesis:create', async (event, config: GenesisConfig) => {
     const win = BrowserWindow.fromWebContents(event.sender);
 
@@ -36,23 +60,38 @@ export function setupGenesisIPC(
 
     try {
       const mindPath = await scaffold.create(config);
-      appendE2EGenesisMemory(mindPath);
-
-      // Bootstrap Lens defaults
-      seedLensDefaults(mindPath);
-      installLensSkill(mindPath);
-
-      // Load into MindManager (creates client, session, scans views)
-      const mind = await mindManager.loadMind(mindPath);
-      mindManager.setActiveMind(mind.mindId);
-
-      return { success: true, mindId: mind.mindId, mindPath };
+      return await activateCreatedMind(mindManager, mindPath);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       if (win) win.webContents.send('genesis:progress', { step: 'error', detail: message });
       return { success: false, error: message };
     }
   });
+
+  ipcMain.handle('genesis:createFromTemplate', async (event, request: GenesisMindTemplateInstallRequest) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+
+    try {
+      if (win) win.webContents.send('genesis:progress', { step: 'template', detail: 'Installing Genesis mind template...' });
+      const mindPath = await templateInstaller.install(request);
+      return await activateCreatedMind(mindManager, mindPath);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (win) win.webContents.send('genesis:progress', { step: 'error', detail: message });
+      return { success: false, error: message };
+    }
+  });
+}
+
+async function activateCreatedMind(mindManager: MindManager, mindPath: string): Promise<{ success: true; mindId: string; mindPath: string }> {
+  appendE2EGenesisMemory(mindPath);
+  seedLensDefaults(mindPath);
+  installLensSkill(mindPath);
+
+  const mind = await mindManager.loadMind(mindPath);
+  mindManager.setActiveMind(mind.mindId);
+
+  return { success: true, mindId: mind.mindId, mindPath };
 }
 
 function getDefaultGenesisBasePath(): string {

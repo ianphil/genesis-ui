@@ -178,7 +178,9 @@ export interface ElectronAPI {
   genesis: {
     getDefaultPath: () => Promise<string>;
     pickPath: () => Promise<string | null>;
+    listTemplates: () => Promise<GenesisMindTemplate[]>;
     create: (config: { name: string; role: string; voice: string; voiceDescription: string; basePath: string }) => Promise<{ success: boolean; mindId?: string; mindPath?: string; error?: string }>;
+    createFromTemplate: (request: { templateId: string; basePath: string }) => Promise<{ success: boolean; mindId?: string; mindPath?: string; error?: string }>;
     onProgress: (callback: (progress: { step: string; detail: string }) => void) => () => void;
   };
   chatroom: ChatroomAPI;
@@ -195,6 +197,25 @@ export interface ElectronAPI {
     minimize: () => void;
     maximize: () => void;
     close: () => void;
+  };
+}
+
+export interface GenesisMindTemplate {
+  id: string;
+  displayName: string;
+  description: string;
+  role: string;
+  voice: string;
+  templateVersion: string;
+  agent: string;
+  requiredFiles: string[];
+  source: {
+    owner: string;
+    repo: string;
+    ref: string;
+    plugin: string;
+    manifestPath: string;
+    rootPath: string;
   };
 }
 

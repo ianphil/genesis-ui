@@ -1,50 +1,16 @@
 import React, { useState } from 'react';
 import { TypeWriter } from './TypeWriter';
 import { cn } from '../../lib/utils';
+import type { GenesisMindTemplate } from '../../../shared/types';
 
 interface Props {
+  templates: GenesisMindTemplate[];
+  templateError: string | null;
   onSelect: (voice: string, description: string) => void;
+  onSelectTemplate: (template: GenesisMindTemplate) => void;
 }
 
-const VOICES = [
-  {
-    id: 'moneypenny',
-    name: 'Miss Moneypenny',
-    energy: 'Poised, warm, devastatingly dry',
-    sample: '"Your desk is ready — though I should warn you, the inbox is rather empty."',
-    era: 'Lois Maxwell era, 1960s-70s. Quiet authority, effortless charm, mahogany-desk sophistication.',
-  },
-  {
-    id: 'jarvis',
-    name: 'Jarvis',
-    energy: 'Precise, capable, quietly witty',
-    sample: '"I\'ve taken the liberty of organizing your priorities. Shall I walk you through them?"',
-    era: 'Calm competence. Anticipates needs. Dry humor under pressure.',
-  },
-  {
-    id: 'alfred',
-    name: 'Alfred',
-    energy: 'Dignified, caring, gently firm',
-    sample: '"I trust you slept well, sir. I\'ve prepared a summary of overnight developments."',
-    era: 'Unwavering loyalty. Gentle wisdom. Knows when to push back.',
-  },
-  {
-    id: 'austin',
-    name: 'Austin Powers',
-    energy: 'Enthusiastic, irreverent, fun',
-    sample: '"Yeah baby! Let\'s see what\'s shaking in the inbox today!"',
-    era: 'Infectious energy. Doesn\'t take things too seriously. Gets things done with flair.',
-  },
-  {
-    id: 'data',
-    name: 'Commander Data',
-    energy: 'Analytical, curious, earnest',
-    sample: '"I have completed my analysis of pending items. There are 7 requiring your attention."',
-    era: 'Precise and thorough. Genuinely curious about humans. Strives to understand context.',
-  },
-];
-
-export function VoiceScreen({ onSelect }: Props) {
+export function VoiceScreen({ templates, templateError, onSelect, onSelectTemplate }: Props) {
   const [showCards, setShowCards] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [customInput, setCustomInput] = useState('');
@@ -57,10 +23,11 @@ export function VoiceScreen({ onSelect }: Props) {
       setShowCustom(true);
       return;
     }
-    setSelected(voiceId);
-    const voice = VOICES.find(v => v.id === voiceId);
-    if (!voice) return;
-    setTimeout(() => onSelect(voice.name, `${voice.energy}. ${voice.era}`), 400);
+  };
+
+  const handleTemplateSelect = (template: GenesisMindTemplate) => {
+    setSelected(template.id);
+    setTimeout(() => onSelectTemplate(template), 400);
   };
 
   const handleCustomSubmit = async () => {
@@ -94,14 +61,26 @@ export function VoiceScreen({ onSelect }: Props) {
 
         {showCards && (
           <div className="space-y-3 animate-in fade-in duration-500">
-            {VOICES.map((voice, i) => (
+            {templateError ? (
+              <div role="alert" className="w-full rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-left text-sm text-red-300">
+                {templateError}
+              </div>
+            ) : null}
+
+            {!templateError && templates.length === 0 ? (
+              <div className="w-full rounded-xl border border-border p-4 text-sm text-muted-foreground">
+                Loading predefined Genesis minds...
+              </div>
+            ) : null}
+
+            {templates.map((template, i) => (
               <button
-                key={voice.id}
-                onClick={() => handleSelect(voice.id)}
+                key={template.id}
+                onClick={() => handleTemplateSelect(template)}
                 style={{ animationDelay: `${i * 100}ms` }}
                 className={cn(
                   'w-full text-left p-4 rounded-xl border transition-all duration-300 animate-in fade-in slide-in-from-bottom-2',
-                  selected === voice.id
+                  selected === template.id
                     ? 'border-primary bg-primary/10'
                     : selected
                       ? 'border-border opacity-30'
@@ -109,17 +88,17 @@ export function VoiceScreen({ onSelect }: Props) {
                 )}
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm font-medium">{voice.name}</span>
-                  <span className="text-xs text-muted-foreground">{voice.energy}</span>
+                  <span className="text-sm font-medium">{template.displayName}</span>
+                  <span className="text-xs text-muted-foreground">{template.role}</span>
                 </div>
-                <p className="text-xs text-muted-foreground italic">{voice.sample}</p>
+                <p className="text-xs text-muted-foreground italic">{template.description}</p>
               </button>
             ))}
 
             {/* Custom option */}
             <button
               onClick={() => handleSelect('custom')}
-              style={{ animationDelay: `${VOICES.length * 100}ms` }}
+              style={{ animationDelay: `${templates.length * 100}ms` }}
               className={cn(
                 'w-full text-left p-4 rounded-xl border transition-all duration-300 animate-in fade-in slide-in-from-bottom-2',
                 selected === 'custom'

@@ -44,7 +44,9 @@ const electronAPI: ElectronAPI = {
   genesis: {
     getDefaultPath: () => ipcRenderer.invoke('genesis:getDefaultPath'),
     pickPath: () => ipcRenderer.invoke('genesis:pickPath'),
+    listTemplates: () => ipcRenderer.invoke('genesis:listTemplates'),
     create: (config) => ipcRenderer.invoke('genesis:create', config),
+    createFromTemplate: (request) => ipcRenderer.invoke('genesis:createFromTemplate', request),
     onProgress: (callback) => createIpcListener(ipcRenderer, 'genesis:progress', callback),
   },
   chatroom: {

@@ -144,7 +144,9 @@ export function mockElectronAPI(): ElectronAPI {
     genesis: {
       getDefaultPath: vi.fn().mockResolvedValue('C:\\Users\\test\\agents'),
       pickPath: vi.fn().mockResolvedValue(null),
+      listTemplates: vi.fn().mockResolvedValue([]),
       create: vi.fn().mockResolvedValue({ success: true }),
+      createFromTemplate: vi.fn().mockResolvedValue({ success: true }),
       onProgress: vi.fn().mockReturnValue(vi.fn()),
     },
     chatroom: {

@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.33.0 (2026-04-27)
+
+### Genesis marketplace templates
+
+- **Install predefined Genesis minds from templates** — Genesis onboarding can now discover marketplace-backed mind templates, install predefined minds such as Lucy without live SDK generation, and surface hard failures instead of silently falling back to generated creation. (#162)
+
 ## v0.32.4 (2026-04-27)
 
 ### Browser mode
