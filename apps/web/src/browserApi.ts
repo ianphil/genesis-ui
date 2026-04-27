@@ -6,6 +6,10 @@ import type { ChatroomAPI, ChatroomMessage, TaskLedgerItem } from './shared/chat
 const noopUnsubscribe = () => undefined;
 const SUBSCRIPTION_TIMEOUT_MS = 10_000;
 
+function unavailable(operation: string): never {
+  throw new Error(`Not available in browser mode: ${operation}.`);
+}
+
 type AuthProgress = Parameters<ElectronAPI['auth']['onProgress']>[0] extends (progress: infer TProgress) => void
   ? TProgress
   : never;
@@ -17,12 +21,12 @@ function createClient(): ChamberClient {
 
 function createBrowserChatroomApi(): ChatroomAPI {
   return {
-    send: async () => undefined,
+    send: async () => unavailable('chatroom send'),
     history: async (): Promise<ChatroomMessage[]> => [],
     taskLedger: async (): Promise<TaskLedgerItem[]> => [],
-    clear: async () => undefined,
-    stop: async () => undefined,
-    setOrchestration: async () => undefined,
+    clear: async () => unavailable('chatroom clear'),
+    stop: async () => unavailable('chatroom stop'),
+    setOrchestration: async () => unavailable('chatroom orchestration changes'),
     getOrchestration: async () => ({ mode: 'concurrent', config: null }),
     onEvent: () => noopUnsubscribe,
   };
@@ -140,9 +144,9 @@ export function installBrowserApi(): void {
     },
     mind: {
       add: (mindPath): Promise<MindContext> => client.addMind(mindPath) as Promise<MindContext>,
-      remove: async () => undefined,
+      remove: async () => unavailable('mind removal'),
       list: () => client.listMinds() as Promise<MindContext[]>,
-      setActive: async () => undefined,
+      setActive: async () => unavailable('active mind changes'),
       selectDirectory: async () => window.prompt('Enter a local agent folder path on this computer:')?.trim() || null,
       openWindow: async (mindId) => {
         window.open(`/?mindId=${encodeURIComponent(mindId)}`, '_blank', 'noopener,noreferrer');
@@ -153,7 +157,7 @@ export function installBrowserApi(): void {
       getViews: async (): Promise<LensViewManifest[]> => [],
       getViewData: async () => null,
       refreshView: async () => null,
-      sendAction: async () => null,
+      sendAction: async () => unavailable('Lens write actions'),
       onViewsChanged: () => noopUnsubscribe,
     },
     auth: {
@@ -225,8 +229,8 @@ export function installBrowserApi(): void {
       cancelTask: async (taskId) => ({ error: `Task cancellation is unavailable in browser mode: ${taskId}` }),
     },
     window: {
-      minimize: () => undefined,
-      maximize: () => undefined,
+      minimize: () => unavailable('window minimize'),
+      maximize: () => unavailable('window maximize'),
       close: () => window.close(),
     },
   };

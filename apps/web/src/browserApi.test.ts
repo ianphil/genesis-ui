@@ -104,4 +104,50 @@ describe('installBrowserApi', () => {
       vi.useRealTimers();
     }
   });
+
+  it('rejects browser-mode write APIs that cannot be executed without the desktop shell', async () => {
+    await expect(window.electronAPI.mind.remove('dude-1234')).rejects.toThrow(
+      'Not available in browser mode',
+    );
+    await expect(window.electronAPI.mind.setActive('dude-1234')).rejects.toThrow(
+      'Not available in browser mode',
+    );
+    await expect(window.electronAPI.lens.sendAction('view-1', 'save')).rejects.toThrow(
+      'Not available in browser mode',
+    );
+    await expect(window.electronAPI.chatroom.send('hello')).rejects.toThrow(
+      'Not available in browser mode',
+    );
+    await expect(window.electronAPI.chatroom.clear()).rejects.toThrow(
+      'Not available in browser mode',
+    );
+    await expect(window.electronAPI.chatroom.stop()).rejects.toThrow(
+      'Not available in browser mode',
+    );
+    await expect(window.electronAPI.chatroom.setOrchestration('concurrent')).rejects.toThrow(
+      'Not available in browser mode',
+    );
+  });
+
+  it('throws explicit unavailable errors for browser window controls', () => {
+    expect(() => window.electronAPI.window.minimize()).toThrow('Not available in browser mode');
+    expect(() => window.electronAPI.window.maximize()).toThrow('Not available in browser mode');
+  });
+
+  it('keeps browser-mode subscription APIs as no-op unsubscribe functions', () => {
+    const unsubscribes = [
+      window.electronAPI.mind.onMindChanged(() => undefined),
+      window.electronAPI.lens.onViewsChanged(() => undefined),
+      window.electronAPI.genesis.onProgress(() => undefined),
+      window.electronAPI.a2a.onIncoming(() => undefined),
+      window.electronAPI.a2a.onTaskStatusUpdate(() => undefined),
+      window.electronAPI.a2a.onTaskArtifactUpdate(() => undefined),
+      window.electronAPI.chatroom.onEvent(() => undefined),
+    ];
+
+    for (const unsubscribe of unsubscribes) {
+      expect(typeof unsubscribe).toBe('function');
+      expect(unsubscribe()).toBeUndefined();
+    }
+  });
 });
