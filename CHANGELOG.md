@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.32.1 (2026-04-27)
+
+### Windows packaging
+
+- **Restore Start Menu icon wiring** — Windows packages now embed a Chamber `.ico` asset in the app executable and pass the same icon to the Squirrel setup flow so Start Menu shortcuts have the expected app icon. (#35)
+
 ## v0.32.0 (2026-04-27)
 
 ### Browser loopback chat

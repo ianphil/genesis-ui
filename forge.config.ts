@@ -15,6 +15,8 @@ const enableMacOSNotarization =
   Boolean(process.env.APPLE_ID) &&
   Boolean(process.env.APPLE_ID_PASSWORD) &&
   Boolean(process.env.APPLE_TEAM_ID);
+const APP_ICON_PATH = path.resolve(__dirname, 'assets', 'app');
+const WINDOWS_ICON_PATH = `${APP_ICON_PATH}.ico`;
 
 function prepareCopilotRuntime(platform: string, arch: string): void {
   const scriptPath = path.resolve(__dirname, 'scripts', 'prepare-copilot-runtime.js');
@@ -38,6 +40,7 @@ const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
     executableName: 'chamber',
+    icon: APP_ICON_PATH,
     extraResource: ['./resources/node', './resources/copilot-runtime', './apps/server/dist', './node_modules/keytar'],
     ...(enableMacOSSigning
       ? {
@@ -79,7 +82,8 @@ const config: ForgeConfig = {
   makers: [
     new MakerSquirrel({
       name: 'chamber',
-      shortcutName: 'Chamber',
+      title: 'Chamber',
+      setupIcon: WINDOWS_ICON_PATH,
     }),
     new MakerZIP({}, ['darwin', 'linux']),
     new MakerDeb({}),
