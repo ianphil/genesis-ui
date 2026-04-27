@@ -62,7 +62,7 @@ export function GenesisFlow({ onComplete }: Props) {
 
     const loadedMinds = await window.electronAPI.mind.list();
     dispatch({ type: 'SET_MINDS', payload: loadedMinds });
-    const mindToSelect = selectPreferredMind(loadedMinds, { mindPath: result.mindPath });
+    const mindToSelect = selectPreferredMind(loadedMinds, { mindId: result.mindId, mindPath: result.mindPath });
     if (mindToSelect) {
       dispatch({ type: 'SET_ACTIVE_MIND', payload: mindToSelect.mindId });
     }

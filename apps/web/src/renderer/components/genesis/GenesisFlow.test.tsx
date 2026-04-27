@@ -56,7 +56,7 @@ describe('GenesisFlow', () => {
   });
 
   it('waits for genesis.create to load the new mind before completing', async () => {
-    let resolveCreate: (value: { success: true; mindPath: string }) => void = () => {};
+    let resolveCreate: (value: { success: true; mindId: string; mindPath: string }) => void = () => {};
     (api.genesis.create as ReturnType<typeof vi.fn>).mockReturnValue(new Promise((resolve) => {
       resolveCreate = resolve;
     }));
@@ -77,7 +77,7 @@ describe('GenesisFlow', () => {
     expect(api.mind.list).not.toHaveBeenCalled();
     expect(onComplete).not.toHaveBeenCalled();
 
-    resolveCreate({ success: true, mindPath: createdMind.mindPath });
+    resolveCreate({ success: true, mindId: createdMind.mindId, mindPath: createdMind.mindPath });
 
     await waitFor(() => {
       expect(api.mind.list).toHaveBeenCalled();
@@ -86,7 +86,7 @@ describe('GenesisFlow', () => {
   });
 
   it('selects the mind path returned by genesis.create instead of the last listed mind', async () => {
-    let resolveCreate: (value: { success: true; mindPath: string }) => void = () => {};
+    let resolveCreate: (value: { success: true; mindId?: string; mindPath: string }) => void = () => {};
     (api.genesis.create as ReturnType<typeof vi.fn>).mockReturnValue(new Promise((resolve) => {
       resolveCreate = resolve;
     }));

@@ -270,7 +270,13 @@ export class MindManager extends EventEmitter {
   }
 
   private mindPathKey(mindPath: string): string {
-    const resolved = path.resolve(mindPath);
+    let resolved = path.resolve(mindPath);
+    try {
+      resolved = fs.realpathSync.native(resolved);
+    } catch {
+      // If the folder disappears mid-load, keep the resolved path so the caller
+      // gets the real load error instead of masking it with canonicalization.
+    }
     return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
   }
 

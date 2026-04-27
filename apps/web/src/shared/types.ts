@@ -178,7 +178,7 @@ export interface ElectronAPI {
   genesis: {
     getDefaultPath: () => Promise<string>;
     pickPath: () => Promise<string | null>;
-    create: (config: { name: string; role: string; voice: string; voiceDescription: string; basePath: string }) => Promise<{ success: boolean; mindPath?: string; error?: string }>;
+    create: (config: { name: string; role: string; voice: string; voiceDescription: string; basePath: string }) => Promise<{ success: boolean; mindId?: string; mindPath?: string; error?: string }>;
     onProgress: (callback: (progress: { step: string; detail: string }) => void) => () => void;
   };
   chatroom: ChatroomAPI;

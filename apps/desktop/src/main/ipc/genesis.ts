@@ -46,7 +46,7 @@ export function setupGenesisIPC(
       const mind = await mindManager.loadMind(mindPath);
       mindManager.setActiveMind(mind.mindId);
 
-      return { success: true, mindPath };
+      return { success: true, mindId: mind.mindId, mindPath };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       if (win) win.webContents.send('genesis:progress', { step: 'error', detail: message });

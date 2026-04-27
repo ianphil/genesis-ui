@@ -13,6 +13,9 @@ vi.mock('fs', () => ({
   existsSync: vi.fn(),
   readdirSync: vi.fn(() => []),
   readFileSync: vi.fn(),
+  realpathSync: Object.assign(vi.fn((candidate: string) => candidate), {
+    native: vi.fn((candidate: string) => candidate),
+  }),
 }));
 
 import * as fs from 'fs';
@@ -109,6 +112,7 @@ describe('MindManager', () => {
     };
     vi.mocked(fs.existsSync).mockReturnValue(true);
     vi.mocked(fs.readFileSync).mockReturnValue('# TestAgent\nSome content');
+    vi.mocked(fs.realpathSync.native).mockImplementation((candidate) => String(candidate));
     manager = new MindManager(
       mockClientFactory as unknown as CopilotClientFactory,
       mockIdentityLoader as unknown as IdentityLoader,
@@ -198,6 +202,24 @@ describe('MindManager', () => {
       expect(mockClientFactory.createClient).toHaveBeenCalledTimes(1);
       expect(mockCreateSession).toHaveBeenCalledTimes(1);
       expect(mockProvider.activateMind).toHaveBeenCalledTimes(1);
+    });
+
+    it('deduplicates filesystem aliases by realpath before creating another client', async () => {
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.realpathSync.native).mockImplementation((candidate) => {
+        const normalized = String(candidate).replace(/\\/g, '/');
+        if (normalized.endsWith('/tmp/aliases/q-link')) {
+          return normalized.slice(0, -'/tmp/aliases/q-link'.length) + '/tmp/agents/q';
+        }
+        return normalized;
+      });
+
+      const mind1 = await manager.loadMind('/tmp/agents/q');
+      const mind2 = await manager.loadMind('/tmp/aliases/q-link');
+
+      expect(mind2.mindId).toBe(mind1.mindId);
+      expect(mockClientFactory.createClient).toHaveBeenCalledTimes(1);
+      expect(mockCreateSession).toHaveBeenCalledTimes(1);
     });
 
     it('emits mind:loaded event', async () => {

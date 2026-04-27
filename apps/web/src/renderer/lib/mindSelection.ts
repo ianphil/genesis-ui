@@ -7,7 +7,10 @@ interface PreferredMind {
 
 export function normalizeMindPath(mindPath: string | undefined): string | null {
   if (!mindPath) return null;
-  return mindPath.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+  const normalized = mindPath.replace(/\\/g, '/').replace(/\/+$/, '');
+  return /^[a-z]:\//i.test(normalized) || normalized.startsWith('//')
+    ? normalized.toLowerCase()
+    : normalized;
 }
 
 export function selectPreferredMind(
