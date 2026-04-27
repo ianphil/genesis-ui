@@ -13,6 +13,10 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': 'http://127.0.0.1:33441',
+      '/events': {
+        target: 'ws://127.0.0.1:33441',
+        ws: true,
+      },
       '/ws': {
         target: 'ws://127.0.0.1:33441',
         ws: true,

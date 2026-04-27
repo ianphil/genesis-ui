@@ -12,6 +12,7 @@ import {
   type CredentialStore,
 } from '@chamber/services';
 import keytar from 'keytar';
+import path from 'node:path';
 import { createCredentialPrivilegedHandler } from './privileged-protocol';
 
 const port = Number(process.env.CHAMBER_SERVER_PORT ?? 0);
@@ -81,6 +82,49 @@ ctx.shutdown = () => {
   void shutdown();
 };
 ctx.handlePrivilegedRequest = createCredentialPrivilegedHandler(keytar as CredentialStore);
+
+if (process.env.CHAMBER_E2E === '1' && process.env.CHAMBER_E2E_FAKE_CHAT === '1') {
+  const fakeMinds = new Map<string, {
+    mindId: string;
+    mindPath: string;
+    identity: { name: string; systemMessage: string };
+    status: 'ready';
+  }>();
+  const fakeReply = process.env.CHAMBER_E2E_FAKE_CHAT_REPLY ?? 'CHAMBER_BROWSER_LOOPBACK_ACK';
+
+  ctx.listMinds = () => Array.from(fakeMinds.values());
+  ctx.addMind = (mindPath) => {
+    const existing = fakeMinds.get(mindPath);
+    if (existing) return existing;
+    const basename = path.basename(mindPath) || 'browser-smoke';
+    const mind = {
+      mindId: `${basename}-e2e`,
+      mindPath,
+      identity: {
+        name: basename,
+        systemMessage: `E2E fake browser mind for ${basename}`,
+      },
+      status: 'ready' as const,
+    };
+    fakeMinds.set(mindPath, mind);
+    return mind;
+  };
+  ctx.sendChat = ({ mindId, messageId }) => {
+    serverControls.publish(messageId, {
+      mindId,
+      messageId,
+      event: { type: 'message_final', sdkMessageId: `e2e-${messageId}`, content: fakeReply },
+    });
+    serverControls.publish(messageId, {
+      mindId,
+      messageId,
+      event: { type: 'done' },
+    });
+  };
+  ctx.newConversation = () => undefined;
+  ctx.cancelChat = () => undefined;
+  ctx.listModels = () => [{ id: 'e2e-fake-model', name: 'E2E Fake Model' }];
+}
 
 const serverControls = createHttpServer({
   ...ctx,
