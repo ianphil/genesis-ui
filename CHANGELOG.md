@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.32.3 (2026-04-27)
+
+### Chat input
+
+- **Keep emoji shortcode suggestions visible** — shortcode autocomplete now flips above the caret near the bottom edge and clamps within the viewport so suggestions are not clipped. (#157)
+
 ## v0.32.2 (2026-04-27)
 
 ### Release packaging
