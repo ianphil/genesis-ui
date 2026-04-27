@@ -1,7 +1,18 @@
 import { createHttpServer } from './honoAdapter';
 import { createServerContext } from './composition';
-import { AuthService, type CredentialStore } from '@chamber/services';
+import {
+  AuthService,
+  ChatService,
+  ConfigService,
+  CopilotClientFactory,
+  IdentityLoader,
+  MindManager,
+  TurnQueue,
+  ViewDiscovery,
+  type CredentialStore,
+} from '@chamber/services';
 import keytar from 'keytar';
+import path from 'node:path';
 import { createCredentialPrivilegedHandler } from './privileged-protocol';
 
 const port = Number(process.env.CHAMBER_SERVER_PORT ?? 0);
@@ -11,10 +22,40 @@ const ctx = createServerContext({
   token: process.env.CHAMBER_SERVER_TOKEN,
   allowedOrigins: [allowedOrigin],
 });
-let activeLogin: string | null = null;
-const authService = new AuthService(keytar as CredentialStore, () => activeLogin, (login) => {
-  activeLogin = login;
+const configService = new ConfigService();
+const saveActiveLogin = (login: string | null) => {
+  const config = configService.load();
+  configService.save({ ...config, activeLogin: login });
+};
+const authService = new AuthService(keytar as CredentialStore, () => configService.load().activeLogin, saveActiveLogin);
+const viewDiscovery = new ViewDiscovery();
+const mindManager = new MindManager(new CopilotClientFactory(), new IdentityLoader(), configService, viewDiscovery);
+const chatService = new ChatService(mindManager, new TurnQueue());
+viewDiscovery.setRefreshHandler({
+  sendBackgroundPrompt: (mindPath, prompt) => mindManager.sendBackgroundPrompt(mindPath, prompt),
 });
+
+ctx.listMinds = () => mindManager.listMinds();
+ctx.addMind = async (mindPath) => {
+  const mind = await mindManager.loadMind(mindPath);
+  mindManager.setActiveMind(mind.mindId);
+  return mind;
+};
+ctx.sendChat = ({ mindId, message, messageId, model, attachments }) =>
+  chatService.sendMessage(
+    mindId,
+    message,
+    messageId,
+    (event) => serverControls.publish(messageId, { mindId, messageId, event }),
+    model,
+    attachments,
+  );
+ctx.newConversation = (mindId) => chatService.newConversation(mindId);
+ctx.listModels = (mindId) => {
+  const id = mindId ?? mindManager.getActiveMindId() ?? mindManager.listMinds()[0]?.mindId;
+  return id ? chatService.listModels(id) : [];
+};
+ctx.cancelChat = (mindId, messageId) => chatService.cancelMessage(mindId, messageId);
 
 ctx.getAuthStatus = async () => {
   const credential = await authService.getStoredCredential();
@@ -37,13 +78,61 @@ ctx.switchAuthAccount = async (login) => {
   authService.setActiveLogin(login);
 };
 ctx.logoutAuth = () => authService.logout();
-ctx.shutdown = () => shutdown();
+ctx.shutdown = () => {
+  void shutdown();
+};
 ctx.handlePrivilegedRequest = createCredentialPrivilegedHandler(keytar as CredentialStore);
 
-const { server } = createHttpServer({
+if (process.env.CHAMBER_E2E === '1' && process.env.CHAMBER_E2E_FAKE_CHAT === '1') {
+  const fakeMinds = new Map<string, {
+    mindId: string;
+    mindPath: string;
+    identity: { name: string; systemMessage: string };
+    status: 'ready';
+  }>();
+  const fakeReply = process.env.CHAMBER_E2E_FAKE_CHAT_REPLY ?? 'CHAMBER_BROWSER_LOOPBACK_ACK';
+
+  ctx.listMinds = () => Array.from(fakeMinds.values());
+  ctx.addMind = (mindPath) => {
+    const existing = fakeMinds.get(mindPath);
+    if (existing) return existing;
+    const basename = path.basename(mindPath) || 'browser-smoke';
+    const mind = {
+      mindId: `${basename}-e2e`,
+      mindPath,
+      identity: {
+        name: basename,
+        systemMessage: `E2E fake browser mind for ${basename}`,
+      },
+      status: 'ready' as const,
+    };
+    fakeMinds.set(mindPath, mind);
+    return mind;
+  };
+  ctx.sendChat = ({ mindId, messageId }) => {
+    serverControls.publish(messageId, {
+      mindId,
+      messageId,
+      event: { type: 'message_final', sdkMessageId: `e2e-${messageId}`, content: fakeReply },
+    });
+    serverControls.publish(messageId, {
+      mindId,
+      messageId,
+      event: { type: 'done' },
+    });
+  };
+  ctx.newConversation = () => undefined;
+  ctx.cancelChat = () => undefined;
+  ctx.listModels = () => [{ id: 'e2e-fake-model', name: 'E2E Fake Model' }];
+}
+
+const serverControls = createHttpServer({
   ...ctx,
-  shutdown: () => shutdown(),
+  shutdown: () => {
+    void shutdown();
+  },
 });
+const { server } = serverControls;
 
 server.listen(port, '127.0.0.1', () => {
   const address = server.address();
@@ -51,9 +140,19 @@ server.listen(port, '127.0.0.1', () => {
   console.log(JSON.stringify({ type: 'ready', host: '127.0.0.1', port: actualPort, token: ctx.token }));
 });
 
-function shutdown(): void {
+let shuttingDown = false;
+async function shutdown(): Promise<void> {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  await mindManager.shutdown().catch((error: unknown) => {
+    console.error('[server] Mind shutdown failed:', error);
+  });
   server.close(() => process.exit(0));
 }
 
-process.on('SIGTERM', shutdown);
-process.on('SIGINT', shutdown);
+process.on('SIGTERM', () => {
+  void shutdown();
+});
+process.on('SIGINT', () => {
+  void shutdown();
+});

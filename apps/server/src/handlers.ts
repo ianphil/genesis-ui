@@ -8,6 +8,23 @@ export async function listMindsHandler(_request: ChamberRequest, ctx: ChamberCtx
   return { status: 200, body: { minds: ctx.listMinds() } };
 }
 
+export async function addMindHandler(request: ChamberRequest, ctx: ChamberCtx): Promise<ChamberResponse> {
+  const mindPath = typeof request.body === 'object' && request.body !== null && 'mindPath' in request.body
+    ? String((request.body as { mindPath: unknown }).mindPath).trim()
+    : '';
+  if (!mindPath) {
+    return { status: 400, body: { error: 'mindPath is required' } };
+  }
+  if (!ctx.addMind) {
+    return { status: 503, body: { error: 'Mind loading is unavailable' } };
+  }
+  try {
+    return { status: 200, body: { mind: await ctx.addMind(mindPath) } };
+  } catch (error) {
+    return { status: 400, body: { error: error instanceof Error ? error.message : String(error) } };
+  }
+}
+
 export async function getConfigHandler(_request: ChamberRequest, ctx: ChamberCtx): Promise<ChamberResponse> {
   return { status: 200, body: await ctx.getConfig?.() ?? { version: 1 } };
 }
@@ -67,12 +84,53 @@ export async function uploadAttachmentHandler(request: ChamberRequest, ctx: Cham
 }
 
 export async function cancelChatHandler(request: ChamberRequest, ctx: ChamberCtx): Promise<ChamberResponse> {
-  const sessionId = typeof request.body === 'object' && request.body !== null && 'sessionId' in request.body
-    ? String((request.body as { sessionId: unknown }).sessionId)
+  const mindId = typeof request.body === 'object' && request.body !== null && 'mindId' in request.body
+    ? String((request.body as { mindId: unknown }).mindId).trim()
     : '';
-  if (!sessionId) {
-    return { status: 400, body: { error: 'sessionId is required' } };
-  }
-  await ctx.cancelChat?.(sessionId);
+  const messageId = typeof request.body === 'object' && request.body !== null && 'messageId' in request.body
+    ? String((request.body as { messageId: unknown }).messageId).trim()
+    : '';
+  if (!mindId) return { status: 400, body: { error: 'mindId is required' } };
+  if (!messageId) return { status: 400, body: { error: 'messageId is required' } };
+  await ctx.cancelChat?.(mindId, messageId);
   return { status: 200, body: { ok: true } };
+}
+
+export async function sendChatHandler(request: ChamberRequest, ctx: ChamberCtx): Promise<ChamberResponse> {
+  const body = typeof request.body === 'object' && request.body !== null
+    ? request.body as Record<string, unknown>
+    : {};
+  const mindId = typeof body.mindId === 'string' ? body.mindId.trim() : '';
+  const message = typeof body.message === 'string' ? body.message : '';
+  const messageId = typeof body.messageId === 'string' ? body.messageId.trim() : '';
+  if (!mindId) return { status: 400, body: { error: 'mindId is required' } };
+  if (!messageId) return { status: 400, body: { error: 'messageId is required' } };
+  if (!ctx.sendChat) return { status: 503, body: { error: 'Chat is unavailable' } };
+
+  await ctx.sendChat({
+    mindId,
+    message,
+    messageId,
+    model: typeof body.model === 'string' ? body.model : undefined,
+    attachments: Array.isArray(body.attachments)
+      ? body.attachments as never
+      : undefined,
+  });
+  return { status: 200, body: { ok: true } };
+}
+
+export async function newConversationHandler(request: ChamberRequest, ctx: ChamberCtx): Promise<ChamberResponse> {
+  const mindId = typeof request.body === 'object' && request.body !== null && 'mindId' in request.body
+    ? String((request.body as { mindId: unknown }).mindId).trim()
+    : '';
+  if (!mindId) return { status: 400, body: { error: 'mindId is required' } };
+  if (!ctx.newConversation) return { status: 503, body: { error: 'Chat is unavailable' } };
+
+  await ctx.newConversation(mindId);
+  return { status: 200, body: { ok: true } };
+}
+
+export async function listModelsHandler(request: ChamberRequest, ctx: ChamberCtx): Promise<ChamberResponse> {
+  if (!ctx.listModels) return { status: 503, body: { error: 'Model listing is unavailable' } };
+  return { status: 200, body: { models: await ctx.listModels(request.query?.get('mindId') ?? undefined) } };
 }

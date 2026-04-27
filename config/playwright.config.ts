@@ -30,6 +30,9 @@ export default defineConfig({
       timeout: 120_000,
       reuseExistingServer: !process.env.CI,
       env: {
+        CHAMBER_E2E: '1',
+        CHAMBER_E2E_FAKE_CHAT: '1',
+        CHAMBER_E2E_FAKE_CHAT_REPLY: 'CHAMBER_BROWSER_LOOPBACK_ACK',
         CHAMBER_SERVER_PORT: '33441',
         CHAMBER_SERVER_TOKEN: 'e2e-token',
         CHAMBER_ALLOWED_ORIGIN: 'http://127.0.0.1:4173',

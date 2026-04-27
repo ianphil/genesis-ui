@@ -1,4 +1,12 @@
-import type { CommandResponse, ListMindsResponse, MindDto } from '@chamber/wire-contracts';
+import type {
+  AddMindResponse,
+  CommandResponse,
+  ListModelsResponse,
+  ListMindsResponse,
+  MindDto,
+  ModelDto,
+  SendChatRequest,
+} from '@chamber/wire-contracts';
 
 export interface AuthProgressDto {
   step: string;
@@ -26,6 +34,11 @@ export class ChamberClient {
   async listMinds(): Promise<MindDto[]> {
     const body = await this.get<ListMindsResponse>('/api/mind/list');
     return body.minds;
+  }
+
+  async addMind(mindPath: string): Promise<MindDto> {
+    const body = await this.post<AddMindResponse>('/api/mind/add', { mindPath });
+    return body.mind;
   }
 
   async getConfig(): Promise<unknown> {
@@ -112,8 +125,22 @@ export class ChamberClient {
     return readJson(response, 'upload attachment');
   }
 
-  async cancelChat(sessionId: string): Promise<CommandResponse> {
-    return this.post('/api/chat/cancel', { sessionId });
+  async cancelChat(mindId: string, messageId: string): Promise<CommandResponse> {
+    return this.post('/api/chat/cancel', { mindId, messageId });
+  }
+
+  async sendChat(request: SendChatRequest): Promise<CommandResponse> {
+    return this.post('/api/chat/send', request);
+  }
+
+  async startNewConversation(mindId: string): Promise<CommandResponse> {
+    return this.post('/api/chat/new', { mindId });
+  }
+
+  async listModels(mindId?: string): Promise<ModelDto[]> {
+    const query = mindId ? `?mindId=${encodeURIComponent(mindId)}` : '';
+    const body = await this.get<ListModelsResponse>(`/api/chat/models${query}`);
+    return body.models;
   }
 
   private async get<TBody = unknown>(path: string): Promise<TBody> {
@@ -142,7 +169,17 @@ export class ChamberClient {
 
 async function readJson<TBody>(response: Response, operation: string): Promise<TBody> {
   if (!response.ok) {
-    throw new Error(`Failed to ${operation}: ${response.status}`);
+    const body = await response.text();
+    let message = body.trim();
+    try {
+      const parsed = JSON.parse(body) as { error?: unknown };
+      if (typeof parsed.error === 'string' && parsed.error.trim()) {
+        message = parsed.error;
+      }
+    } catch {
+      // Non-JSON response bodies are still useful as-is.
+    }
+    throw new Error(`Failed to ${operation}: ${response.status}${message ? ` - ${message}` : ''}`);
   }
   return response.json() as Promise<TBody>;
 }
