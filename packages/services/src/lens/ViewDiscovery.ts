@@ -12,6 +12,7 @@ export interface ViewRefreshHandler {
 export class ViewDiscovery {
   private viewsByMind = new Map<string, LensViewManifest[]>();
   private watchersByMind = new Map<string, fs.FSWatcher[]>();
+  private scanTimersByMind = new Map<string, ReturnType<typeof setTimeout>>();
   private refreshHandler: ViewRefreshHandler | null = null;
 
   constructor(refreshHandler?: ViewRefreshHandler) {
@@ -136,13 +137,21 @@ export class ViewDiscovery {
     const watchers: fs.FSWatcher[] = [];
     try {
       const watcher = fs.watch(lensDir, { recursive: true }, (_eventType, filename) => {
-        if (filename && (filename.endsWith('view.json') || filename.endsWith('.json'))) {
-          setTimeout(() => this.scan(mindPath).then(onChanged), 300);
-        }
+        if (filename) this.scheduleScan(mindPath, onChanged);
       });
       watchers.push(watcher);
     } catch { /* watch not supported */ }
     this.watchersByMind.set(mindPath, watchers);
+  }
+
+  private scheduleScan(mindPath: string, onChanged: () => void): void {
+    const existingTimer = this.scanTimersByMind.get(mindPath);
+    if (existingTimer) clearTimeout(existingTimer);
+    const timer = setTimeout(() => {
+      this.scanTimersByMind.delete(mindPath);
+      void this.scan(mindPath).then(onChanged);
+    }, 300);
+    this.scanTimersByMind.set(mindPath, timer);
   }
 
   stopWatching(mindPath?: string): void {
@@ -150,11 +159,16 @@ export class ViewDiscovery {
       const watchers = this.watchersByMind.get(mindPath) ?? [];
       for (const w of watchers) w.close();
       this.watchersByMind.delete(mindPath);
+      const timer = this.scanTimersByMind.get(mindPath);
+      if (timer) clearTimeout(timer);
+      this.scanTimersByMind.delete(mindPath);
     } else {
       for (const watchers of this.watchersByMind.values()) {
         for (const w of watchers) w.close();
       }
       this.watchersByMind.clear();
+      for (const timer of this.scanTimersByMind.values()) clearTimeout(timer);
+      this.scanTimersByMind.clear();
     }
   }
 
