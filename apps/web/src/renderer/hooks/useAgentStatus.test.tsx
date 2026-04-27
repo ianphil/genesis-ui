@@ -16,6 +16,13 @@ const fakeMind: MindContext = {
   status: 'ready',
 };
 
+const otherMind: MindContext = {
+  mindId: 'other-1234',
+  mindPath: 'C:\\test\\other',
+  identity: { name: 'Other', systemMessage: '' },
+  status: 'ready',
+};
+
 function wrapper({ children }: { children: React.ReactNode }) {
   return <AppStateProvider>{children}</AppStateProvider>;
 }
@@ -67,6 +74,24 @@ describe('useAgentStatus', () => {
     expect(api.mind.selectDirectory).toHaveBeenCalled();
     expect(api.mind.add).toHaveBeenCalledWith('C:\\test\\mind');
     expect(dirPath).toBe('C:\\test\\mind');
+  });
+
+  it('selectMindDirectory selects the mind returned by mind.add when it already exists', async () => {
+    (api.mind.selectDirectory as ReturnType<typeof vi.fn>).mockResolvedValue('C:\\test\\mind');
+    (api.mind.add as ReturnType<typeof vi.fn>).mockResolvedValue(fakeMind);
+    (api.mind.list as ReturnType<typeof vi.fn>).mockResolvedValue([fakeMind, otherMind]);
+
+    const { result } = renderHook(() => {
+      const agentStatus = useAgentStatus();
+      const state = useAppState();
+      return { agentStatus, state };
+    }, { wrapper });
+
+    await act(async () => {
+      await result.current.agentStatus.selectMindDirectory();
+    });
+
+    expect(result.current.state.activeMindId).toBe(fakeMind.mindId);
   });
 
   it('selectMindDirectory returns null when dialog is cancelled', async () => {

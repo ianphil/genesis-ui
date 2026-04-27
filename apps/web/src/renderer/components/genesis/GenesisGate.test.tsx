@@ -5,9 +5,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { GenesisGate } from './GenesisGate';
-import { AppStateProvider } from '../../lib/store';
+import { AppStateProvider, useAppState } from '../../lib/store';
 import { useAgentStatus } from '../../hooks/useAgentStatus';
 import { installElectronAPI, mockElectronAPI } from '../../../test/helpers';
+import type { MindContext } from '../../../shared/types';
 
 function TestWrapper({ children }: { children: React.ReactNode }) {
   useAgentStatus();
@@ -17,6 +18,25 @@ function TestWrapper({ children }: { children: React.ReactNode }) {
 function renderWithProvider(ui: React.ReactElement) {
   return render(<AppStateProvider><TestWrapper>{ui}</TestWrapper></AppStateProvider>);
 }
+
+function ActiveMindProbe() {
+  const { activeMindId } = useAppState();
+  return <div data-testid="active-mind-id">{activeMindId}</div>;
+}
+
+const existingMind: MindContext = {
+  mindId: 'existing-1234',
+  mindPath: 'C:\\test\\mind',
+  identity: { name: 'Test', systemMessage: '' },
+  status: 'ready',
+};
+
+const otherMind: MindContext = {
+  mindId: 'other-1234',
+  mindPath: 'C:\\test\\other',
+  identity: { name: 'Other', systemMessage: '' },
+  status: 'ready',
+};
 
 describe('GenesisGate', () => {
   let api: ReturnType<typeof mockElectronAPI>;
@@ -79,6 +99,29 @@ describe('GenesisGate', () => {
 
     await waitFor(() => {
       expect(screen.getByRole('alert').textContent).toContain('Invalid mind directory');
+    });
+  });
+
+  it('selects the mind returned by Open Existing when it is already loaded', async () => {
+    (api.mind.selectDirectory as ReturnType<typeof vi.fn>).mockResolvedValue('C:\\test\\mind');
+    (api.mind.add as ReturnType<typeof vi.fn>).mockResolvedValue(existingMind);
+    let callCount = 0;
+    (api.mind.list as ReturnType<typeof vi.fn>).mockImplementation(async () => {
+      callCount++;
+      if (callCount <= 1) return [];
+      return [existingMind, otherMind];
+    });
+
+    renderWithProvider(<GenesisGate><ActiveMindProbe /></GenesisGate>);
+
+    await waitFor(() => {
+      expect(screen.getByText('Open Existing', { exact: false })).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByText('Open Existing', { exact: false }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('active-mind-id').textContent).toBe(existingMind.mindId);
     });
   });
 

@@ -39,9 +39,10 @@ export class MindManager extends EventEmitter {
 
   async loadMind(mindPath: string, mindId?: string): Promise<MindContext> {
     const resolvedMindPath = this.resolveMindPath(mindPath);
+    const mindPathKey = this.mindPathKey(resolvedMindPath);
 
     // Deduplicate — return existing mind
-    const existingId = this.pathToId.get(resolvedMindPath);
+    const existingId = this.pathToId.get(mindPathKey);
     if (existingId && this.minds.has(existingId)) {
       const existing = this.minds.get(existingId);
       if (!existing) throw new Error(`Mind ${existingId} not found`);
@@ -49,20 +50,21 @@ export class MindManager extends EventEmitter {
     }
 
     // Concurrent guard — return in-flight promise
-    const inflight = this.loading.get(resolvedMindPath);
+    const inflight = this.loading.get(mindPathKey);
     if (inflight) return inflight;
 
     const promise = this.doLoadMind(resolvedMindPath, mindId);
-    this.loading.set(resolvedMindPath, promise);
+    this.loading.set(mindPathKey, promise);
     try {
       return await promise;
     } finally {
-      this.loading.delete(resolvedMindPath);
+      this.loading.delete(mindPathKey);
     }
   }
 
   private async doLoadMind(mindPath: string, mindId?: string): Promise<MindContext> {
     const resolvedMindPath = this.resolveMindPath(mindPath);
+    const mindPathKey = this.mindPathKey(resolvedMindPath);
 
     // Use provided ID or generate a new one
     const id = mindId ?? generateMindId(resolvedMindPath);
@@ -91,7 +93,7 @@ export class MindManager extends EventEmitter {
     };
 
     this.minds.set(id, context);
-    this.pathToId.set(resolvedMindPath, id);
+    this.pathToId.set(mindPathKey, id);
 
     try {
       await Promise.all([
@@ -103,7 +105,7 @@ export class MindManager extends EventEmitter {
       });
     } catch (err) {
       this.minds.delete(id);
-      this.pathToId.delete(resolvedMindPath);
+      this.pathToId.delete(mindPathKey);
       this.viewDiscovery.removeMind(resolvedMindPath);
       await this.releaseProviders(id).catch(() => { /* noop */ });
       await this.clientFactory.destroyClient(client);
@@ -131,7 +133,7 @@ export class MindManager extends EventEmitter {
 
     // Remove from maps
     this.minds.delete(mindId);
-    this.pathToId.delete(context.mindPath);
+    this.pathToId.delete(this.mindPathKey(context.mindPath));
 
     // Update active mind if needed
     if (this.activeMindId === mindId) {
@@ -267,6 +269,11 @@ export class MindManager extends EventEmitter {
     return hasSoul || hasGithub;
   }
 
+  private mindPathKey(mindPath: string): string {
+    const resolved = path.resolve(mindPath);
+    return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+  }
+
   private toExternalContext(ctx: InternalMindContext): MindContext {
     return {
       mindId: ctx.mindId,
@@ -358,7 +365,8 @@ export class MindManager extends EventEmitter {
   }
 
   async sendBackgroundPrompt(mindPath: string, prompt: string): Promise<void> {
-    const mind = this.listMinds().find(m => m.mindPath === mindPath);
+    const requestedMindPathKey = this.mindPathKey(mindPath);
+    const mind = this.listMinds().find(m => this.mindPathKey(m.mindPath) === requestedMindPathKey);
     if (!mind) return;
     const context = this.minds.get(mind.mindId);
     if (!context?.session) return;

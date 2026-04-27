@@ -185,6 +185,21 @@ describe('MindManager', () => {
       expect(mockClientFactory.createClient).toHaveBeenCalledTimes(1);
     });
 
+    it('deduplicates equivalent path spellings before creating another client', async () => {
+      vi.mocked(fs.existsSync).mockImplementation((candidate) => {
+        const normalized = String(candidate).replace(/\\/g, '/').toLowerCase();
+        return normalized === '/tmp/agents/q/soul.md' || normalized === '/tmp/agents/q/.github';
+      });
+
+      const mind1 = await manager.loadMind('/tmp/agents/q');
+      const mind2 = await manager.loadMind('/tmp/agents/Q/');
+
+      expect(mind2.mindId).toBe(mind1.mindId);
+      expect(mockClientFactory.createClient).toHaveBeenCalledTimes(1);
+      expect(mockCreateSession).toHaveBeenCalledTimes(1);
+      expect(mockProvider.activateMind).toHaveBeenCalledTimes(1);
+    });
+
     it('emits mind:loaded event', async () => {
       const listener = vi.fn();
       manager.on('mind:loaded', listener);

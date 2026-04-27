@@ -3,6 +3,7 @@ import { useAppState, useAppDispatch } from '../../lib/store';
 import { LandingScreen } from './LandingScreen';
 import { GenesisFlow } from './GenesisFlow';
 import { ChamberLoadingScreen } from './ChamberLoadingScreen';
+import { selectPreferredMind } from '../../lib/mindSelection';
 
 interface Props {
   children: React.ReactNode;
@@ -54,11 +55,11 @@ export function GenesisGate({ children }: Props) {
           if (!dirPath) return;
 
           try {
-            await window.electronAPI.mind.add(dirPath);
+            const openedMind = await window.electronAPI.mind.add(dirPath);
             const loadedMinds = await window.electronAPI.mind.list();
             dispatch({ type: 'SET_MINDS', payload: loadedMinds });
-            const newest = loadedMinds[loadedMinds.length - 1];
-            if (newest) dispatch({ type: 'SET_ACTIVE_MIND', payload: newest.mindId });
+            const mindToSelect = selectPreferredMind(loadedMinds, openedMind);
+            if (mindToSelect) dispatch({ type: 'SET_ACTIVE_MIND', payload: mindToSelect.mindId });
             dispatch({ type: 'HIDE_LANDING' });
           } catch (error) {
             setOpenExistingError(error instanceof Error ? error.message : 'Failed to open existing agent.');

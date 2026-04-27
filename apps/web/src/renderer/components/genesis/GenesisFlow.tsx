@@ -4,14 +4,10 @@ import { VoidScreen } from './VoidScreen';
 import { RoleScreen } from './RoleScreen';
 import { VoiceScreen } from './VoiceScreen';
 import { BootScreen } from './BootScreen';
+import { selectPreferredMind } from '../../lib/mindSelection';
 
 type Stage = 'void' | 'role' | 'voice' | 'boot' | 'done';
 type GenesisCreateResult = Awaited<ReturnType<typeof window.electronAPI.genesis.create>>;
-
-function normalizeMindPath(mindPath: string | undefined): string | null {
-  if (!mindPath) return null;
-  return mindPath.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
-}
 
 interface Props {
   onComplete: () => void;
@@ -66,11 +62,7 @@ export function GenesisFlow({ onComplete }: Props) {
 
     const loadedMinds = await window.electronAPI.mind.list();
     dispatch({ type: 'SET_MINDS', payload: loadedMinds });
-    const createdMindPath = normalizeMindPath(result.mindPath);
-    const createdMind = createdMindPath
-      ? loadedMinds.find((mind) => normalizeMindPath(mind.mindPath) === createdMindPath)
-      : undefined;
-    const mindToSelect = createdMind ?? loadedMinds[loadedMinds.length - 1];
+    const mindToSelect = selectPreferredMind(loadedMinds, { mindPath: result.mindPath });
     if (mindToSelect) {
       dispatch({ type: 'SET_ACTIVE_MIND', payload: mindToSelect.mindId });
     }
