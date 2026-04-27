@@ -28,6 +28,7 @@ Do not use this skill for a single already-scoped PR. Use the `pr` skill directl
 - Base branch: `master`.
 - Labels are priority buckets: `now`, `next`, `later`.
 - Default slate label: ask if unclear; otherwise use the label named by the user.
+- Prefer Git Town stacks for slate execution. Independent PRs are the exception, not the default, when every PR needs release metadata.
 - Use `gh` for issue and PR operations.
 - Never use MCP.
 - Do not run `npm run make:sandbox`.
@@ -36,7 +37,7 @@ Do not use this skill for a single already-scoped PR. Use the `pr` skill directl
 - Use the narrowest existing runtime smoke that proves the changed surface still runs.
 - Run Uncle Bob for non-trivial, runtime, architectural, or security-sensitive PRs, and fix critical findings.
 - Include `Closes #NNN` or `Fixes #NNN` for every issue intentionally addressed by a PR.
-- Let the `pr` skill recommend the version bump, then accept the recommendation unless the user gives a reason to override.
+- Let the `pr` skill recommend the version bump, then accept the recommendation unless the user gives a reason to override. For a stack, apply sequential version bumps down the stack so child PRs do not duplicate parent release metadata.
 - Draft and apply a matching `CHANGELOG.md` entry for every non-trivial PR.
 - Do not merge PRs unless the user explicitly asks. Creating reviewable PRs is the default end state.
 
@@ -79,11 +80,19 @@ Do not invent new smoke scripts. If no existing smoke covers the path, document 
 
 6. Identify dependencies and stack candidates:
 
-   - Independent PR: base `master`.
-   - Child PR: base the child branch on the parent branch.
-   - Avoid one long stack unless the issues truly depend on each other.
+   - Default to one short Git Town stack for a 2-5 issue slate that is intended to land in order.
+   - For larger slates, create several short stacks, one per cluster.
+   - Independent PRs are allowed for design-heavy, uncertain, urgent, or intentionally deferred-version work.
+   - Avoid one long stack across unrelated clusters.
+   - Use the repo's automatic branch deletion/retargeting behavior: merge stack parents first, then let GitHub retarget child PRs to `master`.
 
-7. Present a concise slate proposal and ask for confirmation before creating the roadmap when the grouping is ambiguous.
+7. Choose the release metadata strategy for the slate:
+
+   - **Stacked release metadata** (default): parent PR gets the next version, each child gets the next sequential version. This avoids duplicate `package.json`, lockfile, and changelog bumps.
+   - **Deferred release metadata**: later independent PRs skip version/changelog until their predecessor merges.
+   - **Preallocated independent versions**: independent PRs get sequential versions up front only when merge order is fixed and the user explicitly chooses this.
+
+8. Present a concise slate proposal and ask for confirmation before creating the roadmap when the grouping, stack order, or release metadata strategy is ambiguous.
 
 ## Phase 2 - Create the roadmap
 
@@ -137,24 +146,33 @@ git pull --ff-only origin master
 git switch -c <branch>
 ```
 
-For stacked work:
+For stacked work, prefer Git Town when available:
+
+```powershell
+git town hack <parent-branch>
+git town append <child-branch>
+git town sync
+```
+
+When Git Town is unavailable and the user does not want to install it, use manual stacked branches:
 
 ```powershell
 git switch <parent-branch>
 git switch -c <child-branch>
 ```
 
-If Git Town is available and the user has chosen it, use:
-
-```powershell
-git town hack <branch>
-git town append <child-branch>
-git town sync
-```
-
 Do not install new stack tooling without user approval.
 
-### 2. Inspect the issue and code
+### 2. Create stacked PR bases
+
+Open each PR against its stack parent:
+
+- Root PR: `gh pr create --base master --head <parent-branch>`.
+- Child PR: `gh pr create --base <parent-branch> --head <child-branch>`.
+
+Merge stack parents first. Because the repo deletes merged head branches, GitHub should retarget child PRs to `master`; verify this after each merge.
+
+### 3. Inspect the issue and code
 
 Read the GitHub issue body and comments:
 
@@ -164,7 +182,7 @@ gh issue view <issue-number> --repo ianphil/chamber --comments
 
 Inspect the nearest code, tests, and docs before editing. Follow existing Chamber conventions.
 
-### 3. Write the TDD mini-plan
+### 4. Write the TDD mini-plan
 
 Before implementation, update the roadmap section for this PR group with:
 
@@ -173,23 +191,23 @@ Before implementation, update the roadmap section for this PR group with:
 3. The minimal implementation path.
 4. The focused tests, full checks, and runtime smoke that prove completion.
 
-### 4. Red phase
+### 5. Red phase
 
 Write the smallest failing test first whenever practical.
 
 If the defect cannot be reproduced in an automated test, capture the closest executable smoke/repro before changing production code. Do not use that exception to skip validation.
 
-### 5. Green phase
+### 6. Green phase
 
 Implement surgically until the focused test passes. Keep changes limited to the PR group's scope. Do not fix unrelated pre-existing issues.
 
-### 6. Refactor and validate
+### 7. Refactor and validate
 
 Run focused tests during development, then run the appropriate smoke command for changed runtime surfaces.
 
 The `pr` skill will run the full required checks, but do not hand it a known-broken branch.
 
-### 7. Commit
+### 8. Commit
 
 Commit with a conventional title and the required trailer:
 
@@ -197,19 +215,25 @@ Commit with a conventional title and the required trailer:
 Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
 ```
 
-### 8. Invoke the PR skill
+### 9. Invoke the PR skill
 
 Run the Chamber `pr` skill for the current branch. Carry forward these answers unless the user overrides them:
 
 | Prompt area | Default answer |
 |---|---|
-| Version bump | Accept the skill recommendation |
+| Version bump | Accept the skill recommendation; in stacks, use the next sequential version after the parent branch |
 | Changelog | Draft/apply the matching entry |
 | Closing issue | Include all covered issues |
 | Uncle Bob | Yes for non-trivial/runtime/security/architecture changes |
 | Packaging sandbox | No; use `npm run package` when packaging smoke is needed |
 
-### 9. Record result
+For child branches, explicitly tell the `pr` skill that the PR base is the parent branch, not `master`. If the skill still creates the PR against `master`, immediately fix the base with:
+
+```powershell
+gh pr edit <pr-number> --repo ianphil/chamber --base <parent-branch>
+```
+
+### 10. Record result
 
 After the PR is open:
 
