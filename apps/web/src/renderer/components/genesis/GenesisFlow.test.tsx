@@ -5,7 +5,7 @@ import React from 'react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { GenesisFlow } from './GenesisFlow';
-import { AppStateProvider } from '../../lib/store';
+import { AppStateProvider, useAppState } from '../../lib/store';
 import { installElectronAPI, mockElectronAPI } from '../../../test/helpers';
 import type { MindContext } from '../../../shared/types';
 
@@ -35,6 +35,18 @@ const createdMind: MindContext = {
   identity: { name: 'Test Agent', systemMessage: '# Test Agent' },
   status: 'ready',
 };
+
+const otherMind: MindContext = {
+  mindId: 'other-agent-1234',
+  mindPath: 'C:\\agents\\other-agent',
+  identity: { name: 'Other Agent', systemMessage: '# Other Agent' },
+  status: 'ready',
+};
+
+function ActiveMindProbe() {
+  const { activeMindId } = useAppState();
+  return <div data-testid="active-mind-id">{activeMindId}</div>;
+}
 
 describe('GenesisFlow', () => {
   let api: ReturnType<typeof mockElectronAPI>;
@@ -70,6 +82,32 @@ describe('GenesisFlow', () => {
     await waitFor(() => {
       expect(api.mind.list).toHaveBeenCalled();
       expect(onComplete).toHaveBeenCalled();
+    });
+  });
+
+  it('selects the mind path returned by genesis.create instead of the last listed mind', async () => {
+    let resolveCreate: (value: { success: true; mindPath: string }) => void = () => {};
+    (api.genesis.create as ReturnType<typeof vi.fn>).mockReturnValue(new Promise((resolve) => {
+      resolveCreate = resolve;
+    }));
+    (api.mind.list as ReturnType<typeof vi.fn>).mockResolvedValue([createdMind, otherMind]);
+
+    render(
+      <AppStateProvider>
+        <GenesisFlow onComplete={vi.fn()} />
+        <ActiveMindProbe />
+      </AppStateProvider>,
+    );
+
+    fireEvent.click(screen.getByText('Begin'));
+    fireEvent.click(screen.getByText('Choose voice'));
+    fireEvent.click(await screen.findByText('Choose role'));
+    fireEvent.click(await screen.findByText('Boot complete'));
+
+    resolveCreate({ success: true, mindPath: createdMind.mindPath.toUpperCase() });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('active-mind-id').textContent).toBe(createdMind.mindId);
     });
   });
 });

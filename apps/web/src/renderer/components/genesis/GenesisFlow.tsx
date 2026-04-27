@@ -8,6 +8,11 @@ import { BootScreen } from './BootScreen';
 type Stage = 'void' | 'role' | 'voice' | 'boot' | 'done';
 type GenesisCreateResult = Awaited<ReturnType<typeof window.electronAPI.genesis.create>>;
 
+function normalizeMindPath(mindPath: string | undefined): string | null {
+  if (!mindPath) return null;
+  return mindPath.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+}
+
 interface Props {
   onComplete: () => void;
 }
@@ -61,9 +66,13 @@ export function GenesisFlow({ onComplete }: Props) {
 
     const loadedMinds = await window.electronAPI.mind.list();
     dispatch({ type: 'SET_MINDS', payload: loadedMinds });
-    const newest = loadedMinds[loadedMinds.length - 1];
-    if (newest) {
-      dispatch({ type: 'SET_ACTIVE_MIND', payload: newest.mindId });
+    const createdMindPath = normalizeMindPath(result.mindPath);
+    const createdMind = createdMindPath
+      ? loadedMinds.find((mind) => normalizeMindPath(mind.mindPath) === createdMindPath)
+      : undefined;
+    const mindToSelect = createdMind ?? loadedMinds[loadedMinds.length - 1];
+    if (mindToSelect) {
+      dispatch({ type: 'SET_ACTIVE_MIND', payload: mindToSelect.mindId });
     }
     dispatch({ type: 'NEW_CONVERSATION' });
     setStage('done');

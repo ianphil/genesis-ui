@@ -92,6 +92,34 @@ describe('IdentityLoader', () => {
       expect(result?.systemMessage).toContain('Chronological note');
     });
 
+    it('does not extract the mind name from working-memory headings', () => {
+      vi.mocked(fs.existsSync).mockImplementation((candidate) => {
+        const normalized = String(candidate).replace(/\\/g, '/');
+        return [
+          '/tmp/agents/fox/SOUL.md',
+          '/tmp/agents/fox/.working-memory',
+        ].includes(normalized);
+      });
+      vi.mocked(fs.readFileSync).mockImplementation((candidate) => {
+        const normalized = String(candidate).replace(/\\/g, '/');
+        if (normalized.endsWith('SOUL.md')) return 'No heading here.';
+        if (normalized.endsWith('memory.md')) return '# Memory\nCurated memory';
+        return '';
+      });
+      vi.mocked(fs.readdirSync).mockImplementation((candidate) => {
+        const normalized = String(candidate).replace(/\\/g, '/');
+        if (normalized.endsWith('/.working-memory')) {
+          return ['memory.md'] as unknown as ReturnType<typeof fs.readdirSync>;
+        }
+        return [] as unknown as ReturnType<typeof fs.readdirSync>;
+      });
+
+      const result = loader.load('/tmp/agents/fox');
+
+      expect(result?.name).toBe('fox');
+      expect(result?.systemMessage).toContain('# Memory');
+    });
+
     it('returns null when nothing exists', () => {
       vi.mocked(fs.existsSync).mockReturnValue(false);
       expect(loader.load('/tmp/test')).toBeNull();
