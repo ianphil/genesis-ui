@@ -8,6 +8,7 @@ import started from 'electron-squirrel-startup';
 import {
   A2aToolProvider,
   AgentCardRegistry,
+  ApprovalGate,
   AuthService,
   CanvasService,
   ChatroomService,
@@ -117,7 +118,15 @@ const mindManager: MindManager = new MindManager(clientFactory, identityLoader, 
 const taskManager = new TaskManager(mindManager, agentCardRegistry);
 const chatService: ChatService = new ChatService(mindManager, turnQueue);
 const messageRouter: MessageRouter = new MessageRouter(chatService, agentCardRegistry, a2aEventBus);
-const chatroomService = new ChatroomService(mindManager, appPaths);
+const chatroomApprovalGate = new ApprovalGate();
+chatroomApprovalGate.setApprovalHandler(async (request) => ({
+  correlationId: request.correlationId,
+  approved: false,
+  decidedBy: 'system',
+  timestamp: Date.now(),
+  reason: 'Chatroom approval UI is not wired yet; side-effect tools are blocked.',
+}));
+const chatroomService = new ChatroomService(mindManager, appPaths, chatroomApprovalGate);
 const canvasService = new CanvasService({ openExternal: { open: (url) => shell.openExternal(url) } });
 const cronService = new CronService({
   getTaskManager: () => taskManager,

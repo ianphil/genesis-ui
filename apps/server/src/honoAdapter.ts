@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
+import { getRequestListener } from '@hono/node-server';
 import { createServer } from 'node:http';
 import { WebSocketServer } from 'ws';
 import {
@@ -149,18 +150,7 @@ export function createHonoApp(ctx: ChamberCtx): Hono {
 
 export function createHttpServer(ctx: ChamberCtx) {
   const app = createHonoApp(ctx);
-  const server = createServer((request, response) => {
-    const host = request.headers.host ?? '127.0.0.1';
-    const url = `http://${host}${request.url ?? '/'}`;
-    const webRequest = new Request(url, {
-      method: request.method,
-      headers: request.headers as HeadersInit,
-    });
-    void Promise.resolve(app.fetch(webRequest)).then(async (fetchResponse: Response) => {
-      response.writeHead(fetchResponse.status, Object.fromEntries(fetchResponse.headers.entries()));
-      response.end(Buffer.from(await fetchResponse.arrayBuffer()));
-    });
-  });
+  const server = createServer(getRequestListener((request) => app.fetch(request)));
   const wsServer = new WebSocketServer({ noServer: true });
 
   server.on('upgrade', (request, socket, head) => {

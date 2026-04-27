@@ -251,7 +251,7 @@ export class ChatroomService extends EventEmitter {
       invocation: { sessionId: string },
     ): Promise<PermissionRequestResult> => {
       const toolName = this.permissionToolName(request);
-      const { approved } = await this.approvalGate.gate(
+      const { approved, reason } = await this.approvalGate.gate(
         mindId,
         toolName,
         {
@@ -268,7 +268,9 @@ export class ChatroomService extends EventEmitter {
 
       return {
         kind: 'reject',
-        feedback: 'Denied by Chamber approval gate',
+        feedback: reason
+          ? `Denied by Chamber approval gate: ${reason}`
+          : 'Denied by Chamber approval gate',
       };
     };
   }

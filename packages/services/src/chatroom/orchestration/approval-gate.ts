@@ -39,6 +39,12 @@ export interface ApprovalGateConfig {
 
 export type ApprovalHandler = (request: ApprovalRequest) => Promise<ApprovalDecision>;
 
+export interface ApprovalGateResult {
+  approved: boolean;
+  correlationId: string;
+  reason?: string;
+}
+
 export class ApprovalGate {
   private readonly sideEffectPatterns: readonly string[];
   private readonly allowedTools: ReadonlySet<string>;
@@ -83,7 +89,7 @@ export class ApprovalGate {
     toolName: string,
     parameters: Record<string, unknown>,
     reason: string = '',
-  ): Promise<{ approved: boolean; correlationId: string }> {
+  ): Promise<ApprovalGateResult> {
     if (!this.requiresApproval(toolName)) {
       return { approved: true, correlationId: '' };
     }
@@ -150,7 +156,7 @@ export class ApprovalGate {
       },
     );
 
-    return { approved: decision.approved, correlationId };
+    return { approved: decision.approved, correlationId, reason: decision.reason };
   }
 
   /** Get the audit log (non-sensitive, redacted parameters) */

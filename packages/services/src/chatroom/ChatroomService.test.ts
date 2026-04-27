@@ -664,7 +664,7 @@ describe('ChatroomService', () => {
 
       expect(decision).toEqual({
         kind: 'reject',
-        feedback: 'Denied by Chamber approval gate',
+        feedback: 'Denied by Chamber approval gate: No approval handler registered — default deny',
       });
     });
   });

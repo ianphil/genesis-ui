@@ -15,7 +15,7 @@ export { HandoffStrategy } from './HandoffStrategy';
 export { MagenticStrategy } from './MagenticStrategy';
 export { ObservabilityEmitter, redactParameters } from './observability';
 export { ApprovalGate } from './approval-gate';
-export type { ApprovalGateConfig, ApprovalHandler, ApprovalLogEntry } from './approval-gate';
+export type { ApprovalGateConfig, ApprovalGateResult, ApprovalHandler, ApprovalLogEntry } from './approval-gate';
 
 export function createStrategy(
   mode: OrchestrationMode,
