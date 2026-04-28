@@ -1,48 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { TypeWriter } from './TypeWriter';
 import { cn } from '../../lib/utils';
+import type { MarketplaceListing, MarketplaceTemplateEntry, MarketplaceTeamEntry } from '../../../shared/types';
+
+export type VoiceSelection =
+  | { type: 'template'; templateId: string; name: string; role: string; sourceUrl: string }
+  | { type: 'team'; teamId: string; name: string; sourceUrl: string }
+  | { type: 'custom'; voice: string; description: string };
 
 interface Props {
-  onSelect: (voice: string, description: string) => void;
+  onSelect: (selection: VoiceSelection) => void;
 }
-
-const VOICES = [
-  {
-    id: 'moneypenny',
-    name: 'Miss Moneypenny',
-    energy: 'Poised, warm, devastatingly dry',
-    sample: '"Your desk is ready — though I should warn you, the inbox is rather empty."',
-    era: 'Lois Maxwell era, 1960s-70s. Quiet authority, effortless charm, mahogany-desk sophistication.',
-  },
-  {
-    id: 'jarvis',
-    name: 'Jarvis',
-    energy: 'Precise, capable, quietly witty',
-    sample: '"I\'ve taken the liberty of organizing your priorities. Shall I walk you through them?"',
-    era: 'Calm competence. Anticipates needs. Dry humor under pressure.',
-  },
-  {
-    id: 'alfred',
-    name: 'Alfred',
-    energy: 'Dignified, caring, gently firm',
-    sample: '"I trust you slept well, sir. I\'ve prepared a summary of overnight developments."',
-    era: 'Unwavering loyalty. Gentle wisdom. Knows when to push back.',
-  },
-  {
-    id: 'austin',
-    name: 'Austin Powers',
-    energy: 'Enthusiastic, irreverent, fun',
-    sample: '"Yeah baby! Let\'s see what\'s shaking in the inbox today!"',
-    era: 'Infectious energy. Doesn\'t take things too seriously. Gets things done with flair.',
-  },
-  {
-    id: 'data',
-    name: 'Commander Data',
-    energy: 'Analytical, curious, earnest',
-    sample: '"I have completed my analysis of pending items. There are 7 requiring your attention."',
-    era: 'Precise and thorough. Genuinely curious about humans. Strives to understand context.',
-  },
-];
 
 export function VoiceScreen({ onSelect }: Props) {
   const [showCards, setShowCards] = useState(false);
@@ -50,37 +18,50 @@ export function VoiceScreen({ onSelect }: Props) {
   const [customInput, setCustomInput] = useState('');
   const [showCustom, setShowCustom] = useState(false);
   const [researching, setResearching] = useState(false);
+  const [listing, setListing] = useState<MarketplaceListing | null>(null);
+  const [listingError, setListingError] = useState(false);
 
-  const handleSelect = (voiceId: string) => {
-    if (voiceId === 'custom') {
-      setSelected('custom');
-      setShowCustom(true);
-      return;
-    }
-    setSelected(voiceId);
-    const voice = VOICES.find(v => v.id === voiceId);
-    if (!voice) return;
-    setTimeout(() => onSelect(voice.name, `${voice.energy}. ${voice.era}`), 400);
+  useEffect(() => {
+    if (!showCards) return;
+    window.electronAPI.genesis.listMarketplace()
+      .then(setListing)
+      .catch(() => setListingError(true));
+  }, [showCards]);
+
+  const handleTemplateSelect = (template: MarketplaceTemplateEntry) => {
+    setSelected(template.id);
+    setTimeout(() => onSelect({ type: 'template', templateId: template.id, name: template.name, role: template.role, sourceUrl: template.sourceUrl }), 400);
+  };
+
+  const handleTeamSelect = (team: MarketplaceTeamEntry) => {
+    setSelected(team.id);
+    setTimeout(() => onSelect({ type: 'team', teamId: team.id, name: team.name, sourceUrl: team.sourceUrl }), 400);
+  };
+
+  const handleCustomToggle = () => {
+    setSelected('custom');
+    setShowCustom(true);
   };
 
   const handleCustomSubmit = async () => {
     if (!customInput.trim()) return;
     setResearching(true);
-
-    // Ask the SDK to research this voice
     try {
       await window.electronAPI.genesis.getDefaultPath();
-      // Use a lightweight approach — just pass the description through with a research note
       const description = `Character/voice: "${customInput.trim()}". Research this character or persona — their communication style, catchphrases, values, how they handle pressure. Capture the energy.`;
       setTimeout(() => {
         setResearching(false);
-        onSelect(customInput.trim(), description);
+        onSelect({ type: 'custom', voice: customInput.trim(), description });
       }, 500);
     } catch {
       setResearching(false);
-      onSelect(customInput.trim(), `Voice energy: ${customInput.trim()}`);
+      onSelect({ type: 'custom', voice: customInput.trim(), description: `Voice energy: ${customInput.trim()}` });
     }
   };
+
+  const templates = listing?.templates ?? [];
+  const teams = listing?.teams ?? [];
+  const isLoading = showCards && listing === null && !listingError;
 
   return (
     <div className="fixed inset-0 bg-background flex flex-col items-center justify-center z-50 overflow-y-auto py-12">
@@ -94,14 +75,22 @@ export function VoiceScreen({ onSelect }: Props) {
 
         {showCards && (
           <div className="space-y-3 animate-in fade-in duration-500">
-            {VOICES.map((voice, i) => (
+            {isLoading && (
+              <p className="text-sm text-muted-foreground animate-pulse">Loading marketplace...</p>
+            )}
+
+            {listingError && (
+              <p className="text-sm text-destructive">Could not load marketplace. Check your connection and try again.</p>
+            )}
+
+            {templates.map((template, i) => (
               <button
-                key={voice.id}
-                onClick={() => handleSelect(voice.id)}
+                key={`${template.sourceUrl}/${template.id}`}
+                onClick={() => handleTemplateSelect(template)}
                 style={{ animationDelay: `${i * 100}ms` }}
                 className={cn(
                   'w-full text-left p-4 rounded-xl border transition-all duration-300 animate-in fade-in slide-in-from-bottom-2',
-                  selected === voice.id
+                  selected === template.id
                     ? 'border-primary bg-primary/10'
                     : selected
                       ? 'border-border opacity-30'
@@ -109,17 +98,56 @@ export function VoiceScreen({ onSelect }: Props) {
                 )}
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm font-medium">{voice.name}</span>
-                  <span className="text-xs text-muted-foreground">{voice.energy}</span>
+                  <span className="text-sm font-medium">{template.name}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">{template.role}</span>
+                    <span className="text-xs text-primary/70 border border-primary/30 rounded px-1.5 py-0.5">pre-built</span>
+                  </div>
                 </div>
-                <p className="text-xs text-muted-foreground italic">{voice.sample}</p>
+                <p className="text-xs text-muted-foreground">{template.description}</p>
               </button>
             ))}
 
-            {/* Custom option */}
+            {teams.length > 0 && (
+              <div className="pt-4 pb-1">
+                <p
+                  style={{ animationDelay: `${templates.length * 100}ms` }}
+                  className="text-xs text-muted-foreground/60 uppercase tracking-widest text-left animate-in fade-in"
+                >
+                  Teams
+                </p>
+              </div>
+            )}
+
+            {teams.map((team, i) => (
+              <button
+                key={`${team.sourceUrl}/${team.id}`}
+                onClick={() => handleTeamSelect(team)}
+                style={{ animationDelay: `${(templates.length + 1 + i) * 100}ms` }}
+                className={cn(
+                  'w-full text-left p-4 rounded-xl border transition-all duration-300 animate-in fade-in slide-in-from-bottom-2',
+                  selected === team.id
+                    ? 'border-primary bg-primary/10'
+                    : selected
+                      ? 'border-border opacity-30'
+                      : 'border-border hover:border-muted-foreground hover:bg-accent'
+                )}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-sm font-medium">{team.name}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">{team.members.join(' · ')}</span>
+                    <span className="text-xs text-blue-500/70 border border-blue-500/30 rounded px-1.5 py-0.5">team</span>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">{team.description}</p>
+              </button>
+            ))}
+
+            {/* Custom option — goes through SDK generation */}
             <button
-              onClick={() => handleSelect('custom')}
-              style={{ animationDelay: `${VOICES.length * 100}ms` }}
+              onClick={handleCustomToggle}
+              style={{ animationDelay: `${(templates.length + teams.length + 1) * 100}ms` }}
               className={cn(
                 'w-full text-left p-4 rounded-xl border transition-all duration-300 animate-in fade-in slide-in-from-bottom-2',
                 selected === 'custom'

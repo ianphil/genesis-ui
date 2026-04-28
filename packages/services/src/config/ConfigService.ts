@@ -7,7 +7,7 @@ import type { AppConfig, AppConfigV1, MindRecord } from '@chamber/shared/types';
 const CONFIG_DIR = path.join(os.homedir(), '.chamber');
 const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');
 
-const DEFAULT_CONFIG: AppConfig = { version: 2, minds: [], activeMindId: null, activeLogin: null, theme: 'dark' };
+const DEFAULT_CONFIG: AppConfig = { version: 2, minds: [], activeMindId: null, activeLogin: null, theme: 'dark', marketplaceSources: [] };
 
 export class ConfigService {
   /** @deprecated Use generateMindId() from mind/generateMindId instead */
@@ -48,12 +48,14 @@ export class ConfigService {
       ? raw.theme
       : 'dark';
     const minds = Array.isArray(raw.minds) ? raw.minds as MindRecord[] : [];
+    const marketplaceSources = Array.isArray(raw.marketplaceSources) ? raw.marketplaceSources : [];
     return this.deduplicateMinds({
       version: 2,
       minds,
       activeMindId: typeof raw.activeMindId === 'string' ? raw.activeMindId : null,
       activeLogin: typeof raw.activeLogin === 'string' ? raw.activeLogin : null,
       theme,
+      marketplaceSources,
     });
   }
 
@@ -68,6 +70,7 @@ export class ConfigService {
       activeMindId: id,
       activeLogin: null,
       theme: v1.theme ?? 'dark',
+      marketplaceSources: [],
     };
   }
 

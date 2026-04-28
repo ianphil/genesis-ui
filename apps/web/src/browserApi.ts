@@ -216,7 +216,15 @@ export function installBrowserApi(): void {
       getDefaultPath: async () => '',
       pickPath: async () => null,
       create: async () => ({ success: false, error: 'Genesis setup is desktop-only in browser mode.' }),
+      installTemplate: async () => ({ success: false, error: 'Genesis setup is desktop-only in browser mode.' }),
+      installTeam: async () => ({ success: false, error: 'Genesis setup is desktop-only in browser mode.' }),
+      listMarketplace: async () => ({ templates: [], teams: [] }),
       onProgress: () => noopUnsubscribe,
+    },
+    settings: {
+      getMarketplaceSources: async () => [],
+      addMarketplaceSource: async () => ({ success: false, error: 'Settings are desktop-only in browser mode.' }),
+      removeMarketplaceSource: async () => undefined,
     },
     chatroom: createBrowserChatroomApi(),
     a2a: {

@@ -2,12 +2,20 @@ import React, { useState, useCallback, useRef } from 'react';
 import { useAppDispatch } from '../../lib/store';
 import { VoidScreen } from './VoidScreen';
 import { RoleScreen } from './RoleScreen';
-import { VoiceScreen } from './VoiceScreen';
+import { VoiceScreen, type VoiceSelection } from './VoiceScreen';
 import { BootScreen } from './BootScreen';
 import { selectPreferredMind } from '../../lib/mindSelection';
 
 type Stage = 'void' | 'role' | 'voice' | 'boot' | 'done';
-type GenesisCreateResult = Awaited<ReturnType<typeof window.electronAPI.genesis.create>>;
+
+type AnyGenesisResult = {
+  success: boolean;
+  mindId?: string;
+  mindPath?: string;
+  mindIds?: string[];
+  welcomeMessage?: string;
+  error?: string;
+} | null;
 
 interface Props {
   onComplete: () => void;
@@ -17,14 +25,56 @@ export function GenesisFlow({ onComplete }: Props) {
   const [stage, setStage] = useState<Stage>('void');
   const [name, setName] = useState('');
   const [role, setRole] = useState('');
-  // Store voice description for the create call
   const [voiceDesc, setVoiceDesc] = useState('');
-  const creationPromiseRef = useRef<Promise<GenesisCreateResult> | null>(null);
+  const creationPromiseRef = useRef<Promise<AnyGenesisResult> | null>(null);
   const dispatch = useAppDispatch();
 
   const handleBegin = useCallback(() => setStage('voice'), []);
 
-  const handleRole= useCallback(async (r: string) => {
+  const handleVoiceSelect = useCallback(async (selection: VoiceSelection) => {
+    if (selection.type === 'template') {
+      // Predefined marketplace mind — skip RoleScreen, install deterministically
+      setName(selection.name);
+      setRole(selection.role);
+      setStage('boot');
+
+      const defaultPath = await window.electronAPI.genesis.getDefaultPath();
+      const installPromise = window.electronAPI.genesis.installTemplate({
+        templateId: selection.templateId,
+        basePath: defaultPath,
+        sourceUrl: selection.sourceUrl,
+      }).catch((error: unknown) => ({
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+      creationPromiseRef.current = installPromise;
+      await installPromise;
+    } else if (selection.type === 'team') {
+      // Pre-configured team — install all members, then open chatroom
+      setName(selection.name);
+      setRole('Team');
+      setStage('boot');
+
+      const defaultPath = await window.electronAPI.genesis.getDefaultPath();
+      const installPromise = window.electronAPI.genesis.installTeam({
+        teamId: selection.teamId,
+        basePath: defaultPath,
+        sourceUrl: selection.sourceUrl,
+      }).catch((error: unknown) => ({
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+      creationPromiseRef.current = installPromise;
+      await installPromise;
+    } else {
+      // Custom voice — proceed to RoleScreen then SDK generation
+      setName(selection.voice);
+      setVoiceDesc(selection.description);
+      setTimeout(() => setStage('role'), 300);
+    }
+  }, []);
+
+  const handleRole = useCallback(async (r: string) => {
     setRole(r);
     setStage('boot');
 
@@ -40,18 +90,8 @@ export function GenesisFlow({ onComplete }: Props) {
       error: error instanceof Error ? error.message : String(error),
     }));
     creationPromiseRef.current = creationPromise;
-    const result = await creationPromise;
-
-    if (!result.success) {
-      console.error('[Genesis] Failed:', result.error);
-    }
+    await creationPromise;
   }, [name, voiceDesc]);
-
-  const handleVoiceWithDesc = useCallback((voiceName: string, desc: string) => {
-    setName(voiceName);
-    setVoiceDesc(desc);
-    setTimeout(() => setStage('role'), 300);
-  }, []);
 
   const handleBootComplete = useCallback(async () => {
     const result = await creationPromiseRef.current;
@@ -62,11 +102,19 @@ export function GenesisFlow({ onComplete }: Props) {
 
     const loadedMinds = await window.electronAPI.mind.list();
     dispatch({ type: 'SET_MINDS', payload: loadedMinds });
-    const mindToSelect = selectPreferredMind(loadedMinds, { mindId: result.mindId, mindPath: result.mindPath });
+
+    // For single minds use mindId/mindPath; for team installs use first member
+    const primaryMindId = result.mindId ?? result.mindIds?.[0];
+    const mindToSelect = selectPreferredMind(loadedMinds, { mindId: primaryMindId, mindPath: result.mindPath });
     if (mindToSelect) {
       dispatch({ type: 'SET_ACTIVE_MIND', payload: mindToSelect.mindId });
     }
-    dispatch({ type: 'NEW_CONVERSATION' });
+
+    // Only open a new conversation for single-mind installs
+    if (!result.mindIds) {
+      dispatch({ type: 'NEW_CONVERSATION' });
+    }
+
     setStage('done');
     onComplete();
   }, [dispatch, onComplete]);
@@ -75,7 +123,7 @@ export function GenesisFlow({ onComplete }: Props) {
     case 'void':
       return <VoidScreen onBegin={handleBegin} />;
     case 'voice':
-      return <VoiceScreen onSelect={handleVoiceWithDesc} />;
+      return <VoiceScreen onSelect={handleVoiceSelect} />;
     case 'role':
       return <RoleScreen name={name} onSelect={handleRole} />;
     case 'boot':

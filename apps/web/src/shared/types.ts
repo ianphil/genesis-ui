@@ -179,6 +179,8 @@ export interface ElectronAPI {
     getDefaultPath: () => Promise<string>;
     pickPath: () => Promise<string | null>;
     create: (config: { name: string; role: string; voice: string; voiceDescription: string; basePath: string }) => Promise<{ success: boolean; mindId?: string; mindPath?: string; error?: string }>;
+    installTemplate: (config: { templateId: string; basePath: string }) => Promise<{ success: boolean; mindId?: string; mindPath?: string; error?: string }>;
+    installTeam: (config: { teamId: string; basePath: string }) => Promise<{ success: boolean; mindIds?: string[]; welcomeMessage?: string; error?: string }>;
     onProgress: (callback: (progress: { step: string; detail: string }) => void) => () => void;
   };
   chatroom: ChatroomAPI;

@@ -45,7 +45,15 @@ const electronAPI: ElectronAPI = {
     getDefaultPath: () => ipcRenderer.invoke('genesis:getDefaultPath'),
     pickPath: () => ipcRenderer.invoke('genesis:pickPath'),
     create: (config) => ipcRenderer.invoke('genesis:create', config),
+    installTemplate: (config) => ipcRenderer.invoke('genesis:installTemplate', config),
+    installTeam: (config) => ipcRenderer.invoke('genesis:installTeam', config),
+    listMarketplace: () => ipcRenderer.invoke('genesis:listMarketplace'),
     onProgress: (callback) => createIpcListener(ipcRenderer, 'genesis:progress', callback),
+  },
+  settings: {
+    getMarketplaceSources: () => ipcRenderer.invoke('settings:getMarketplaceSources'),
+    addMarketplaceSource: (url, label) => ipcRenderer.invoke('settings:addMarketplaceSource', url, label),
+    removeMarketplaceSource: (url) => ipcRenderer.invoke('settings:removeMarketplaceSource', url),
   },
   chatroom: {
     send: (message: string, model?: string) => ipcRenderer.invoke('chatroom:send', message, model),

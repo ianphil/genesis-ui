@@ -145,7 +145,15 @@ export function mockElectronAPI(): ElectronAPI {
       getDefaultPath: vi.fn().mockResolvedValue('C:\\Users\\test\\agents'),
       pickPath: vi.fn().mockResolvedValue(null),
       create: vi.fn().mockResolvedValue({ success: true }),
+      installTemplate: vi.fn().mockResolvedValue({ success: true }),
+      installTeam: vi.fn().mockResolvedValue({ success: true, mindIds: [] }),
+      listMarketplace: vi.fn().mockResolvedValue({ templates: [], teams: [] }),
       onProgress: vi.fn().mockReturnValue(vi.fn()),
+    },
+    settings: {
+      getMarketplaceSources: vi.fn().mockResolvedValue([]),
+      addMarketplaceSource: vi.fn().mockResolvedValue({ success: true }),
+      removeMarketplaceSource: vi.fn().mockResolvedValue(undefined),
     },
     chatroom: {
       send: vi.fn().mockResolvedValue(undefined),

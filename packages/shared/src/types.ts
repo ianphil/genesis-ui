@@ -113,6 +113,44 @@ export interface AppConfig {
   activeMindId: string | null;
   activeLogin: string | null;
   theme: 'light' | 'dark' | 'system';
+  marketplaceSources: MarketplaceSource[];
+}
+
+/** A configured marketplace source — GitHub repo slug or HTTPS URL */
+export interface MarketplaceSource {
+  url: string;
+  label?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Marketplace listing — returned by genesis:listMarketplace IPC
+// ---------------------------------------------------------------------------
+
+export interface MarketplaceTemplateEntry {
+  id: string;
+  name: string;
+  role: string;
+  description: string;
+  tags: string[];
+  /** The source URL this template was fetched from, e.g. "ianphil/genesis-minds" */
+  sourceUrl: string;
+  sourceLabel?: string;
+}
+
+export interface MarketplaceTeamEntry {
+  id: string;
+  name: string;
+  description: string;
+  members: string[];
+  tags: string[];
+  /** The source URL this team was fetched from */
+  sourceUrl: string;
+  sourceLabel?: string;
+}
+
+export interface MarketplaceListing {
+  templates: MarketplaceTemplateEntry[];
+  teams: MarketplaceTeamEntry[];
 }
 
 export interface LensViewManifest {
@@ -179,7 +217,15 @@ export interface ElectronAPI {
     getDefaultPath: () => Promise<string>;
     pickPath: () => Promise<string | null>;
     create: (config: { name: string; role: string; voice: string; voiceDescription: string; basePath: string }) => Promise<{ success: boolean; mindId?: string; mindPath?: string; error?: string }>;
+    installTemplate: (config: { templateId: string; basePath: string; sourceUrl?: string }) => Promise<{ success: boolean; mindId?: string; mindPath?: string; error?: string }>;
+    installTeam: (config: { teamId: string; basePath: string; sourceUrl?: string }) => Promise<{ success: boolean; mindIds?: string[]; welcomeMessage?: string; error?: string }>;
+    listMarketplace: () => Promise<MarketplaceListing>;
     onProgress: (callback: (progress: { step: string; detail: string }) => void) => () => void;
+  };
+  settings: {
+    getMarketplaceSources: () => Promise<MarketplaceSource[]>;
+    addMarketplaceSource: (url: string, label?: string) => Promise<{ success: boolean; error?: string }>;
+    removeMarketplaceSource: (url: string) => Promise<void>;
   };
   chatroom: ChatroomAPI;
   a2a: {

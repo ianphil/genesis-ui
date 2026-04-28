@@ -20,7 +20,9 @@ import {
   MessageRouter,
   MindManager,
   MindScaffold,
+  MarketplaceClient,
   TaskManager,
+  TemplateInstaller,
   TurnQueue,
   ViewDiscovery,
   configureSdkRuntimeLayout,
@@ -39,6 +41,7 @@ import { setupGenesisIPC } from './main/ipc/genesis';
 import { setupAuthIPC } from './main/ipc/auth';
 import { setupA2AIPC } from './main/ipc/a2a';
 import { setupChatroomIPC } from './main/ipc/chatroom';
+import { setupSettingsIPC } from './main/ipc/settings';
 
 import { EventEmitter } from 'events';
 import { wireLifecycleEvents } from './main/wireLifecycleEvents';
@@ -110,6 +113,8 @@ const authService = new AuthService(
   `Chamber/${app.getVersion()}`,
 );
 const scaffold = new MindScaffold();
+const marketplace = new MarketplaceClient();
+const installer = new TemplateInstaller(marketplace);
 const viewDiscovery = new ViewDiscovery();
 
 // --- Services (business rules, all dependencies injected) ---
@@ -318,7 +323,8 @@ app.on('ready', async () => {
     windowIcon,
   });
   setupLensIPC(viewDiscovery, mindManager);
-  setupGenesisIPC(mindManager, scaffold);
+  setupGenesisIPC(mindManager, scaffold, installer, chatroomService, marketplace, configService);
+  setupSettingsIPC(configService);
   setupAuthIPC(authService, mindManager);
   setupA2AIPC(a2aEventBus, agentCardRegistry, taskManager);
   setupChatroomIPC(chatroomService);

@@ -51,6 +51,7 @@ export class ChatroomService extends EventEmitter {
   private groupChatConfig: GroupChatConfig | null = null;
   private handoffConfig: HandoffConfig | null = null;
   private magneticConfig: MagenticConfig | null = null;
+  private participantFilter: Set<string> | null = null;
   private readonly persistPath: string;
   private readonly persistDir: string;
   private ledgerPersistTimer: ReturnType<typeof setTimeout> | null = null;
@@ -104,10 +105,11 @@ export class ChatroomService extends EventEmitter {
 
     const roundId = randomUUID();
 
-    // Snapshot participants (only ready minds)
+    // Snapshot participants (only ready minds, filtered to team if set)
     const participants = this.sessionFactory
       .listMinds()
-      .filter((m) => m.status === 'ready');
+      .filter((m) => m.status === 'ready')
+      .filter((m) => !this.participantFilter || this.participantFilter.has(m.mindId));
 
     // Create and persist user message
     const userMsg = this.createUserMessage(userMessage, roundId);
@@ -206,6 +208,14 @@ export class ChatroomService extends EventEmitter {
       mode: this.orchestrationMode,
       config: this.groupChatConfig ?? this.handoffConfig ?? this.magneticConfig,
     };
+  }
+
+  /**
+   * Restrict chatroom participation to a specific subset of loaded minds.
+   * Pass null to allow all ready minds to participate (default behavior).
+   */
+  setParticipants(mindIds: string[] | null): void {
+    this.participantFilter = mindIds ? new Set(mindIds) : null;
   }
 
   getHistory(): ChatroomMessage[] {
