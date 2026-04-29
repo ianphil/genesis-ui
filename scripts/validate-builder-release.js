@@ -62,13 +62,18 @@ function assertSigned(filePath, expectedPublisherName) {
 
   const script = [
     '$ErrorActionPreference = "Stop"',
+    'Import-Module Microsoft.PowerShell.Security -ErrorAction Stop',
     `$sig = Get-AuthenticodeSignature -LiteralPath ${JSON.stringify(filePath)}`,
     '$sig | Select-Object Status, StatusMessage, @{Name="Subject";Expression={$_.SignerCertificate.Subject}} | ConvertTo-Json -Compress',
   ].join('; ');
-  const result = spawnSync('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script], {
-    encoding: 'utf8',
-    windowsHide: true,
-  });
+  const result = spawnSync(
+    process.env.CHAMBER_SIGN_POWERSHELL || 'pwsh',
+    ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script],
+    {
+      encoding: 'utf8',
+      windowsHide: true,
+    }
+  );
 
   if (result.status !== 0) {
     throw new Error(`Authenticode validation failed:\n${result.stdout}${result.stderr}`.trim());
