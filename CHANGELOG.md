@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.34.1 (2026-04-28)
+
+### Packaging
+
+- **Share the packaged renderer path** — Forge, Vite, and the Windows Sandbox preflight now use one shared renderer path constant so packaged renderer checks cannot drift from the configured renderer output. (#146)
+
 ## v0.34.0 (2026-04-28)
 
 ### Desktop updates

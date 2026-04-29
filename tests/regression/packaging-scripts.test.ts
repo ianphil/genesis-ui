@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 
 import packageJson from '../../package.json';
+import {
+  PACKAGED_RENDERER_ENTRY,
+  PACKAGED_RENDERER_NAME,
+  PACKAGED_RENDERER_RELATIVE_DIR,
+} from '../../config/packaged-renderer.cjs';
 
 describe('packaging scripts', () => {
   it('builds generated server resources before Electron packaging commands', () => {
@@ -50,5 +55,21 @@ describe('packaging scripts', () => {
     expect(releaseWorkflow).toContain('azure/login@v2');
     expect(releaseWorkflow).toContain('CHAMBER_REQUIRE_WINDOWS_SIGNATURE');
     expect(releaseWorkflow).not.toContain('AZURE_CLIENT_SECRET');
+  });
+
+  it('shares the packaged renderer path across Forge, Vite, and sandbox preflight', () => {
+    const forgeConfig = readFileSync('forge.config.ts', 'utf-8');
+    const viteElectronConfig = readFileSync('apps/web/vite.electron.config.ts', 'utf-8');
+    const sandboxTest = readFileSync('scripts/sandbox-test.js', 'utf-8');
+
+    expect(PACKAGED_RENDERER_NAME).toBe('main_window');
+    expect(PACKAGED_RENDERER_RELATIVE_DIR).toBe(`.vite/renderer/${PACKAGED_RENDERER_NAME}`);
+    expect(PACKAGED_RENDERER_ENTRY).toBe(
+      `/${PACKAGED_RENDERER_RELATIVE_DIR}/index.html`
+    );
+    expect(forgeConfig).toContain('PACKAGED_RENDERER_NAME');
+    expect(viteElectronConfig).toContain('PACKAGED_RENDERER_RELATIVE_DIR');
+    expect(sandboxTest).toContain('PACKAGED_RENDERER_ENTRY');
+    expect(sandboxTest).not.toContain('/.vite/renderer/main_window/index.html');
   });
 });

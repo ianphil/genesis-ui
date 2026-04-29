@@ -12,6 +12,7 @@ const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
 const asar = require('@electron/asar');
+const { PACKAGED_RENDERER_ENTRY } = require('../config/packaged-renderer.cjs');
 
 const repoRoot = path.resolve(__dirname, '..');
 const builderDir = path.join(repoRoot, 'out', 'builder');
@@ -43,10 +44,9 @@ if (!fs.existsSync(appAsarPath)) {
 }
 
 const appAsarFiles = asar.listPackage(appAsarPath);
-const rendererEntry = '/.vite/renderer/main_window/index.html';
 const normalizedAppAsarFiles = appAsarFiles.map((file) => file.replaceAll('\\', '/'));
-if (!normalizedAppAsarFiles.includes(rendererEntry)) {
-  console.error(`Packaged app is missing renderer entry ${rendererEntry}.`);
+if (!normalizedAppAsarFiles.includes(PACKAGED_RENDERER_ENTRY)) {
+  console.error(`Packaged app is missing renderer entry ${PACKAGED_RENDERER_ENTRY}.`);
   process.exit(1);
 }
 

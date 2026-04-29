@@ -8,6 +8,7 @@ import { AutoUnpackNativesPlugin } from '@electron-forge/plugin-auto-unpack-nati
 import { VitePlugin } from '@electron-forge/plugin-vite';
 import { FusesPlugin } from '@electron-forge/plugin-fuses';
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
+import { PACKAGED_RENDERER_NAME } from './config/packaged-renderer.cjs';
 
 const enableMacOSSigning = process.platform === 'darwin' && process.env.ENABLE_MACOS_SIGNING === 'true';
 const enableMacOSNotarization =
@@ -108,7 +109,7 @@ const config: ForgeConfig = {
       ],
       renderer: [
         {
-          name: 'main_window',
+          name: PACKAGED_RENDERER_NAME,
           config: 'apps/web/vite.electron.config.ts',
         },
       ],
