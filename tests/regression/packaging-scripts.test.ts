@@ -30,4 +30,23 @@ describe('packaging scripts', () => {
     expect(workflow).toContain("if: steps.version-bump.outputs.run-package == 'true'");
     expect(workflow).toContain('run: npm run package');
   });
+
+  it('keeps signed updater verification wired into builder releases', () => {
+    const builderConfig = readFileSync('config/electron-builder.config.cjs', 'utf-8');
+    const prepareBuilder = readFileSync('scripts/prepare-builder-prepackaged.js', 'utf-8');
+    const validateBuilder = readFileSync('scripts/validate-builder-release.js', 'utf-8');
+    const releaseWorkflow = readFileSync('.github/workflows/release.yml', 'utf-8');
+
+    expect(builderConfig).toContain('signtoolOptions');
+    expect(builderConfig).toContain('sign-windows-trusted-signing.js');
+    expect(builderConfig).not.toContain('azureSignOptions');
+    expect(prepareBuilder).toContain('publisherName:');
+    expect(prepareBuilder).toContain('CHAMBER_WINDOWS_SIGNING');
+    expect(validateBuilder).toContain('assertAppUpdatePublisherName');
+    expect(validateBuilder).toContain('matchesPublisherName');
+    expect(validateBuilder).toContain('SignerCertificate.Subject');
+    expect(releaseWorkflow).toContain('azure/login@v2');
+    expect(releaseWorkflow).toContain('CHAMBER_REQUIRE_WINDOWS_SIGNATURE');
+    expect(releaseWorkflow).not.toContain('AZURE_CLIENT_SECRET');
+  });
 });

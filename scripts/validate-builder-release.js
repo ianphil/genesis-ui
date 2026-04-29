@@ -3,6 +3,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const { parseDn } = require('builder-util-runtime');
 
 const repoRoot = path.resolve(__dirname, '..');
 
@@ -42,7 +43,18 @@ function computeSha512Base64(filePath) {
   return hash.digest('base64');
 }
 
-function assertSigned(filePath) {
+function matchesPublisherName(publisherName, signerSubject) {
+  const publisherDn = parseDn(publisherName);
+  const signerDn = parseDn(signerSubject);
+
+  if (publisherDn.size > 0) {
+    return Array.from(publisherDn.keys()).every((key) => publisherDn.get(key) === signerDn.get(key));
+  }
+
+  return publisherName === signerDn.get('CN');
+}
+
+function assertSigned(filePath, expectedPublisherName) {
   if (process.platform !== 'win32') {
     throw new Error('Windows signature validation must run on Windows.');
   }
@@ -67,6 +79,49 @@ function assertSigned(filePath) {
       `Expected a valid Authenticode signature for ${filePath}; got ${signature.Status}: ${signature.StatusMessage}`,
     );
   }
+
+  if (!signature.Subject || !matchesPublisherName(expectedPublisherName, signature.Subject)) {
+    throw new Error(
+      `Installer signer does not match publisherName. Expected ${expectedPublisherName}, found ${
+        signature.Subject ?? 'no signer subject'
+      }.`
+    );
+  }
+}
+
+function readAppUpdatePublisherName(appUpdatePath) {
+  if (!fs.existsSync(appUpdatePath)) {
+    throw new Error(`Missing packaged updater config: ${appUpdatePath}`);
+  }
+
+  const raw = fs.readFileSync(appUpdatePath, 'utf8');
+  const publisherName = raw.match(/^publisherName:\s*(.+)$/m)?.[1]?.trim();
+  if (!publisherName) {
+    throw new Error(`Missing publisherName in packaged updater config: ${appUpdatePath}`);
+  }
+
+  try {
+    return JSON.parse(publisherName);
+  } catch {
+    return publisherName.replace(/^['"]|['"]$/g, '');
+  }
+}
+
+function assertAppUpdatePublisherName() {
+  const expectedPublisherName = process.env.AZURE_TRUSTED_SIGNING_PUBLISHER_NAME?.trim();
+  if (!expectedPublisherName) {
+    throw new Error('Missing AZURE_TRUSTED_SIGNING_PUBLISHER_NAME for signed release validation.');
+  }
+
+  const appUpdatePath = path.join(repoRoot, 'out', 'Chamber-win32-x64', 'resources', 'app-update.yml');
+  const actualPublisherName = readAppUpdatePublisherName(appUpdatePath);
+  if (actualPublisherName !== expectedPublisherName) {
+    throw new Error(
+      `Packaged updater publisherName mismatch. Expected ${expectedPublisherName}, found ${actualPublisherName}.`
+    );
+  }
+
+  return actualPublisherName;
 }
 
 function main() {
@@ -107,7 +162,8 @@ function main() {
   }
 
   if (process.env.CHAMBER_REQUIRE_WINDOWS_SIGNATURE === 'true') {
-    assertSigned(installerPath);
+    const publisherName = assertAppUpdatePublisherName();
+    assertSigned(installerPath, publisherName);
   }
 
   console.log(`Validated electron-builder release artifacts for ${expectedVersion}.`);

@@ -30,14 +30,10 @@ const config = {
     ],
     ...(signingEnabled
       ? {
-          azureSignOptions: {
+          signtoolOptions: {
             publisherName: requireEnv('AZURE_TRUSTED_SIGNING_PUBLISHER_NAME'),
-            endpoint: requireEnv('AZURE_TRUSTED_SIGNING_ENDPOINT'),
-            certificateProfileName: requireEnv('AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME'),
-            codeSigningAccountName: requireEnv('AZURE_TRUSTED_SIGNING_ACCOUNT_NAME'),
-            fileDigest: 'SHA256',
-            timestampRfc3161: 'http://timestamp.acs.microsoft.com',
-            timestampDigest: 'SHA256',
+            signingHashAlgorithms: ['sha256'],
+            sign: path.join(repoRoot, 'scripts', 'sign-windows-trusted-signing.js'),
           },
         }
       : {

@@ -97,8 +97,6 @@ jobs:
         run: npm run make:builder
         env:
           CHAMBER_WINDOWS_SIGNING: 'true'
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           AZURE_TRUSTED_SIGNING_ENDPOINT: https://eus.codesigning.azure.net/
           AZURE_TRUSTED_SIGNING_ACCOUNT_NAME: chamber-signing
           AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME: chamber-public
@@ -108,6 +106,7 @@ jobs:
         run: node scripts/validate-builder-release.js --artifacts-dir=out/builder --version=${{ needs.check-version.outputs.version }}
         env:
           CHAMBER_REQUIRE_WINDOWS_SIGNATURE: 'true'
+          AZURE_TRUSTED_SIGNING_PUBLISHER_NAME: ${{ secrets.AZURE_TRUSTED_SIGNING_PUBLISHER_NAME }}
 
       - name: Stage artifacts
         shell: pwsh
