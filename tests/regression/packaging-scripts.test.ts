@@ -4,8 +4,8 @@ import { readFileSync } from 'node:fs';
 import packageJson from '../../package.json';
 
 describe('packaging scripts', () => {
-  it('builds generated server resources before Electron Forge packaging commands', () => {
-    for (const scriptName of ['package', 'make', 'publish'] as const) {
+  it('builds generated server resources before Electron packaging commands', () => {
+    for (const scriptName of ['package', 'make:forge', 'publish'] as const) {
       const script = packageJson.scripts[scriptName];
 
       expect(script).toContain('npm --workspace @chamber/server run build');
@@ -13,6 +13,12 @@ describe('packaging scripts', () => {
         script.indexOf('electron-forge')
       );
     }
+
+    expect(packageJson.scripts.make).toBe('npm run make:builder');
+    expect(packageJson.scripts['make:builder']).toContain('npm run package');
+    expect(packageJson.scripts['make:builder'].indexOf('npm run package')).toBeLessThan(
+      packageJson.scripts['make:builder'].indexOf('electron-builder')
+    );
   });
 
   it('runs PR packaging only for major or minor version bumps', () => {
