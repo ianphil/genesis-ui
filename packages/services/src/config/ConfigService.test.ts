@@ -86,6 +86,29 @@ describe('ConfigService', () => {
       });
     });
 
+    it('preserves a saved disabled state for the default public marketplace', () => {
+      vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify({
+        version: 2,
+        minds: [],
+        activeMindId: null,
+        activeLogin: null,
+        theme: 'dark',
+        marketplaceRegistries: [
+          {
+            ...DEFAULT_MARKETPLACES[0],
+            enabled: false,
+          },
+        ],
+      }));
+
+      expect(svc.load().marketplaceRegistries).toEqual([
+        {
+          ...DEFAULT_MARKETPLACES[0],
+          enabled: false,
+        },
+      ]);
+    });
+
     it('migrates v1 config with mindPath to v2', () => {
       vi.mocked(fs.readFileSync).mockReturnValue(
         JSON.stringify({ mindPath: '/tmp/agents/q', theme: 'light' }),

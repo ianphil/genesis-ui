@@ -96,7 +96,7 @@ export class ConfigService {
     const registries = Array.isArray(raw)
       ? raw.filter(isMarketplaceRegistry)
       : [];
-    return deduplicateRegistries([DEFAULT_MARKETPLACE_REGISTRY, ...registries]);
+    return deduplicateRegistries([...registries, DEFAULT_MARKETPLACE_REGISTRY]);
   }
 
   private deduplicateMinds(config: AppConfig): AppConfig {

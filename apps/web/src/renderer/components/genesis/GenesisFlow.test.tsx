@@ -163,7 +163,11 @@ describe('GenesisFlow', () => {
     fireEvent.click(await screen.findByText('Choose template'));
     fireEvent.click(await screen.findByText('Boot complete'));
 
-    expect(api.genesis.createFromTemplate).toHaveBeenCalledWith({ templateId: 'lucy', basePath: 'C:\\Users\\test\\agents' });
+    expect(api.genesis.createFromTemplate).toHaveBeenCalledWith({
+      templateId: 'lucy',
+      marketplaceId: undefined,
+      basePath: 'C:\\Users\\test\\agents',
+    });
     expect(api.genesis.create).not.toHaveBeenCalled();
     expect(onComplete).not.toHaveBeenCalled();
 

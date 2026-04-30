@@ -25,6 +25,7 @@ type SourceProvider =
 
 export interface GenesisMindTemplateInstallRequest {
   templateId: string;
+  marketplaceId?: string;
   basePath: string;
 }
 
@@ -36,7 +37,10 @@ export class GenesisMindTemplateInstaller {
   ) {}
 
   async install(request: GenesisMindTemplateInstallRequest): Promise<string> {
-    const template = this.listTemplates().find((item) => item.id === request.templateId);
+    const template = this.listTemplates().find((item) =>
+      item.id === request.templateId
+      && (!request.marketplaceId || item.source.marketplaceId === request.marketplaceId)
+    );
     if (!template) {
       throw new Error(`Genesis mind template not found: ${request.templateId}`);
     }

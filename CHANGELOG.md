@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.35.0 (2026-04-30)
+
+### Genesis marketplace
+
+- **Aggregate followed Genesis marketplaces** — Chamber now persists the default public Genesis marketplace in app config and discovers templates across enabled marketplace registries while preserving accessible sources when a private/internal registry cannot be read. (#169)
+
 ## v0.34.2 (2026-04-29)
 
 ### Genesis

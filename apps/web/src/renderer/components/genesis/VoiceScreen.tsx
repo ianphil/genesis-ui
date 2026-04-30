@@ -26,7 +26,7 @@ export function VoiceScreen({ templates, templateError, onSelect, onSelectTempla
   };
 
   const handleTemplateSelect = (template: GenesisMindTemplate) => {
-    setSelected(template.id);
+    setSelected(templateKey(template));
     setTimeout(() => onSelectTemplate(template), 400);
   };
 
@@ -75,12 +75,12 @@ export function VoiceScreen({ templates, templateError, onSelect, onSelectTempla
 
             {templates.map((template, i) => (
               <button
-                key={template.id}
+                key={templateKey(template)}
                 onClick={() => handleTemplateSelect(template)}
                 style={{ animationDelay: `${i * 100}ms` }}
                 className={cn(
                   'w-full text-left p-4 rounded-xl border transition-all duration-300 animate-in fade-in slide-in-from-bottom-2',
-                  selected === template.id
+                  selected === templateKey(template)
                     ? 'border-primary bg-primary/10'
                     : selected
                       ? 'border-border opacity-30'
@@ -144,4 +144,8 @@ export function VoiceScreen({ templates, templateError, onSelect, onSelectTempla
       </div>
     </div>
   );
+}
+
+function templateKey(template: GenesisMindTemplate): string {
+  return `${template.source.marketplaceId ?? `${template.source.owner}/${template.source.repo}`}:${template.id}`;
 }

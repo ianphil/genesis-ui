@@ -10,15 +10,16 @@ vi.mock('node:child_process', () => ({ execSync: vi.fn() }));
 
 class FakeRegistryClient {
   tree: TreeEntry[] = [];
+  treeByRepo = new Map<string, TreeEntry[]>();
   json = new Map<string, unknown>();
   blobs = new Map<string, Buffer>();
 
-  fetchTree(): TreeEntry[] {
-    return this.tree;
+  fetchTree(owner = 'ianphil', repo = 'genesis-minds'): TreeEntry[] {
+    return this.treeByRepo.get(repoKey(owner, repo)) ?? this.tree;
   }
 
-  fetchJsonContent(_owner: string, _repo: string, filePath: string): unknown {
-    const content = this.json.get(filePath);
+  fetchJsonContent(owner: string, repo: string, filePath: string): unknown {
+    const content = this.json.get(`${repoKey(owner, repo)}:${filePath}`) ?? this.json.get(filePath);
     if (!content) throw new Error(`Missing JSON fixture for ${filePath}`);
     return content;
   }
@@ -90,6 +91,60 @@ describe('GenesisMindTemplateInstaller', () => {
 
     expect(installer.clientFactory.createClient).not.toHaveBeenCalled();
   });
+
+  it('installs the selected marketplace when template ids overlap', async () => {
+    seedMarketplace(registryClient, {
+      owner: 'ianphil',
+      repo: 'genesis-minds',
+      ref: 'master',
+      plugin: 'genesis-minds',
+      id: 'github:ianphil/genesis-minds',
+      label: 'Public Genesis Minds',
+      url: 'https://github.com/ianphil/genesis-minds',
+      enabled: true,
+    }, 'Lucy', '# Public Lucy\n');
+    seedMarketplace(registryClient, {
+      owner: 'agency-microsoft',
+      repo: 'genesis-minds',
+      ref: 'main',
+      plugin: 'genesis-minds',
+      id: 'github:agency-microsoft/genesis-minds',
+      label: 'Agency Microsoft',
+      url: 'https://github.com/agency-microsoft/genesis-minds',
+      enabled: true,
+    }, 'Internal Lucy', '# Internal Lucy\n');
+    const installer = new GenesisMindTemplateInstaller(registryClient, undefined, [
+      {
+        owner: 'ianphil',
+        repo: 'genesis-minds',
+        ref: 'master',
+        plugin: 'genesis-minds',
+        id: 'github:ianphil/genesis-minds',
+        label: 'Public Genesis Minds',
+        url: 'https://github.com/ianphil/genesis-minds',
+        enabled: true,
+      },
+      {
+        owner: 'agency-microsoft',
+        repo: 'genesis-minds',
+        ref: 'main',
+        plugin: 'genesis-minds',
+        id: 'github:agency-microsoft/genesis-minds',
+        label: 'Agency Microsoft',
+        url: 'https://github.com/agency-microsoft/genesis-minds',
+        enabled: true,
+      },
+    ]);
+
+    const mindPath = await installer.install({
+      templateId: 'lucy',
+      marketplaceId: 'github:agency-microsoft/genesis-minds',
+      basePath,
+    });
+
+    expect(mindPath).toBe(path.join(basePath, 'internal-lucy'));
+    expect(readFileSync(path.join(mindPath, 'SOUL.md'), 'utf8')).toBe('# Internal Lucy\n');
+  });
 });
 
 function seedLucyMarketplace(registryClient: FakeRegistryClient): void {
@@ -138,4 +193,56 @@ function lucyManifest(): Record<string, unknown> {
       '.working-memory/log.md',
     ],
   };
+}
+
+function seedMarketplace(
+  registryClient: FakeRegistryClient,
+  source: {
+    owner: string;
+    repo: string;
+    ref: string;
+    plugin: string;
+    id: string;
+    label: string;
+    url: string;
+    enabled: boolean;
+  },
+  displayName: string,
+  soulContent: string,
+): void {
+  const key = repoKey(source.owner, source.repo);
+  const manifestPath = `plugins/${source.plugin}/minds/lucy/mind.json`;
+  registryClient.treeByRepo.set(key, [
+    { path: 'marketplace-config.json', type: 'blob', sha: `${key}-marketplace` },
+    { path: `plugins/${source.plugin}/plugin.json`, type: 'blob', sha: `${key}-plugin` },
+    { path: manifestPath, type: 'blob', sha: `${key}-manifest` },
+    { path: `plugins/${source.plugin}/minds/lucy/SOUL.md`, type: 'blob', sha: `${key}-soul` },
+    { path: `plugins/${source.plugin}/minds/lucy/mind-index.md`, type: 'blob', sha: `${key}-index` },
+    { path: `plugins/${source.plugin}/minds/lucy/.github/agents/lucy.agent.md`, type: 'blob', sha: `${key}-agent` },
+    { path: `plugins/${source.plugin}/minds/lucy/.working-memory/memory.md`, type: 'blob', sha: `${key}-memory` },
+    { path: `plugins/${source.plugin}/minds/lucy/.working-memory/rules.md`, type: 'blob', sha: `${key}-rules` },
+    { path: `plugins/${source.plugin}/minds/lucy/.working-memory/log.md`, type: 'blob', sha: `${key}-log` },
+  ]);
+  registryClient.json.set(`${key}:plugins/${source.plugin}/plugin.json`, {
+    name: source.plugin,
+    minds: [{ id: 'lucy', manifest: 'minds/lucy/mind.json' }],
+  });
+  registryClient.json.set(`${key}:${manifestPath}`, {
+    ...lucyManifest(),
+    displayName,
+  });
+  registryClient.blobs.set(`${key}-manifest`, Buffer.from(JSON.stringify({
+    ...lucyManifest(),
+    displayName,
+  }, null, 2)));
+  registryClient.blobs.set(`${key}-soul`, Buffer.from(soulContent));
+  registryClient.blobs.set(`${key}-index`, Buffer.from('# Mind Index\n'));
+  registryClient.blobs.set(`${key}-agent`, Buffer.from('---\nname: lucy\n---\n'));
+  registryClient.blobs.set(`${key}-memory`, Buffer.from('# Memory\n'));
+  registryClient.blobs.set(`${key}-rules`, Buffer.from('# Rules\n'));
+  registryClient.blobs.set(`${key}-log`, Buffer.from('# Log\n'));
+}
+
+function repoKey(owner: string, repo: string): string {
+  return `${owner}/${repo}`;
 }

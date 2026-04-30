@@ -81,6 +81,7 @@ export function GenesisFlow({ onComplete }: Props) {
     const defaultPath = await window.electronAPI.genesis.getDefaultPath();
     const creationPromise = window.electronAPI.genesis.createFromTemplate({
       templateId: template.id,
+      marketplaceId: template.source.marketplaceId,
       basePath: defaultPath,
     }).catch((error: unknown) => ({
       success: false,
