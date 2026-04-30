@@ -185,4 +185,83 @@ describe('SettingsView', () => {
       expect(screen.getByRole('combobox')).toBeTruthy();
     });
   });
+
+  it('lists followed marketplaces', async () => {
+    (api.marketplace.listGenesisRegistries as ReturnType<typeof vi.fn>).mockResolvedValue([
+      {
+        id: 'github:ianphil/genesis-minds',
+        label: 'Public Genesis Minds',
+        url: 'https://github.com/ianphil/genesis-minds',
+        owner: 'ianphil',
+        repo: 'genesis-minds',
+        ref: 'master',
+        plugin: 'genesis-minds',
+        enabled: true,
+        isDefault: true,
+      },
+    ]);
+
+    render(<SettingsView />);
+
+    expect(await screen.findByText('Public Genesis Minds')).toBeTruthy();
+    expect(screen.getByText('https://github.com/ianphil/genesis-minds')).toBeTruthy();
+  });
+
+  it('adds a marketplace from settings and refreshes the list', async () => {
+    (api.marketplace.listGenesisRegistries as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          id: 'github:agency-microsoft/genesis-minds',
+          label: 'agency-microsoft/genesis-minds',
+          url: 'https://github.com/agency-microsoft/genesis-minds',
+          owner: 'agency-microsoft',
+          repo: 'genesis-minds',
+          ref: 'main',
+          plugin: 'genesis-minds',
+          enabled: true,
+          isDefault: false,
+        },
+      ]);
+
+    render(<SettingsView />);
+
+    fireEvent.change(await screen.findByLabelText('Marketplace repository URL'), {
+      target: { value: 'https://github.com/agency-microsoft/genesis-minds' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+
+    await waitFor(() => {
+      expect(api.marketplace.addGenesisRegistry).toHaveBeenCalledWith('https://github.com/agency-microsoft/genesis-minds');
+    });
+    expect(await screen.findByText('agency-microsoft/genesis-minds')).toBeTruthy();
+  });
+
+  it('disables, refreshes, and removes marketplaces from settings', async () => {
+    const agencyMarketplace = {
+      id: 'github:agency-microsoft/genesis-minds',
+      label: 'agency-microsoft/genesis-minds',
+      url: 'https://github.com/agency-microsoft/genesis-minds',
+      owner: 'agency-microsoft',
+      repo: 'genesis-minds',
+      ref: 'main',
+      plugin: 'genesis-minds',
+      enabled: true,
+      isDefault: false,
+    };
+    (api.marketplace.listGenesisRegistries as ReturnType<typeof vi.fn>).mockResolvedValue([agencyMarketplace]);
+
+    render(<SettingsView />);
+
+    await screen.findByText('agency-microsoft/genesis-minds');
+    fireEvent.click(screen.getByRole('button', { name: 'Disable' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+
+    await waitFor(() => {
+      expect(api.marketplace.setGenesisRegistryEnabled).toHaveBeenCalledWith('github:agency-microsoft/genesis-minds', false);
+      expect(api.marketplace.refreshGenesisRegistry).toHaveBeenCalledWith('github:agency-microsoft/genesis-minds');
+      expect(api.marketplace.removeGenesisRegistry).toHaveBeenCalledWith('github:agency-microsoft/genesis-minds');
+    });
+  });
 });

@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.37.0 (2026-04-30)
+
+### Genesis marketplace
+
+- **Manage marketplaces in Settings** — Settings now lists followed Genesis marketplaces and lets users add, enable, refresh, and remove non-default marketplace sources from the desktop UI. (#171)
+
 ## v0.36.0 (2026-04-30)
 
 ### Genesis marketplace
