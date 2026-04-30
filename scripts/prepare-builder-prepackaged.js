@@ -4,10 +4,32 @@ const path = require('node:path');
 const { WINDOWS_PUBLISHER_NAME } = require('../config/windows-publisher.cjs');
 
 const repoRoot = path.resolve(__dirname, '..');
-const prepackagedDir = path.join(repoRoot, 'out', 'Chamber-win32-x64');
-const resourcesDir = path.join(prepackagedDir, 'resources');
-const appUpdatePath = path.join(resourcesDir, 'app-update.yml');
 const signingEnabled = process.env.CHAMBER_WINDOWS_SIGNING === 'true';
+
+function parseArgs(argv) {
+  const args = new Map();
+  for (const arg of argv) {
+    const match = arg.match(/^--([^=]+)=(.*)$/);
+    if (match?.[1]) args.set(match[1], match[2] ?? '');
+  }
+  return args;
+}
+
+const cliArgs = parseArgs(process.argv.slice(2));
+const targetPlatform = cliArgs.get('platform') ?? process.platform;
+const targetArch = cliArgs.get('arch') ?? process.arch;
+
+function resolvePrepackagedLayout(platform, arch) {
+  const baseDir = path.join(repoRoot, 'out', `Chamber-${platform}-${arch}`);
+  if (platform === 'darwin') {
+    const resourcesDir = path.join(baseDir, 'Chamber.app', 'Contents', 'Resources');
+    return { baseDir, resourcesDir };
+  }
+  return { baseDir, resourcesDir: path.join(baseDir, 'resources') };
+}
+
+const { baseDir: prepackagedDir, resourcesDir } = resolvePrepackagedLayout(targetPlatform, targetArch);
+const appUpdatePath = path.join(resourcesDir, 'app-update.yml');
 
 function requireDir(dir) {
   if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) {
@@ -20,6 +42,8 @@ function yamlString(value) {
 }
 
 function resolvePublisherName() {
+  if (targetPlatform !== 'win32') return null;
+
   const publisherName = process.env.AZURE_TRUSTED_SIGNING_PUBLISHER_NAME?.trim();
   if (publisherName) {
     return publisherName;
