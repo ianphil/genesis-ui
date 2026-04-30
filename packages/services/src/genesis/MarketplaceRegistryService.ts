@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import path from 'node:path';
 import { promisify } from 'node:util';
 import { DEFAULT_GENESIS_MIND_TEMPLATE_SOURCE } from './GenesisMindTemplateCatalog';
 import type { TreeEntry } from './GitHubRegistryClient';
@@ -7,6 +8,7 @@ import type { AppConfig, MarketplaceRegistry, MarketplaceRegistryActionResult } 
 const execFileAsync = promisify(execFile);
 const GITHUB_OWNER_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/;
 const GITHUB_REPO_PATTERN = /^[A-Za-z0-9._-]+$/;
+const MANIFEST_STRING_FIELDS = ['id', 'displayName', 'description', 'role', 'voice', 'templateVersion', 'root', 'agent'] as const;
 
 interface ConfigStore {
   load(): AppConfig;
@@ -17,6 +19,8 @@ interface RegistryClient {
   fetchTree(owner: string, repo: string, branch: string): Promise<TreeEntry[]>;
   fetchJsonContent(owner: string, repo: string, filePath: string, ref: string): Promise<unknown>;
 }
+
+class MarketplaceManifestError extends Error {}
 
 class AsyncGitHubRegistryClient implements RegistryClient {
   async fetchTree(owner: string, repo: string, branch: string): Promise<TreeEntry[]> {
@@ -49,7 +53,7 @@ export class MarketplaceRegistryService {
     return this.configStore.load().marketplaceRegistries ?? [DEFAULT_GENESIS_MIND_TEMPLATE_SOURCE as MarketplaceRegistry];
   }
 
-  async addGenesisRegistry(rawUrl: string): Promise<MarketplaceRegistryActionResult> {
+  async addGenesisRegistry(rawUrl: unknown): Promise<MarketplaceRegistryActionResult> {
     let registry: MarketplaceRegistry;
     try {
       registry = parseGitHubMarketplaceUrl(rawUrl);
@@ -62,10 +66,10 @@ export class MarketplaceRegistryService {
 
     try {
       await validateGenesisMarketplace(this.registryClient, registry);
-    } catch {
+    } catch (error) {
       return {
         success: false,
-        error: `Unable to access marketplace ${registry.label}. Check your GitHub sign-in or repository access.`,
+        error: marketplaceValidationMessage(registry, error),
       };
     }
 
@@ -84,7 +88,10 @@ export class MarketplaceRegistryService {
     return { success: true, registry };
   }
 
-  async refreshGenesisRegistry(id: string): Promise<MarketplaceRegistryActionResult> {
+  async refreshGenesisRegistry(id: unknown): Promise<MarketplaceRegistryActionResult> {
+    if (typeof id !== 'string') {
+      return { success: false, error: 'Marketplace id must be a string.' };
+    }
     const registry = this.findRegistry(id);
     if (!registry) {
       return { success: false, error: 'Marketplace not found.' };
@@ -93,15 +100,21 @@ export class MarketplaceRegistryService {
     try {
       await validateGenesisMarketplace(this.registryClient, registry);
       return { success: true, registry };
-    } catch {
+    } catch (error) {
       return {
         success: false,
-        error: `Unable to access marketplace ${registry.label}. Check your GitHub sign-in or repository access.`,
+        error: marketplaceValidationMessage(registry, error),
       };
     }
   }
 
-  setGenesisRegistryEnabled(id: string, enabled: boolean): MarketplaceRegistryActionResult {
+  setGenesisRegistryEnabled(id: unknown, enabled: unknown): MarketplaceRegistryActionResult {
+    if (typeof id !== 'string') {
+      return { success: false, error: 'Marketplace id must be a string.' };
+    }
+    if (typeof enabled !== 'boolean') {
+      return { success: false, error: 'Marketplace enabled state must be a boolean.' };
+    }
     const config = this.configStore.load();
     const registries = config.marketplaceRegistries ?? [DEFAULT_GENESIS_MIND_TEMPLATE_SOURCE as MarketplaceRegistry];
     const index = registries.findIndex((registry) => registry.id === id);
@@ -115,7 +128,10 @@ export class MarketplaceRegistryService {
     return { success: true, registry: nextRegistries[index] };
   }
 
-  removeGenesisRegistry(id: string): MarketplaceRegistryActionResult {
+  removeGenesisRegistry(id: unknown): MarketplaceRegistryActionResult {
+    if (typeof id !== 'string') {
+      return { success: false, error: 'Marketplace id must be a string.' };
+    }
     const config = this.configStore.load();
     const registries = config.marketplaceRegistries ?? [DEFAULT_GENESIS_MIND_TEMPLATE_SOURCE as MarketplaceRegistry];
     const registry = registries.find((item) => item.id === id);
@@ -138,7 +154,10 @@ export class MarketplaceRegistryService {
   }
 }
 
-function parseGitHubMarketplaceUrl(rawUrl: string): MarketplaceRegistry {
+function parseGitHubMarketplaceUrl(rawUrl: unknown): MarketplaceRegistry {
+  if (typeof rawUrl !== 'string') {
+    throw new Error('Enter a GitHub marketplace repository URL.');
+  }
   const trimmed = rawUrl.trim();
   if (!trimmed) {
     throw new Error('Enter a GitHub marketplace repository URL.');
@@ -192,22 +211,73 @@ async function validateGenesisMarketplace(registryClient: RegistryClient, regist
 
   const plugin = await registryClient.fetchJsonContent(registry.owner, registry.repo, pluginPath, registry.ref);
   if (!isRecord(plugin) || !Array.isArray(plugin.minds)) {
-    throw new Error(`Plugin manifest ${pluginPath} must define a minds array`);
+    throw new MarketplaceManifestError(`Plugin manifest ${pluginPath} must define a minds array`);
   }
 
   for (const entry of plugin.minds) {
     if (!isRecord(entry) || typeof entry.manifest !== 'string') {
-      throw new Error(`Plugin manifest ${pluginPath} has an invalid minds entry`);
+      throw new MarketplaceManifestError(`Plugin manifest ${pluginPath} has an invalid minds entry`);
     }
     const manifestPath = `plugins/${registry.plugin}/${entry.manifest}`;
     requireBlob(blobPaths, manifestPath);
+    const manifest = await registryClient.fetchJsonContent(registry.owner, registry.repo, manifestPath, registry.ref);
+    validateMindManifest(manifest, manifestPath, blobPaths);
   }
 }
 
 function requireBlob(blobPaths: Set<string>, filePath: string): void {
   if (!blobPaths.has(filePath)) {
-    throw new Error(`Marketplace missing required file: ${filePath}`);
+    throw new MarketplaceManifestError(`Marketplace missing required file: ${filePath}`);
   }
+}
+
+function validateMindManifest(
+  manifest: unknown,
+  manifestPath: string,
+  blobPaths: Set<string>,
+): void {
+  if (!isRecord(manifest)) {
+    throw new MarketplaceManifestError(`Expected ${manifestPath} to contain a JSON object`);
+  }
+  for (const field of MANIFEST_STRING_FIELDS) {
+    if (typeof manifest[field] !== 'string') {
+      throw new MarketplaceManifestError(`Template manifest ${manifestPath} must define string field: ${field}`);
+    }
+  }
+  if (!Array.isArray(manifest.requiredFiles) || manifest.requiredFiles.some((file) => typeof file !== 'string')) {
+    throw new MarketplaceManifestError(`Template manifest ${manifestPath} must define requiredFiles as a string array`);
+  }
+
+  const manifestId = manifest.id as string;
+  const root = manifest.root as string;
+  const manifestDir = path.posix.dirname(manifestPath);
+  const rootPath = safeJoin(manifestDir, root, `Template ${manifestId} has unsafe root path: ${root}`);
+  for (const file of manifest.requiredFiles) {
+    if (!isSafeRelativePath(file)) {
+      throw new MarketplaceManifestError(`Template ${manifestId} has unsafe required file path: ${file}`);
+    }
+    requireBlob(blobPaths, path.posix.join(rootPath, file));
+  }
+}
+
+function safeJoin(base: string, relativePath: string, message: string): string {
+  if (!isSafeRelativePath(relativePath)) {
+    throw new MarketplaceManifestError(message);
+  }
+  return path.posix.normalize(path.posix.join(base, relativePath));
+}
+
+function isSafeRelativePath(value: string): boolean {
+  if (!value || path.posix.isAbsolute(value)) return false;
+  const normalized = path.posix.normalize(value);
+  return normalized === '.' || (!normalized.startsWith('..') && !normalized.includes('/../'));
+}
+
+function marketplaceValidationMessage(registry: MarketplaceRegistry, error: unknown): string {
+  if (error instanceof MarketplaceManifestError) {
+    return `Marketplace ${registry.label} is invalid: ${error.message}`;
+  }
+  return `Unable to access marketplace ${registry.label}. Check your GitHub sign-in or repository access.`;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

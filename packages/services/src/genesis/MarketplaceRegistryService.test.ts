@@ -5,10 +5,12 @@ import type { TreeEntry } from './GitHubRegistryClient';
 
 class FakeRegistryClient {
   fail = false;
+  malformedManifest = false;
+  missingRequiredFile = false;
 
   async fetchTree(): Promise<TreeEntry[]> {
     if (this.fail) throw new Error('not found');
-    return [
+    const tree = [
       { path: 'marketplace-config.json', type: 'blob', sha: 'marketplace' },
       { path: 'plugins/genesis-minds/plugin.json', type: 'blob', sha: 'plugin' },
       { path: 'plugins/genesis-minds/minds/donna/mind.json', type: 'blob', sha: 'manifest' },
@@ -19,11 +21,20 @@ class FakeRegistryClient {
       { path: 'plugins/genesis-minds/minds/donna/.working-memory/rules.md', type: 'blob', sha: 'rules' },
       { path: 'plugins/genesis-minds/minds/donna/.working-memory/log.md', type: 'blob', sha: 'log' },
     ];
+    return this.missingRequiredFile
+      ? tree.filter((entry) => entry.path !== 'plugins/genesis-minds/minds/donna/SOUL.md')
+      : tree;
   }
 
   async fetchJsonContent(_owner: string, _repo: string, filePath: string): Promise<unknown> {
     if (filePath.endsWith('plugin.json')) {
       return { name: 'genesis-minds', minds: [{ id: 'donna', manifest: 'minds/donna/mind.json' }] };
+    }
+    if (this.malformedManifest) {
+      return {
+        id: 'donna',
+        displayName: 'Donna',
+      };
     }
     return {
       id: 'donna',
@@ -114,6 +125,27 @@ describe('MarketplaceRegistryService', () => {
     expect(savedConfigs).toHaveLength(0);
   });
 
+  it('returns a manifest validation error without saving malformed marketplaces', async () => {
+    registryClient.malformedManifest = true;
+    const service = new MarketplaceRegistryService({ load: () => config, save }, registryClient);
+
+    await expect(service.addGenesisRegistry('https://github.com/agency-microsoft/genesis-minds')).resolves.toEqual({
+      success: false,
+      error: 'Marketplace agency-microsoft/genesis-minds is invalid: Template manifest plugins/genesis-minds/minds/donna/mind.json must define string field: description',
+    });
+    expect(savedConfigs).toHaveLength(0);
+  });
+
+  it('returns a manifest validation error when required template files are missing', async () => {
+    registryClient.missingRequiredFile = true;
+    const service = new MarketplaceRegistryService({ load: () => config, save }, registryClient);
+
+    await expect(service.refreshGenesisRegistry('github:ianphil/genesis-minds')).resolves.toEqual({
+      success: false,
+      error: 'Marketplace Public Genesis Minds is invalid: Marketplace missing required file: plugins/genesis-minds/minds/donna/SOUL.md',
+    });
+  });
+
   it('rejects non-GitHub URLs', async () => {
     const service = new MarketplaceRegistryService({ load: () => config, save }, registryClient);
 
@@ -150,6 +182,16 @@ describe('MarketplaceRegistryService', () => {
       registry: expect.objectContaining({ id: 'github:agency-microsoft/genesis-minds' }),
     });
     expect(config.marketplaceRegistries).toHaveLength(1);
+  });
+
+  it('rejects invalid enabled state without mutating config', () => {
+    const service = new MarketplaceRegistryService({ load: () => config, save }, registryClient);
+
+    expect(service.setGenesisRegistryEnabled('github:ianphil/genesis-minds', 'false')).toEqual({
+      success: false,
+      error: 'Marketplace enabled state must be a boolean.',
+    });
+    expect(savedConfigs).toHaveLength(0);
   });
 
   it('does not remove the default marketplace', () => {
