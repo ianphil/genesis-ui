@@ -232,6 +232,9 @@ export interface ElectronAPI {
   marketplace: {
     listGenesisRegistries: () => Promise<MarketplaceRegistry[]>;
     addGenesisRegistry: (url: string) => Promise<MarketplaceRegistryActionResult>;
+    refreshGenesisRegistry: (id: string) => Promise<MarketplaceRegistryActionResult>;
+    setGenesisRegistryEnabled: (id: string, enabled: boolean) => Promise<MarketplaceRegistryActionResult>;
+    removeGenesisRegistry: (id: string) => Promise<MarketplaceRegistryActionResult>;
   };
   chatroom: ChatroomAPI;
   updater: {

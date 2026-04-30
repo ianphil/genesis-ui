@@ -132,4 +132,41 @@ describe('MarketplaceRegistryService', () => {
     });
     expect(savedConfigs).toHaveLength(0);
   });
+
+  it('disables, enables, and removes followed marketplaces', async () => {
+    const service = new MarketplaceRegistryService({ load: () => config, save }, registryClient);
+    await service.addGenesisRegistry('https://github.com/agency-microsoft/genesis-minds');
+
+    expect(service.setGenesisRegistryEnabled('github:agency-microsoft/genesis-minds', false)).toEqual({
+      success: true,
+      registry: expect.objectContaining({ id: 'github:agency-microsoft/genesis-minds', enabled: false }),
+    });
+    expect(service.setGenesisRegistryEnabled('github:agency-microsoft/genesis-minds', true)).toEqual({
+      success: true,
+      registry: expect.objectContaining({ id: 'github:agency-microsoft/genesis-minds', enabled: true }),
+    });
+    expect(service.removeGenesisRegistry('github:agency-microsoft/genesis-minds')).toEqual({
+      success: true,
+      registry: expect.objectContaining({ id: 'github:agency-microsoft/genesis-minds' }),
+    });
+    expect(config.marketplaceRegistries).toHaveLength(1);
+  });
+
+  it('does not remove the default marketplace', () => {
+    const service = new MarketplaceRegistryService({ load: () => config, save }, registryClient);
+
+    expect(service.removeGenesisRegistry('github:ianphil/genesis-minds')).toEqual({
+      success: false,
+      error: 'The default marketplace cannot be removed.',
+    });
+  });
+
+  it('refreshes a followed marketplace by validating access', async () => {
+    const service = new MarketplaceRegistryService({ load: () => config, save }, registryClient);
+
+    await expect(service.refreshGenesisRegistry('github:ianphil/genesis-minds')).resolves.toEqual({
+      success: true,
+      registry: expect.objectContaining({ id: 'github:ianphil/genesis-minds' }),
+    });
+  });
 });

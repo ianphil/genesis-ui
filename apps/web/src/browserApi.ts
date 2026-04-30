@@ -223,6 +223,9 @@ export function installBrowserApi(): void {
     marketplace: {
       listGenesisRegistries: async () => [],
       addGenesisRegistry: async () => ({ success: false, error: 'Marketplace management is desktop-only in browser mode.' }),
+      refreshGenesisRegistry: async () => ({ success: false, error: 'Marketplace management is desktop-only in browser mode.' }),
+      setGenesisRegistryEnabled: async () => ({ success: false, error: 'Marketplace management is desktop-only in browser mode.' }),
+      removeGenesisRegistry: async () => ({ success: false, error: 'Marketplace management is desktop-only in browser mode.' }),
     },
     chatroom: createBrowserChatroomApi(),
     updater: {

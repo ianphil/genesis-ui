@@ -83,6 +83,59 @@ export class MarketplaceRegistryService {
     this.configStore.save({ ...config, marketplaceRegistries: nextRegistries });
     return { success: true, registry };
   }
+
+  async refreshGenesisRegistry(id: string): Promise<MarketplaceRegistryActionResult> {
+    const registry = this.findRegistry(id);
+    if (!registry) {
+      return { success: false, error: 'Marketplace not found.' };
+    }
+
+    try {
+      await validateGenesisMarketplace(this.registryClient, registry);
+      return { success: true, registry };
+    } catch {
+      return {
+        success: false,
+        error: `Unable to access marketplace ${registry.label}. Check your GitHub sign-in or repository access.`,
+      };
+    }
+  }
+
+  setGenesisRegistryEnabled(id: string, enabled: boolean): MarketplaceRegistryActionResult {
+    const config = this.configStore.load();
+    const registries = config.marketplaceRegistries ?? [DEFAULT_GENESIS_MIND_TEMPLATE_SOURCE as MarketplaceRegistry];
+    const index = registries.findIndex((registry) => registry.id === id);
+    if (index < 0) {
+      return { success: false, error: 'Marketplace not found.' };
+    }
+
+    const nextRegistries = [...registries];
+    nextRegistries[index] = { ...nextRegistries[index], enabled };
+    this.configStore.save({ ...config, marketplaceRegistries: nextRegistries });
+    return { success: true, registry: nextRegistries[index] };
+  }
+
+  removeGenesisRegistry(id: string): MarketplaceRegistryActionResult {
+    const config = this.configStore.load();
+    const registries = config.marketplaceRegistries ?? [DEFAULT_GENESIS_MIND_TEMPLATE_SOURCE as MarketplaceRegistry];
+    const registry = registries.find((item) => item.id === id);
+    if (!registry) {
+      return { success: false, error: 'Marketplace not found.' };
+    }
+    if (registry.isDefault) {
+      return { success: false, error: 'The default marketplace cannot be removed.' };
+    }
+
+    this.configStore.save({
+      ...config,
+      marketplaceRegistries: registries.filter((item) => item.id !== id),
+    });
+    return { success: true, registry };
+  }
+
+  private findRegistry(id: string): MarketplaceRegistry | undefined {
+    return this.listGenesisRegistries().find((registry) => registry.id === id);
+  }
 }
 
 function parseGitHubMarketplaceUrl(rawUrl: string): MarketplaceRegistry {
