@@ -6,6 +6,7 @@ export { GitHubRegistryClient } from './GitHubRegistryClient';
 export { GenesisMindTemplateCatalog, DEFAULT_GENESIS_MIND_TEMPLATE_SOURCE } from './GenesisMindTemplateCatalog';
 export { GenesisMindTemplateMarketplaceCatalog } from './GenesisMindTemplateMarketplaceCatalog';
 export { GenesisMindTemplateInstaller } from './GenesisMindTemplateInstaller';
+export { MarketplaceRegistryService } from './MarketplaceRegistryService';
 export type { GenesisMindTemplateInstallRequest } from './GenesisMindTemplateInstaller';
 export type {
   GenesisMindTemplate,

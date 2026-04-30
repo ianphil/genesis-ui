@@ -220,6 +220,10 @@ export function installBrowserApi(): void {
       createFromTemplate: async () => ({ success: false, error: 'Genesis template install is desktop-only in browser mode.' }),
       onProgress: () => noopUnsubscribe,
     },
+    marketplace: {
+      listGenesisRegistries: async () => [],
+      addGenesisRegistry: async () => ({ success: false, error: 'Marketplace management is desktop-only in browser mode.' }),
+    },
     chatroom: createBrowserChatroomApi(),
     updater: {
       getState: async () => ({

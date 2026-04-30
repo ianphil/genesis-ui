@@ -108,6 +108,10 @@ export interface MarketplaceRegistry {
   isDefault: boolean;
 }
 
+export type MarketplaceRegistryActionResult =
+  | { success: true; registry: MarketplaceRegistry }
+  | { success: false; error: string };
+
 export interface ModelInfo {
   id: string;
   name: string;
@@ -224,6 +228,10 @@ export interface ElectronAPI {
     create: (config: { name: string; role: string; voice: string; voiceDescription: string; basePath: string }) => Promise<{ success: boolean; mindId?: string; mindPath?: string; error?: string }>;
     createFromTemplate: (request: { templateId: string; marketplaceId?: string; basePath: string }) => Promise<{ success: boolean; mindId?: string; mindPath?: string; error?: string }>;
     onProgress: (callback: (progress: { step: string; detail: string }) => void) => () => void;
+  };
+  marketplace: {
+    listGenesisRegistries: () => Promise<MarketplaceRegistry[]>;
+    addGenesisRegistry: (url: string) => Promise<MarketplaceRegistryActionResult>;
   };
   chatroom: ChatroomAPI;
   updater: {

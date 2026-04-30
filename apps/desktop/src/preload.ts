@@ -49,6 +49,10 @@ const electronAPI: ElectronAPI = {
     createFromTemplate: (request) => ipcRenderer.invoke('genesis:createFromTemplate', request),
     onProgress: (callback) => createIpcListener(ipcRenderer, 'genesis:progress', callback),
   },
+  marketplace: {
+    listGenesisRegistries: () => ipcRenderer.invoke('marketplace:listGenesisRegistries'),
+    addGenesisRegistry: (url) => ipcRenderer.invoke('marketplace:addGenesisRegistry', url),
+  },
   chatroom: {
     send: (message: string, model?: string) => ipcRenderer.invoke('chatroom:send', message, model),
     history: () => ipcRenderer.invoke('chatroom:history'),

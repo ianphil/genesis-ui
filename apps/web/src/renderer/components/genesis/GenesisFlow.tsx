@@ -40,6 +40,15 @@ export function GenesisFlow({ onComplete }: Props) {
     void loadTemplates();
   }, [loadTemplates]);
 
+  const handleAddMarketplace = useCallback(async (url: string): Promise<{ success: boolean; message: string }> => {
+    const result = await window.electronAPI.marketplace.addGenesisRegistry(url);
+    if (!result.success) {
+      return { success: false, message: result.error };
+    }
+    await loadTemplates();
+    return { success: true, message: `Added ${result.registry.label}. It will appear in New Agent templates.` };
+  }, [loadTemplates]);
+
   const handleRole= useCallback(async (r: string) => {
     setRole(r);
     setStage('boot');
@@ -117,7 +126,7 @@ export function GenesisFlow({ onComplete }: Props) {
 
   switch (stage) {
     case 'void':
-      return <VoidScreen onBegin={handleBegin} />;
+      return <VoidScreen onBegin={handleBegin} onAddMarketplace={handleAddMarketplace} />;
     case 'voice':
       return (
         <VoiceScreen

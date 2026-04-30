@@ -2,15 +2,28 @@
  * @vitest-environment jsdom
  */
 import React from 'react';
-import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import { GenesisFlow } from './GenesisFlow';
 import { AppStateProvider, useAppState } from '../../lib/store';
 import { installElectronAPI, mockElectronAPI } from '../../../test/helpers';
 import type { GenesisMindTemplate, MindContext } from '../../../shared/types';
 
 vi.mock('./VoidScreen', () => ({
-  VoidScreen: ({ onBegin }: { onBegin: () => void }) => <button onClick={onBegin}>Begin</button>,
+  VoidScreen: ({
+    onBegin,
+    onAddMarketplace,
+  }: {
+    onBegin: () => void;
+    onAddMarketplace: (url: string) => Promise<{ success: boolean; message: string }>;
+  }) => (
+    <div>
+      <button onClick={onBegin}>Begin</button>
+      <button onClick={() => { void onAddMarketplace('https://github.com/agency-microsoft/genesis-minds'); }}>
+        Add Marketplace
+      </button>
+    </div>
+  ),
 }));
 
 vi.mock('./VoiceScreen', () => ({
@@ -87,6 +100,10 @@ describe('GenesisFlow', () => {
   beforeEach(() => {
     api = installElectronAPI();
     (api.genesis.listTemplates as ReturnType<typeof vi.fn>).mockResolvedValue([lucyTemplate]);
+  });
+
+  afterEach(() => {
+    cleanup();
   });
 
   it('waits for genesis.create to load the new mind before completing', async () => {
@@ -199,6 +216,21 @@ describe('GenesisFlow', () => {
       });
     });
     expect(api.genesis.createFromTemplate).not.toHaveBeenCalled();
+  });
+
+  it('adds a marketplace from the landing page and refreshes templates', async () => {
+    render(
+      <AppStateProvider>
+        <GenesisFlow onComplete={vi.fn()} />
+      </AppStateProvider>,
+    );
+
+    fireEvent.click(screen.getByText('Add Marketplace'));
+
+    await waitFor(() => {
+      expect(api.marketplace.addGenesisRegistry).toHaveBeenCalledWith('https://github.com/agency-microsoft/genesis-minds');
+    });
+    expect(api.genesis.listTemplates).toHaveBeenCalled();
   });
 
   it('shows marketplace template failures and blocks completion', async () => {

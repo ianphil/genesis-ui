@@ -150,6 +150,20 @@ export function mockElectronAPI(): ElectronAPI {
       createFromTemplate: vi.fn().mockResolvedValue({ success: true }),
       onProgress: vi.fn().mockReturnValue(vi.fn()),
     },
+    marketplace: {
+      listGenesisRegistries: vi.fn().mockResolvedValue([]),
+      addGenesisRegistry: vi.fn().mockResolvedValue({ success: true, registry: {
+        id: 'github:agency-microsoft/genesis-minds',
+        label: 'agency-microsoft/genesis-minds',
+        url: 'https://github.com/agency-microsoft/genesis-minds',
+        owner: 'agency-microsoft',
+        repo: 'genesis-minds',
+        ref: 'main',
+        plugin: 'genesis-minds',
+        enabled: true,
+        isDefault: false,
+      } }),
+    },
     chatroom: {
       send: vi.fn().mockResolvedValue(undefined),
       history: vi.fn().mockResolvedValue([]),

@@ -21,6 +21,7 @@ import {
   CronService,
   IdentityLoader,
   MessageRouter,
+  MarketplaceRegistryService,
   MindManager,
   MindScaffold,
   TaskManager,
@@ -40,6 +41,7 @@ import { setupChatIPC } from './main/ipc/chat';
 import { setupMindIPC } from './main/ipc/mind';
 import { setupLensIPC } from './main/ipc/lens';
 import { setupGenesisIPC } from './main/ipc/genesis';
+import { setupMarketplaceIPC } from './main/ipc/marketplace';
 import { setupAuthIPC } from './main/ipc/auth';
 import { setupA2AIPC } from './main/ipc/a2a';
 import { setupChatroomIPC } from './main/ipc/chatroom';
@@ -122,6 +124,7 @@ const authService = new AuthService(
 const scaffold = new MindScaffold();
 const genesisTemplateCatalog = new GenesisMindTemplateMarketplaceCatalog(undefined, getGenesisMarketplaceSources);
 const genesisTemplateInstaller = new GenesisMindTemplateInstaller(undefined, clientFactory, getGenesisMarketplaceSources);
+const marketplaceRegistryService = new MarketplaceRegistryService(configService);
 const viewDiscovery = new ViewDiscovery();
 
 // --- Services (business rules, all dependencies injected) ---
@@ -360,6 +363,7 @@ app.on('ready', async () => {
     { listTemplates: () => genesisTemplateCatalog.listTemplates().templates },
     genesisTemplateInstaller,
   );
+  setupMarketplaceIPC(marketplaceRegistryService);
   setupAuthIPC(authService, mindManager);
   setupA2AIPC(a2aEventBus, agentCardRegistry, taskManager);
   setupChatroomIPC(chatroomService);
