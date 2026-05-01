@@ -19,7 +19,9 @@ export class MindManager extends EventEmitter {
   private minds = new Map<string, InternalMindContext>();
   private pathToId = new Map<string, string>();
   private loading = new Map<string, Promise<MindContext>>();
+  private knownMindRecords = new Map<string, MindRecord>();
   private activeMindId: string | null = null;
+  private persistedActiveMindId: string | null = null;
   private restorePromise: Promise<void> | null = null;
   private reloading = false;
   private providers: ChamberToolProvider[] = [];
@@ -112,6 +114,8 @@ export class MindManager extends EventEmitter {
       throw err;
     }
 
+    this.knownMindRecords.set(id, { id, path: resolvedMindPath });
+
     // Persist
     this.persistConfig();
 
@@ -121,7 +125,16 @@ export class MindManager extends EventEmitter {
 
   async unloadMind(mindId: string): Promise<void> {
     const context = this.minds.get(mindId);
-    if (!context) return;
+    if (!context) {
+      const removedKnownRecord = this.knownMindRecords.delete(mindId);
+      if (!removedKnownRecord) return;
+      if (this.persistedActiveMindId === mindId) {
+        this.persistedActiveMindId = this.activeMindId;
+      }
+      this.persistConfig();
+      this.emit('mind:unloaded', mindId);
+      return;
+    }
 
     await this.releaseProviders(mindId);
 
@@ -134,11 +147,15 @@ export class MindManager extends EventEmitter {
     // Remove from maps
     this.minds.delete(mindId);
     this.pathToId.delete(this.mindPathKey(context.mindPath));
+    this.knownMindRecords.delete(mindId);
 
     // Update active mind if needed
     if (this.activeMindId === mindId) {
       const remaining = Array.from(this.minds.keys());
       this.activeMindId = remaining.length > 0 ? remaining[0] : null;
+    }
+    if (this.persistedActiveMindId === mindId) {
+      this.persistedActiveMindId = this.activeMindId;
     }
 
     // Persist
@@ -158,6 +175,7 @@ export class MindManager extends EventEmitter {
   setActiveMind(mindId: string): void {
     if (this.minds.has(mindId)) {
       this.activeMindId = mindId;
+      this.persistedActiveMindId = mindId;
     }
   }
 
@@ -191,11 +209,8 @@ export class MindManager extends EventEmitter {
     const existingConfig = this.configService.load();
     const configSnapshot: AppConfig = {
       version: 2,
-      minds: Array.from(this.minds.values()).map((mind) => ({
-        id: mind.mindId,
-        path: mind.mindPath,
-      })),
-      activeMindId: this.activeMindId,
+      minds: this.getPersistedMindRecords(),
+      activeMindId: this.getPersistedActiveMindId(),
       activeLogin: existingConfig.activeLogin,
       theme: existingConfig.theme,
     };
@@ -217,6 +232,8 @@ export class MindManager extends EventEmitter {
 
   private async doRestore(): Promise<void> {
     const config = this.configService.load();
+    this.knownMindRecords = new Map(config.minds.map(record => [record.id, { ...record }]));
+    this.persistedActiveMindId = config.activeMindId;
     for (const record of config.minds) {
       try {
         await this.loadMind(record.path, record.id);
@@ -391,17 +408,34 @@ export class MindManager extends EventEmitter {
   private persistConfig(): void {
     if (this.reloading) return;
     const existingConfig = this.configService.load();
-    const minds: MindRecord[] = Array.from(this.minds.values()).map(m => ({
-      id: m.mindId,
-      path: m.mindPath,
-    }));
     const config: AppConfig = {
       version: 2,
-      minds,
-      activeMindId: this.activeMindId,
+      minds: this.getPersistedMindRecords(),
+      activeMindId: this.getPersistedActiveMindId(),
       activeLogin: existingConfig.activeLogin,
       theme: existingConfig.theme,
     };
     this.configService.save(config);
+  }
+
+  private getPersistedMindRecords(): MindRecord[] {
+    const records = new Map(this.knownMindRecords);
+    for (const mind of this.minds.values()) {
+      records.set(mind.mindId, {
+        id: mind.mindId,
+        path: mind.mindPath,
+      });
+    }
+    return Array.from(records.values());
+  }
+
+  private getPersistedActiveMindId(): string | null {
+    if (
+      this.persistedActiveMindId &&
+      (this.minds.has(this.persistedActiveMindId) || this.knownMindRecords.has(this.persistedActiveMindId))
+    ) {
+      return this.persistedActiveMindId;
+    }
+    return this.activeMindId;
   }
 }

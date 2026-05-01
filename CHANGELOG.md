@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.38.1 (2026-05-01)
+
+### Mind registry
+
+- **Preserve minds after restore failures** — Chamber now keeps configured mind records when a startup restore attempt fails, so a transient runtime, filesystem, or validation error cannot silently prune the registry on shutdown. (#180)
+
 ## v0.38.0 (2026-04-30)
 
 ### Genesis marketplace
