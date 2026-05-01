@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, powerMonitor, shell, Notification, type NativeImage, type Tray as ElectronTray } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, powerMonitor, shell, Notification, type MessageBoxOptions, type NativeImage, type Tray as ElectronTray } from 'electron';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
@@ -35,6 +35,7 @@ import {
 } from '@chamber/services';
 import { createAppTray, loadAppIcon } from './main/tray/Tray';
 import { installContextMenu } from './main/contextMenu/ContextMenu';
+import { enrollMarketplaceFromProtocolUrl, findMarketplaceInstallUrl, parseMarketplaceInstallUrl } from './main/protocol/marketplaceProtocol';
 
 // IPC adapters
 import { setupChatIPC } from './main/ipc/chat';
@@ -171,6 +172,8 @@ let windowIcon: NativeImage | undefined;
 let isQuitting = false;
 let serverChild: ChildProcessWithoutNullStreams | null = null;
 let mvpServerUrl: string | null = null;
+const launchProtocolUrl = findMarketplaceInstallUrl(process.argv);
+const pendingProtocolUrls: string[] = launchProtocolUrl ? [launchProtocolUrl] : [];
 const shouldMinimizeToTray = process.platform === 'win32';
 const useMvpServer = process.env.CHAMBER_MVP_SERVER === '1';
 const updaterService = new UpdaterService({
@@ -273,6 +276,74 @@ const showMainWindow = () => {
   mainWindow.focus();
 };
 
+const showMarketplaceProtocolMessage = (type: 'info' | 'error', message: string, detail?: string): void => {
+  const options: MessageBoxOptions = {
+    type,
+    buttons: ['OK'],
+    message,
+    detail,
+  };
+  if (mainWindow) {
+    void dialog.showMessageBox(mainWindow, options);
+  } else {
+    void dialog.showMessageBox(options);
+  }
+};
+
+const confirmMarketplaceProtocolEnrollment = async (registryUrl: string): Promise<boolean> => {
+  const options: MessageBoxOptions = {
+    type: 'question',
+    buttons: ['Cancel', 'Add Marketplace'],
+    defaultId: 1,
+    cancelId: 0,
+    message: 'Add this Genesis marketplace to Chamber?',
+    detail: registryUrl,
+  };
+  const result = mainWindow
+    ? await dialog.showMessageBox(mainWindow, options)
+    : await dialog.showMessageBox(options);
+  return result.response === 1;
+};
+
+const handleProtocolUrl = (rawUrl: string): void => {
+  const installUrl = parseMarketplaceInstallUrl(rawUrl);
+  if (!installUrl) return;
+
+  if (!app.isReady()) {
+    pendingProtocolUrls.push(rawUrl);
+    return;
+  }
+
+  showMainWindow();
+  confirmMarketplaceProtocolEnrollment(installUrl.registryUrl)
+    .then((confirmed) => {
+      if (!confirmed) return false;
+      return enrollMarketplaceFromProtocolUrl(
+        rawUrl,
+        (registryUrl) => marketplaceRegistryService.addGenesisRegistry(registryUrl),
+        (error) => {
+          console.warn('[marketplace] Protocol registry enrollment failed:', error);
+          showMarketplaceProtocolMessage('error', 'Unable to add marketplace', error);
+        },
+      );
+    })
+    .then((added) => {
+      if (added) {
+        showMarketplaceProtocolMessage('info', 'Marketplace added to Chamber', installUrl.registryUrl);
+      }
+    })
+    .catch((error: unknown) => {
+      console.warn('[marketplace] Protocol registry enrollment failed:', error);
+      showMarketplaceProtocolMessage('error', 'Unable to add marketplace', error instanceof Error ? error.message : String(error));
+    });
+};
+
+const drainPendingProtocolUrls = (): void => {
+  for (const rawUrl of pendingProtocolUrls.splice(0)) {
+    handleProtocolUrl(rawUrl);
+  }
+};
+
 const createWindow = () => {
   mainWindow = new BrowserWindow({
     width: 1200,
@@ -330,6 +401,7 @@ const createWindow = () => {
 };
 
 app.on('ready', async () => {
+  app.setAsDefaultProtocolClient('chamber');
   windowIcon = await loadAppIcon();
   if (runUpdaterSmoke(app)) {
     return;
@@ -392,6 +464,7 @@ app.on('ready', async () => {
 
   // Create window first (don't block on restore)
   createWindow();
+  drainPendingProtocolUrls();
   if (shouldMinimizeToTray) {
     appTray = createAppTray({
       showMainWindow,
@@ -415,8 +488,20 @@ app.on('window-all-closed', () => {
   }
 });
 
-app.on('second-instance', () => {
+app.on('second-instance', (_event, argv) => {
+  const rawUrl = findMarketplaceInstallUrl(argv);
+  if (rawUrl) {
+    handleProtocolUrl(rawUrl);
+  }
   showMainWindow();
+});
+
+app.on('open-url', (event, rawUrl) => {
+  event.preventDefault();
+  handleProtocolUrl(rawUrl);
+  if (app.isReady()) {
+    showMainWindow();
+  }
 });
 
 app.on('activate', () => {

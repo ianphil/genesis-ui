@@ -42,6 +42,12 @@ const config: ForgeConfig = {
     asar: true,
     executableName: 'chamber',
     icon: APP_ICON_PATH,
+    protocols: [
+      {
+        name: 'Chamber',
+        schemes: ['chamber'],
+      },
+    ],
     extraResource: ['./resources/node', './resources/copilot-runtime', './apps/server/dist', './node_modules/keytar'],
     ...(enableMacOSSigning
       ? {

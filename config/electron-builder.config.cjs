@@ -20,6 +20,12 @@ const config = {
   appId: 'dev.chmbr.chamber',
   productName: 'Chamber',
   artifactName: 'Chamber-${version}-${arch}.${ext}',
+  protocols: [
+    {
+      name: 'Chamber',
+      schemes: ['chamber'],
+    },
+  ],
   directories: {
     output: 'out/builder',
     buildResources: 'assets',

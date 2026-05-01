@@ -32,6 +32,7 @@ Chamber is where that happens. Your agent wakes up, finds its voice, and prepare
 - **Activity bar** — VS Code-style icon strip. Icons appear as views are discovered.
 - **Streaming chat** — real-time responses with markdown, tool calls, and reasoning blocks.
 - **Chatroom** — multi-agent group chat with 5 orchestration modes: Concurrent (all agents respond in parallel), Sequential (round-robin), GroupChat (moderator-directed), Handoff (agent-to-agent delegation), and Magentic (manager-driven task ledger).
+- **Marketplace install links** — enroll public, private, or internal Genesis mind registries from a `chamber://install?registry=...` link.
 - **Model picker** — choose your model, persisted across sessions.
 - **Agent identity** — chat shows the agent's name. This is their chamber.
 
@@ -45,6 +46,16 @@ npm start
 ```
 
 Select a mind directory from the sidebar. The agent connects, views appear, and you're ready.
+
+## Genesis Marketplace Links
+
+Marketplace maintainers can add a click-to-enroll link to a README or internal portal:
+
+```markdown
+[![Add to Chamber](https://img.shields.io/badge/Add%20to-Chamber-7c3aed)](https://chmbr.dev/install.html?registry=https%3A%2F%2Fgithub.com%2Fagency-microsoft%2Fgenesis-minds)
+```
+
+The GitHub Pages interstitial at `https://chmbr.dev/install.html?registry=<encoded registry URL>` opens the matching `chamber://install?registry=...` URL and shows a fallback copy button if Chamber is not installed.
 
 ## Architecture
 
