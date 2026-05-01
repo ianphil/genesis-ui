@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { TypeWriter } from './TypeWriter';
 import { cn } from '../../lib/utils';
 import type { GenesisMindTemplate } from '../../../shared/types';
@@ -16,6 +16,15 @@ export function VoiceScreen({ templates, templateError, onSelect, onSelectTempla
   const [customInput, setCustomInput] = useState('');
   const [showCustom, setShowCustom] = useState(false);
   const [researching, setResearching] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!showCustom) return;
+    // Wait for the parent's fade-in animation to settle before focusing,
+    // otherwise the focus call lands while the element is still being painted.
+    const t = setTimeout(() => inputRef.current?.focus(), 350);
+    return () => clearTimeout(t);
+  }, [showCustom]);
 
   const handleSelect = (voiceId: string) => {
     if (voiceId === 'custom') {
@@ -31,21 +40,29 @@ export function VoiceScreen({ templates, templateError, onSelect, onSelectTempla
   };
 
   const handleCustomSubmit = async () => {
-    if (!customInput.trim()) return;
+    const input = customInput.trim();
+    if (!input) return;
     setResearching(true);
+
+    // Derive a short display/dir name from the input. Take the text up to the
+    // first sentence/clause boundary, then cap at 30 chars. This protects the
+    // filesystem from long, paragraph-style descriptions while keeping the
+    // full text as the voice description.
+    const firstClause = input.split(/[.,;:\n]/)[0].trim();
+    const shortName = (firstClause || input).slice(0, 30).trim();
 
     // Ask the SDK to research this voice
     try {
       await window.electronAPI.genesis.getDefaultPath();
       // Use a lightweight approach — just pass the description through with a research note
-      const description = `Character/voice: "${customInput.trim()}". Research this character or persona — their communication style, catchphrases, values, how they handle pressure. Capture the energy.`;
+      const description = `Character/voice: "${input}". Research this character or persona — their communication style, catchphrases, values, how they handle pressure. Capture the energy.`;
       setTimeout(() => {
         setResearching(false);
-        onSelect(customInput.trim(), description);
+        onSelect(shortName, description);
       }, 500);
     } catch {
       setResearching(false);
-      onSelect(customInput.trim(), `Voice energy: ${customInput.trim()}`);
+      onSelect(shortName, `Voice energy: ${input}`);
     }
   };
 
@@ -119,12 +136,12 @@ export function VoiceScreen({ templates, templateError, onSelect, onSelectTempla
             {showCustom && (
               <div className="animate-in fade-in duration-300 space-y-3 pt-2">
                 <input
+                  ref={inputRef}
                   type="text"
                   value={customInput}
                   onChange={(e) => setCustomInput(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') handleCustomSubmit(); }}
                   placeholder="e.g. Tony Stark, Gandalf, your cool aunt..."
-                  autoFocus
                   className="w-full bg-transparent border-b-2 border-muted-foreground/30 focus:border-foreground
                              text-lg text-center py-2 outline-none transition-colors placeholder:text-muted-foreground/30"
                 />
