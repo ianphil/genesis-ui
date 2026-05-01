@@ -66,6 +66,15 @@ export class MindScaffold {
     const slug = MindScaffold.slugify(config.name);
     const mindPath = path.join(config.basePath, slug);
 
+    // Refuse to create when the target directory already exists. createStructure
+    // uses fs.mkdirSync(..., { recursive: true }) which silently merges into an
+    // existing tree — combined with the 40-char slug cap, two long names sharing
+    // a prefix would write into the same mind and overwrite SOUL.md, agent files,
+    // and working memory. Caller should surface this and prompt for a new name.
+    if (fs.existsSync(mindPath)) {
+      throw new Error(`Mind directory already exists: ${mindPath}`);
+    }
+
     // 1. Create deterministic structure
     this.emit('structure', 'Creating mind structure...');
     this.createStructure(mindPath);
