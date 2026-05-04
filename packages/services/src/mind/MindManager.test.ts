@@ -86,6 +86,16 @@ const mockViewDiscovery = {
   setRefreshHandler: vi.fn(),
 };
 
+function lastSavedConfig(): AppConfig {
+  const config = mockConfigService.save.mock.calls.at(-1)?.[0] as AppConfig | undefined;
+  if (!config) throw new Error('Expected config to be saved');
+  return config;
+}
+
+function savedMindIds(config: AppConfig): string[] {
+  return config.minds.map(record => record.id).sort();
+}
+
 describe('MindManager', () => {
   let manager: MindManager;
 
@@ -261,6 +271,15 @@ describe('MindManager', () => {
       const config = mockConfigService.save.mock.calls.at(-1)?.[0];
       expect(config?.activeMindId).toBe(mind2.mindId);
     });
+
+    it('explicit unload still prunes the unloaded mind from persisted config', async () => {
+      const mind1 = await manager.loadMind('/tmp/agents/q');
+      const mind2 = await manager.loadMind('/tmp/agents/fox');
+
+      await manager.unloadMind(mind1.mindId);
+
+      expect(savedMindIds(lastSavedConfig())).toEqual([mind2.mindId]);
+    });
   });
 
   describe('listMinds', () => {
@@ -353,6 +372,81 @@ describe('MindManager', () => {
       await manager.restoreFromConfig();
       expect(manager.listMinds()).toHaveLength(1);
       expect(manager.listMinds()[0].identity.name).toBe('good');
+      consoleSpy.mockRestore();
+    });
+
+    it('preserves failed restore records when shutdown persists config', async () => {
+      vi.mocked(fs.existsSync).mockImplementation((p: fs.PathLike) => {
+        const normalized = String(p).replace(/\\/g, '/');
+        return normalized === '/tmp/agents/good/SOUL.md' || normalized === '/tmp/agents/good/.github';
+      });
+      mockConfigService.load.mockReturnValue({
+        version: 2,
+        minds: [
+          { id: 'good-a1b2', path: '/tmp/agents/good' },
+          { id: 'bad-c3d4', path: '/tmp/agents/bad' },
+        ],
+        activeMindId: 'good-a1b2',
+        activeLogin: 'alice',
+        theme: 'dark',
+      });
+
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(vi.fn());
+      await manager.restoreFromConfig();
+      mockConfigService.save.mockClear();
+      await manager.shutdown();
+
+      expect(savedMindIds(lastSavedConfig())).toEqual(['bad-c3d4', 'good-a1b2']);
+      consoleSpy.mockRestore();
+    });
+
+    it('preserves activeMindId when the active mind fails to restore', async () => {
+      vi.mocked(fs.existsSync).mockImplementation((p: fs.PathLike) => {
+        const normalized = String(p).replace(/\\/g, '/');
+        return normalized === '/tmp/agents/good/SOUL.md' || normalized === '/tmp/agents/good/.github';
+      });
+      mockConfigService.load.mockReturnValue({
+        version: 2,
+        minds: [
+          { id: 'bad-c3d4', path: '/tmp/agents/bad' },
+          { id: 'good-a1b2', path: '/tmp/agents/good' },
+        ],
+        activeMindId: 'bad-c3d4',
+        activeLogin: 'alice',
+        theme: 'dark',
+      });
+
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(vi.fn());
+      await manager.restoreFromConfig();
+      expect(manager.getActiveMindId()).toBe('good-a1b2');
+      mockConfigService.save.mockClear();
+      await manager.shutdown();
+
+      expect(lastSavedConfig().activeMindId).toBe('bad-c3d4');
+      consoleSpy.mockRestore();
+    });
+
+    it('preserves every configured mind when all restores fail', async () => {
+      vi.mocked(fs.existsSync).mockReturnValue(false);
+      mockConfigService.load.mockReturnValue({
+        version: 2,
+        minds: [
+          { id: 'q-a1b2', path: '/tmp/agents/q' },
+          { id: 'fox-c3d4', path: '/tmp/agents/fox' },
+        ],
+        activeMindId: 'q-a1b2',
+        activeLogin: 'alice',
+        theme: 'dark',
+      });
+
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(vi.fn());
+      await manager.restoreFromConfig();
+      mockConfigService.save.mockClear();
+      await manager.shutdown();
+
+      const config = lastSavedConfig();
+      expect(savedMindIds(config)).toEqual(['fox-c3d4', 'q-a1b2']);
+      expect(config.activeMindId).toBe('q-a1b2');
       consoleSpy.mockRestore();
     });
 
@@ -664,6 +758,33 @@ describe('MindManager', () => {
       // No save should have an empty minds array (which would be the mid-unload state)
       const emptyMindsSaves = saveCalls.filter((call: unknown[]) => (call[0] as { minds: unknown[] }).minds.length === 0);
       expect(emptyMindsSaves).toHaveLength(0);
+    });
+
+    it('does not drop failed restore records during reload', async () => {
+      vi.mocked(fs.existsSync).mockImplementation((p: fs.PathLike) => {
+        const normalized = String(p).replace(/\\/g, '/');
+        return normalized === '/tmp/agents/good/SOUL.md' || normalized === '/tmp/agents/good/.github';
+      });
+      mockConfigService.load.mockReturnValue({
+        version: 2,
+        minds: [
+          { id: 'good-a1b2', path: '/tmp/agents/good' },
+          { id: 'bad-c3d4', path: '/tmp/agents/bad' },
+        ],
+        activeMindId: 'bad-c3d4',
+        activeLogin: 'alice',
+        theme: 'dark',
+      });
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(vi.fn());
+      await manager.restoreFromConfig();
+      mockConfigService.save.mockClear();
+
+      await manager.reloadAllMinds();
+
+      for (const [config] of mockConfigService.save.mock.calls as Array<[AppConfig]>) {
+        expect(savedMindIds(config)).toEqual(['bad-c3d4', 'good-a1b2']);
+      }
+      consoleSpy.mockRestore();
     });
   });
 });
