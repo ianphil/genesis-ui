@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.38.2 (2026-05-04)
+
+### Lens
+
+- **Scope hot-loaded Lens views to the active mind** — Lens create/delete watcher events now publish the changed mind ID and the renderer ignores inactive-mind updates, preventing duplicate activity-bar entries when multiple minds expose views with the same ID.
+
 ## v0.38.1 (2026-05-01)
 
 ### Mind registry

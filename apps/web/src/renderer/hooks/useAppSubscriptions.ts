@@ -20,11 +20,12 @@ export function useAppSubscriptions() {
 
   // Listen for view discovery changes (file watcher)
   useEffect(() => {
-    const unsub = window.electronAPI.lens.onViewsChanged((views) => {
+    const unsub = window.electronAPI.lens.onViewsChanged((views, mindId) => {
+      if (mindId && mindId !== activeMindId) return;
       dispatch({ type: 'SET_DISCOVERED_VIEWS', payload: views });
     });
     return () => { unsub(); };
-  }, [dispatch]);
+  }, [activeMindId, dispatch]);
 
   // Reload views when active mind changes
   useEffect(() => {
@@ -55,16 +56,17 @@ export function useAppSubscriptions() {
 
   // Fetch discovered Lens views
   useEffect(() => {
-    const connected = minds.length > 0 || !!activeMindId;
-    if (!connected) {
+    if (!activeMindId) {
       viewsLoaded.current = false;
       return;
     }
 
     if (!viewsLoaded.current) {
+      let cancelled = false;
       const loadViews = async () => {
         try {
-          const views = await window.electronAPI.lens.getViews();
+          const views = await window.electronAPI.lens.getViews(activeMindId);
+          if (cancelled) return;
           dispatch({ type: 'SET_DISCOVERED_VIEWS', payload: views });
           viewsLoaded.current = true;
         } catch (err) {
@@ -72,6 +74,9 @@ export function useAppSubscriptions() {
         }
       };
       loadViews();
+      return () => {
+        cancelled = true;
+      };
     }
   }, [minds.length, activeMindId, dispatch]);
 

@@ -14,15 +14,19 @@ test.describe('electron Lens hot-load smoke', () => {
 
   let app: LaunchedElectronApp | undefined;
   let mindPath = '';
+  let inactiveMindPath = '';
   let userDataPath = '';
   const tempRoots: string[] = [];
 
   test.beforeAll(async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'chamber-lens-smoke-'));
     mindPath = path.join(root, 'lens-smoke-mind');
+    inactiveMindPath = path.join(root, 'inactive-lens-smoke-mind');
     userDataPath = path.join(root, 'user-data');
     tempRoots.push(root);
-    seedMind(mindPath);
+    seedMind(mindPath, 'Active Lens Smoke Mind');
+    seedMind(inactiveMindPath, 'Inactive Lens Smoke Mind');
+    writeLensView(inactiveMindPath);
 
     app = await launchElectronApp({
       cdpPort,
@@ -43,11 +47,14 @@ test.describe('electron Lens hot-load smoke', () => {
     const page = await findRendererPage(app?.browser, app?.logs ?? []);
     await page.waitForLoadState('domcontentloaded');
 
-    const mind = await page.evaluate(async (pathToMind) => {
+    const mind = await page.evaluate(async ({ pathToMind, pathToInactiveMind }) => {
       const loaded = await window.electronAPI.mind.add(pathToMind);
+      await window.electronAPI.mind.add(pathToInactiveMind);
       await window.electronAPI.mind.setActive(loaded.mindId);
       return loaded;
-    }, mindPath);
+    }, { pathToMind: mindPath, pathToInactiveMind: inactiveMindPath });
+
+    await page.getByRole('button', { name: /Active Lens Smoke Mind/ }).click();
 
     await page.evaluate(() => {
       const target = window as typeof window & { __lensHotloadEvents?: string[][] };
@@ -61,8 +68,10 @@ test.describe('electron Lens hot-load smoke', () => {
       () => page.evaluate(async ({ mindId, viewId }) => {
         const views = await window.electronAPI.lens.getViews(mindId);
         return views.some((view) => view.id === viewId);
-      }, { mindId: mind.mindId, viewId: smokeViewId }),
+       }, { mindId: mind.mindId, viewId: smokeViewId }),
     ).toBe(false);
+
+    await expect(page.getByRole('button', { name: 'Smoke Hotload' })).toHaveCount(0);
 
     writeLensView(mindPath);
 
@@ -81,6 +90,8 @@ test.describe('electron Lens hot-load smoke', () => {
       }, smokeViewId),
     ).toBe(true);
 
+    await expect(page.getByRole('button', { name: 'Smoke Hotload' })).toHaveCount(1);
+
     fs.rmSync(path.join(mindPath, '.github', 'lens', smokeViewId), { recursive: true, force: true });
 
     await expect.poll(
@@ -97,15 +108,17 @@ test.describe('electron Lens hot-load smoke', () => {
         return target.__lensHotloadEvents?.some((ids) => !ids.includes(viewId)) ?? false;
       }, smokeViewId),
     ).toBe(true);
+
+    await expect(page.getByRole('button', { name: 'Smoke Hotload' })).toHaveCount(0);
   });
 });
 
-function seedMind(root: string): void {
+function seedMind(root: string, name: string): void {
   fs.mkdirSync(path.join(root, '.github'), { recursive: true });
   fs.writeFileSync(
     path.join(root, 'SOUL.md'),
     [
-      '# Lens Smoke Mind',
+      `# ${name}`,
       '',
       'A deterministic mind used by Electron Lens hot-load smoke tests.',
       '',

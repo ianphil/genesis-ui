@@ -208,7 +208,7 @@ export interface ElectronAPI {
     getViewData: (viewId: string, mindId?: string) => Promise<Record<string, unknown> | null>;
     refreshView: (viewId: string, mindId?: string) => Promise<Record<string, unknown> | null>;
     sendAction: (viewId: string, action: string, mindId?: string) => Promise<Record<string, unknown> | null>;
-    onViewsChanged: (callback: (views: LensViewManifest[]) => void) => () => void;
+    onViewsChanged: (callback: (views: LensViewManifest[], mindId?: string) => void) => () => void;
   };
   auth: {
     getStatus: () => Promise<{ authenticated: boolean; login?: string }>;

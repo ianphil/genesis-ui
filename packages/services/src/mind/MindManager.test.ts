@@ -163,7 +163,8 @@ describe('MindManager', () => {
       onChanged?.();
 
       expect(mockViewDiscovery.startWatching).toHaveBeenCalledWith('/tmp/agents/q', expect.any(Function));
-      expect(listener).toHaveBeenCalledWith(views);
+      expect(mockViewDiscovery.getViews).toHaveBeenCalledWith('/tmp/agents/q');
+      expect(listener).toHaveBeenCalledWith(views, expect.stringMatching(/^q-/));
     });
 
     it('generates a stable mind ID from folder name', async () => {

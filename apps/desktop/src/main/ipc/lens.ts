@@ -29,9 +29,9 @@ export function setupLensIPC(viewDiscovery: ViewDiscovery, mindManager: MindMana
     return viewDiscovery.sendAction(viewId, action, mindPath);
   });
 
-  mindManager.on('lens:viewsChanged', (views: LensViewManifest[]) => {
+  mindManager.on('lens:viewsChanged', (views: LensViewManifest[], mindId: string) => {
     for (const win of BrowserWindow.getAllWindows()) {
-      win.webContents.send('lens:viewsChanged', views);
+      win.webContents.send('lens:viewsChanged', views, mindId);
     }
   });
 }

@@ -103,7 +103,7 @@ export class MindManager extends EventEmitter {
         this.viewDiscovery.scan(resolvedMindPath),
       ]);
       this.viewDiscovery.startWatching(resolvedMindPath, () => {
-        this.emit('lens:viewsChanged', this.viewDiscovery.getViews());
+        this.emit('lens:viewsChanged', this.viewDiscovery.getViews(resolvedMindPath), id);
       });
     } catch (err) {
       this.minds.delete(id);
