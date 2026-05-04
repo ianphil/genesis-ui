@@ -5,6 +5,7 @@
 ### macOS
 
 - **Add macOS build support** — Chamber can now build macOS dmg/zip artifacts with platform-aware builder resources, optional signing/notarization settings, a macOS tray fallback icon path, and a draggable hidden-inset titlebar strip. (#177)
+- **Refresh the packaged Copilot CLI pin** — the development and committed desktop runtimes now pin `@github/copilot@1.0.41-0` so package smoke checks match the CLI binary shipped by the npm package.
 
 ### Genesis
 
