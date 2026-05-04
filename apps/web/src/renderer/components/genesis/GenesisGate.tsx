@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAppState, useAppDispatch } from '../../lib/store';
+import { MacTitlebarDrag } from '../layout/MacTitlebarDrag';
 import { LandingScreen } from './LandingScreen';
 import { GenesisFlow } from './GenesisFlow';
 import { ChamberLoadingScreen } from './ChamberLoadingScreen';
@@ -23,11 +24,21 @@ export function GenesisGate({ children }: Props) {
 
   // Show loading screen while initial minds check is pending
   if (!mindsChecked && !showLanding) {
-    return <ChamberLoadingScreen />;
+    return (
+      <>
+        <ChamberLoadingScreen />
+        <MacTitlebarDrag />
+      </>
+    );
   }
 
   if (runtimePhase === 'switching-account') {
-    return <ChamberLoadingScreen mode="switching-account" login={switchingAccountLogin} />;
+    return (
+      <>
+        <ChamberLoadingScreen mode="switching-account" login={switchingAccountLogin} />
+        <MacTitlebarDrag />
+      </>
+    );
   }
 
   const hasMinds = minds.length > 0;
@@ -35,15 +46,21 @@ export function GenesisGate({ children }: Props) {
 
   // If in genesis flow, show it
   if (mode === 'genesis') {
-    return <GenesisFlow onComplete={() => {
-      setMode('idle');
-      dispatch({ type: 'HIDE_LANDING' });
-    }} />;
+    return (
+      <>
+        <GenesisFlow onComplete={() => {
+          setMode('idle');
+          dispatch({ type: 'HIDE_LANDING' });
+        }} />
+        <MacTitlebarDrag />
+      </>
+    );
   }
 
   // Show landing if triggered or no minds loaded
   if (showGate) {
     return (
+      <>
       <LandingScreen
         onNewAgent={() => {
           setOpenExistingError(null);
@@ -73,6 +90,8 @@ export function GenesisGate({ children }: Props) {
           : undefined}
         error={openExistingError ?? undefined}
       />
+      <MacTitlebarDrag />
+      </>
     );
   }
 

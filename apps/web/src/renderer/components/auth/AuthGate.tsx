@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { MacTitlebarDrag } from '../layout/MacTitlebarDrag';
 import { AuthScreen } from './AuthScreen';
 
 interface Props {
@@ -33,11 +34,21 @@ export function AuthGate({ children }: Props) {
   }, []);
 
   if (checking) {
-    return <div className="fixed inset-0 bg-background z-50" />;
+    return (
+      <>
+        <div className="fixed inset-0 bg-background z-50" />
+        <MacTitlebarDrag />
+      </>
+    );
   }
 
   if (!authenticated) {
-    return <AuthScreen onAuthenticated={() => setAuthenticated(true)} />;
+    return (
+      <>
+        <AuthScreen onAuthenticated={() => setAuthenticated(true)} />
+        <MacTitlebarDrag />
+      </>
+    );
   }
 
   return <>{children}</>;

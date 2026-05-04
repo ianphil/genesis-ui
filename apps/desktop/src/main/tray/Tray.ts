@@ -25,15 +25,17 @@ function createTrayIcon(appIcon: NativeImage): NativeImage {
 }
 
 export async function loadAppIcon(): Promise<NativeImage> {
-  try {
-    const icon = await app.getFileIcon(process.execPath, { size: 'large' });
-    if (!icon.isEmpty()) {
-      return icon;
-    }
+  if (process.platform !== 'darwin') {
+    try {
+      const icon = await app.getFileIcon(process.execPath, { size: 'large' });
+      if (!icon.isEmpty()) {
+        return icon;
+      }
 
-    console.warn(`[tray] Executable icon for ${process.execPath} was empty; using generated fallback.`);
-  } catch (error) {
-    console.error('[tray] Failed to load executable icon:', error);
+      console.warn(`[tray] Executable icon for ${process.execPath} was empty; using generated fallback.`);
+    } catch (error) {
+      console.error('[tray] Failed to load executable icon:', error);
+    }
   }
 
   return createFallbackIcon();

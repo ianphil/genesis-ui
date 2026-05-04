@@ -55,12 +55,25 @@ export class MindScaffold {
   }
 
   static slugify(name: string): string {
-    return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const raw = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    // Cap directory name at 40 chars so we never blow past filesystem limits
+    // (macOS NAME_MAX is 255 bytes; APFS plus child paths like /inbox can still hit ENAMETOOLONG well before that).
+    if (raw.length <= 40) return raw;
+    return raw.slice(0, 40).replace(/-+$/, '');
   }
 
   async create(config: GenesisConfig): Promise<string> {
     const slug = MindScaffold.slugify(config.name);
     const mindPath = path.join(config.basePath, slug);
+
+    // Refuse to create when the target directory already exists. createStructure
+    // uses fs.mkdirSync(..., { recursive: true }) which silently merges into an
+    // existing tree — combined with the 40-char slug cap, two long names sharing
+    // a prefix would write into the same mind and overwrite SOUL.md, agent files,
+    // and working memory. Caller should surface this and prompt for a new name.
+    if (fs.existsSync(mindPath)) {
+      throw new Error(`Mind directory already exists: ${mindPath}`);
+    }
 
     // 1. Create deterministic structure
     this.emit('structure', 'Creating mind structure...');

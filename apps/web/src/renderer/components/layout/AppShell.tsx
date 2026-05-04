@@ -3,6 +3,7 @@ import { useAppSubscriptions } from '../../hooks/useAppSubscriptions';
 import { useAppDispatch, useAppState } from '../../lib/store';
 import { TooltipProvider } from '../ui/tooltip';
 import { ActivityBar } from './ActivityBar';
+import { MacTitlebarDrag } from './MacTitlebarDrag';
 import { MindSidebar } from './MindSidebar';
 import { ViewRouter } from './ViewRouter';
 
@@ -31,6 +32,7 @@ export function AppShell() {
   if (isPopout) {
     return (
       <TooltipProvider>
+        <MacTitlebarDrag />
         <div className="flex flex-col h-screen w-screen bg-background text-foreground">
           <div className="flex flex-1 min-h-0">
             <main className="flex-1 flex flex-col min-w-0">
@@ -44,6 +46,7 @@ export function AppShell() {
 
   return (
     <TooltipProvider>
+      <MacTitlebarDrag />
       <div className="flex flex-col h-screen w-screen bg-background text-foreground">
         {/* Main layout: activity bar | mind sidebar | content */}
         <div className="flex flex-1 min-h-0 gap-2 p-2">
