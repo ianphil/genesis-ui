@@ -1,6 +1,7 @@
 import { EventEmitter } from 'events';
 import type { AgentCardRegistry } from './AgentCardRegistry';
 import type { CopilotSession, UserInputHandler, UserInputResponse } from '../mind/types';
+import { Logger } from '../logger';
 import type {
   SendMessageRequest,
   Task,
@@ -11,6 +12,8 @@ import type {
   Message,
 } from './types';
 import { isStaleSessionError } from '@chamber/shared/sessionErrors';
+
+const log = Logger.create('TaskManager');
 
 export interface TaskSessionFactory {
   createTaskSession(
@@ -93,7 +96,7 @@ export class TaskManager extends EventEmitter {
       this.processTask(task, targetMindId, request.message, request.onUserInputRequest)
         .catch((err) => {
           this.transitionState(task, 'failed');
-          console.error(`[TaskManager] Task ${taskId} failed:`, err);
+          log.error(`Task ${taskId} failed:`, err);
         }),
     );
 

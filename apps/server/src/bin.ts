@@ -1,5 +1,8 @@
 import { createHttpServer } from './honoAdapter';
 import { createServerContext } from './composition';
+import { Logger } from '@chamber/services';
+
+const log = Logger.create('server');
 import {
   AuthService,
   ChatService,
@@ -160,7 +163,7 @@ async function shutdown(): Promise<void> {
   if (shuttingDown) return;
   shuttingDown = true;
   await mindManager.shutdown().catch((error: unknown) => {
-    console.error('[server] Mind shutdown failed:', error);
+    log.error('Mind shutdown failed:', error);
   });
   server.close(() => process.exit(0));
 }

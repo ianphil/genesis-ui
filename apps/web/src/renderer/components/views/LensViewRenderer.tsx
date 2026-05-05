@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import type { LensViewManifest } from '../../../shared/types';
 import { RefreshCw, Send } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { Logger } from '../../lib/logger';
 import { LensBriefing } from './LensBriefing';
 import { LensTable } from './LensTable';
 import { LensDetail } from './LensDetail';
@@ -13,6 +14,8 @@ import { LensForm } from './LensForm';
 interface Props {
   view: LensViewManifest;
 }
+
+const log = Logger.create('LensView');
 
 export function LensViewRenderer({ view }: Props) {
   const [data, setData] = useState<Record<string, unknown> | null>(null);
@@ -26,7 +29,7 @@ export function LensViewRenderer({ view }: Props) {
         const result = await window.electronAPI.lens.getViewData(view.id);
         setData(result);
       } catch (err) {
-        console.error(`[LensView] Failed to load data for ${view.id}:`, err);
+        log.error(`Failed to load data for ${view.id}:`, err);
       }
     };
     load();

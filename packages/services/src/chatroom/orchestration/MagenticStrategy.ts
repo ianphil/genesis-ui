@@ -8,6 +8,9 @@ import type { OrchestrationContext } from './types';
 import { BaseStrategy } from './types';
 import { ObservabilityEmitter } from './observability';
 import { textContent, extractJsonObject } from './shared';
+import { Logger } from '../../logger';
+
+const log = Logger.create('Chatroom:Magentic');
 import { sendToAgentWithRetry, TurnTimeoutError } from './stream-agent';
 
 /** Max characters stored in task.result (safe summary only) */
@@ -181,7 +184,7 @@ export class MagenticStrategy extends BaseStrategy {
     // Resolve manager
     const manager = participants.find((p) => p.mindId === this.config.managerMindId);
     if (!manager) {
-      console.error('[Chatroom:Magentic] Manager mind not found among participants');
+      log.error('Manager mind not found among participants');
       obs.failure('Manager mind not found');
       obs.end({ terminationReason: 'ERROR' });
       return;

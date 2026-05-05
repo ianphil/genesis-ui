@@ -6,6 +6,9 @@ import type { OrchestrationContext } from './types';
 import { BaseStrategy } from './types';
 import { escapeXml, textContent, extractJsonObject } from './shared';
 import { sendToAgentWithRetry } from './stream-agent';
+import { Logger } from '../../logger';
+
+const log = Logger.create('Chatroom:GroupChat');
 
 // ---------------------------------------------------------------------------
 // Moderator response parsing
@@ -69,7 +72,7 @@ export class GroupChatStrategy extends BaseStrategy {
 
     const moderator = participants.find((p) => p.mindId === this.config.moderatorMindId);
     if (!moderator) {
-      console.error('[Chatroom:GroupChat] Moderator mind not found among participants');
+      log.error('Moderator mind not found among participants');
       return;
     }
 
@@ -203,7 +206,7 @@ export class GroupChatStrategy extends BaseStrategy {
           orchestrationMode: 'group-chat',
         }));
       } catch (err) {
-        console.error(`[Chatroom:GroupChat] Speaker ${speaker.mindId} failed:`, err);
+        log.error(`Speaker ${speaker.mindId} failed:`, err);
         continue; // Skip this turn, let moderator pick next speaker
       }
 
@@ -248,7 +251,7 @@ export class GroupChatStrategy extends BaseStrategy {
           orchestrationMode: 'group-chat',
         }));
       } catch (err) {
-        console.error(`[Chatroom:GroupChat] Moderator decision failed:`, err);
+        log.error('Moderator decision failed:', err);
         break; // Can't continue without moderator direction
       }
 
@@ -306,7 +309,7 @@ export class GroupChatStrategy extends BaseStrategy {
             context,
           );
         } catch (err) {
-          console.error(`[Chatroom:GroupChat] Synthesis failed:`, err);
+          log.error('Synthesis failed:', err);
         }
 
         break;

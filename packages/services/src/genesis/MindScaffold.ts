@@ -4,10 +4,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { execSync } from 'child_process';
+import { Logger } from '../logger';
 import { CopilotClientFactory } from '../sdk/CopilotClientFactory';
 import { approveAllCompat } from '../sdk/approveAllCompat';
 import { buildGenesisPrompt } from './genesisPrompt';
 import { GitHubRegistryClient } from './GitHubRegistryClient';
+
+const log = Logger.create('MindScaffold');
 
 const IDEA_FOLDERS = ['inbox', 'domains', 'expertise', 'initiatives', 'Archive'];
 const WORKING_MEMORY_FILES = ['memory.md', 'rules.md', 'log.md'];
@@ -87,7 +90,7 @@ export class MindScaffold {
     this.emit('validate', 'Validating...');
     const result = this.validate(mindPath);
     if (!result.ok) {
-      console.warn('[MindScaffold] Missing files after genesis:', result.missing);
+      log.warn('Missing files after genesis:', result.missing);
     }
 
     // 4. Git init
@@ -99,7 +102,7 @@ export class MindScaffold {
     try {
       this.bootstrapCapabilities(mindPath);
     } catch (err) {
-      console.warn('[MindScaffold] Capability bootstrap failed (non-fatal):', err);
+      log.warn('Capability bootstrap failed (non-fatal):', err);
       this.emit('capabilities', 'Capabilities install failed — run "upgrade from genesis" later.');
     }
 
@@ -188,7 +191,7 @@ export class MindScaffold {
       execSync('git add -A', { cwd: mindPath, stdio: 'ignore' });
       execSync('git commit -m "Genesis"', { cwd: mindPath, stdio: 'ignore' });
     } catch (err) {
-      console.error('[MindScaffold] Git init failed:', err);
+      log.error('Git init failed:', err);
     }
   }
 
@@ -233,9 +236,9 @@ export class MindScaffold {
       const installed = parsed.installed?.length || 0;
       const updated = parsed.updated?.length || 0;
       const errors = parsed.errors?.length || 0;
-      console.log(`[MindScaffold] Capabilities: ${installed} installed, ${updated} updated, ${errors} errors`);
+      log.info(`Capabilities: ${installed} installed, ${updated} updated, ${errors} errors`);
       if (errors > 0) {
-        console.warn('[MindScaffold] Capability errors:', parsed.errors);
+        log.warn('Capability errors:', parsed.errors);
       }
     } catch {
       // upgrade.js output wasn't valid JSON — non-fatal

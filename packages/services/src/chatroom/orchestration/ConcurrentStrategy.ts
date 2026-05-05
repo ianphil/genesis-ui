@@ -3,6 +3,9 @@ import type { OrchestrationStrategy, OrchestrationContext } from './types';
 import type { CopilotSession } from '../../mind';
 import { isStaleSessionError } from '@chamber/shared/sessionErrors';
 import { streamAgentTurn } from './stream-agent';
+import { Logger } from '../../logger';
+
+const log = Logger.create('Chatroom:Concurrent');
 
 // ---------------------------------------------------------------------------
 // In-flight agent tracking
@@ -34,7 +37,7 @@ export class ConcurrentStrategy implements OrchestrationStrategy {
       participants.map((mind) => {
         const prompt = context.buildBasePrompt(userMessage, participants, mind);
         return this.sendToAgent(mind, prompt, roundId, context).catch((err) => {
-          console.error(`[Chatroom:Concurrent] Agent ${mind.mindId} failed:`, err);
+          log.error(`Agent ${mind.mindId} failed:`, err);
         });
       }),
     );

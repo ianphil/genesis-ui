@@ -4,6 +4,9 @@ import type { OrchestrationContext } from './types';
 import { BaseStrategy } from './types';
 import { sendToAgentWithRetry } from './stream-agent';
 import { escapeXml, textContent } from './shared';
+import { Logger } from '../../logger';
+
+const log = Logger.create('Chatroom:Sequential');
 
 // ---------------------------------------------------------------------------
 // SequentialStrategy — round-robin, each agent speaks in order
@@ -60,7 +63,7 @@ export class SequentialStrategy extends BaseStrategy {
           roundResponses.push(message);
         }
       } catch (err) {
-        console.error(`[Chatroom:Sequential] Agent ${mind.mindId} failed:`, err);
+        log.error(`Agent ${mind.mindId} failed:`, err);
         // Continue to next agent — don't break the chain
       }
     }

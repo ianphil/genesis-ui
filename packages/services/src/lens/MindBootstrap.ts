@@ -3,6 +3,9 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { Logger } from '../logger';
+
+const log = Logger.create('MindBootstrap');
 
 export function seedLensDefaults(mindPath: string): void {
   const lensDir = path.join(mindPath, '.github', 'lens');
@@ -11,7 +14,7 @@ export function seedLensDefaults(mindPath: string): void {
   const helloDir = path.join(lensDir, 'hello-world');
   const helloViewJson = path.join(helloDir, 'view.json');
   if (!fs.existsSync(helloViewJson)) {
-    console.log('[MindBootstrap] Seeding default hello-world view');
+    log.info('Seeding default hello-world view');
     fs.mkdirSync(helloDir, { recursive: true });
     fs.writeFileSync(helloViewJson, JSON.stringify({
       name: 'Hello World',
@@ -38,7 +41,7 @@ export function seedLensDefaults(mindPath: string): void {
   const newsDir = path.join(lensDir, 'newspaper');
   const newsViewJson = path.join(newsDir, 'view.json');
   if (!fs.existsSync(newsViewJson)) {
-    console.log('[MindBootstrap] Seeding default newspaper view');
+    log.info('Seeding default newspaper view');
     fs.mkdirSync(newsDir, { recursive: true });
     fs.writeFileSync(newsViewJson, JSON.stringify({
       name: 'Newspaper',
@@ -84,11 +87,11 @@ export function installLensSkill(mindPath: string): void {
   }
 
   if (!content) {
-    console.warn('[MindBootstrap] Lens skill asset not found, skipping install');
+    log.warn('Lens skill asset not found, skipping install');
     return;
   }
 
-  console.log('[MindBootstrap] Installing Lens skill into mind');
+  log.info('Installing Lens skill into mind');
   fs.mkdirSync(skillDir, { recursive: true });
   fs.writeFileSync(skillPath, content);
 }

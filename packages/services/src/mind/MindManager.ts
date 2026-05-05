@@ -5,6 +5,9 @@ import { EventEmitter } from 'events';
 import * as fs from 'fs';
 import * as path from 'path';
 import type { PermissionHandler } from '@github/copilot-sdk';
+import { Logger } from '../logger';
+
+const log = Logger.create('MindManager');
 import type { MindContext, AppConfig, MindRecord } from '@chamber/shared/types';
 import type { InternalMindContext, CopilotClient, CopilotSession, Tool, UserInputHandler } from './types';
 import { generateMindId } from './generateMindId';
@@ -238,7 +241,7 @@ export class MindManager extends EventEmitter {
       try {
         await this.loadMind(record.path, record.id);
       } catch (err) {
-        console.error(`[MindManager] Failed to restore mind at ${record.path}:`, err);
+        log.error(`Failed to restore mind at ${record.path}:`, err);
       }
     }
 
