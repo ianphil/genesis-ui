@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.39.3 (2026-05-04)
+
+### Genesis
+
+- **Load marketplaces without the GitHub CLI** — Genesis marketplace reads now use the GitHub REST API directly, trying public access first and then stored Chamber GitHub credentials for private repositories. (#188)
+- **Improve marketplace access guidance** — inaccessible marketplace errors now point users toward Chamber sign-in and repository permissions instead of `gh auth` account switching. (#188)
+
+### Testing
+
+- **Remove marketplace smoke dependency on `gh`** — Electron marketplace smoke tests now check repository access with the same REST API and stored credential path used by the app. (#188)
+
 ## v0.39.2 (2026-05-04)
 
 ### Genesis

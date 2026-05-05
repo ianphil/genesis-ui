@@ -8,7 +8,7 @@ class FakeRegistryClient {
   json = new Map<string, unknown>();
   failingRepos = new Set<string>();
 
-  fetchTree(owner: string, repo: string): TreeEntry[] {
+  async fetchTree(owner: string, repo: string): Promise<TreeEntry[]> {
     const key = repoKey(owner, repo);
     if (this.failingRepos.has(key)) {
       throw new Error('GitHub repository not found');
@@ -16,7 +16,7 @@ class FakeRegistryClient {
     return this.tree.get(key) ?? [];
   }
 
-  fetchJsonContent(owner: string, repo: string, filePath: string): unknown {
+  async fetchJsonContent(owner: string, repo: string, filePath: string): Promise<unknown> {
     const content = this.json.get(`${repoKey(owner, repo)}:${filePath}`);
     if (!content) throw new Error(`Missing JSON fixture for ${filePath}`);
     return content;
@@ -56,10 +56,10 @@ describe('GenesisMindTemplateMarketplaceCatalog', () => {
     seedMarketplace(registryClient, internalSource, 'donna', 'Donna');
   });
 
-  it('aggregates templates from every enabled marketplace and labels their source', () => {
+  it('aggregates templates from every enabled marketplace and labels their source', async () => {
     const catalog = new GenesisMindTemplateMarketplaceCatalog(registryClient, [publicSource, internalSource]);
 
-    expect(catalog.listTemplates()).toEqual({
+    await expect(catalog.listTemplates()).resolves.toEqual({
       templates: [
         expect.objectContaining({
           id: 'lucy',
@@ -87,13 +87,13 @@ describe('GenesisMindTemplateMarketplaceCatalog', () => {
     });
   });
 
-  it('skips disabled marketplaces', () => {
+  it('skips disabled marketplaces', async () => {
     const catalog = new GenesisMindTemplateMarketplaceCatalog(registryClient, [
       publicSource,
       { ...internalSource, enabled: false },
     ]);
 
-    expect(catalog.listTemplates()).toEqual({
+    await expect(catalog.listTemplates()).resolves.toEqual({
       templates: [
         expect.objectContaining({ id: 'lucy' }),
       ],
@@ -104,11 +104,11 @@ describe('GenesisMindTemplateMarketplaceCatalog', () => {
     });
   });
 
-  it('keeps accessible marketplace templates when a private source cannot be read', () => {
+  it('keeps accessible marketplace templates when a private source cannot be read', async () => {
     registryClient.failingRepos.add(repoKey(internalSource.owner, internalSource.repo));
     const catalog = new GenesisMindTemplateMarketplaceCatalog(registryClient, [publicSource, internalSource]);
 
-    expect(catalog.listTemplates()).toEqual({
+    await expect(catalog.listTemplates()).resolves.toEqual({
       templates: [
         expect.objectContaining({ id: 'lucy' }),
       ],

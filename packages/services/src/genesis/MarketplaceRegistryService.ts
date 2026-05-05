@@ -1,11 +1,8 @@
-import { execFile } from 'node:child_process';
 import path from 'node:path';
-import { promisify } from 'node:util';
 import { DEFAULT_GENESIS_MIND_TEMPLATE_SOURCE } from './GenesisMindTemplateCatalog';
-import type { TreeEntry } from './GitHubRegistryClient';
+import { GitHubRegistryClient, type TreeEntry } from './GitHubRegistryClient';
 import type { AppConfig, MarketplaceRegistry, MarketplaceRegistryActionResult } from '@chamber/shared/types';
 
-const execFileAsync = promisify(execFile);
 const GITHUB_OWNER_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/;
 const GITHUB_REPO_PATTERN = /^[A-Za-z0-9._-]+$/;
 const MANIFEST_STRING_FIELDS = ['id', 'displayName', 'description', 'role', 'voice', 'templateVersion', 'root', 'agent'] as const;
@@ -20,53 +17,12 @@ interface RegistryClient {
   fetchJsonContent(owner: string, repo: string, filePath: string, ref: string): Promise<unknown>;
 }
 
-interface GitHubAuthInspector {
-  getActiveLogin(): Promise<string | null>;
-}
-
 class MarketplaceManifestError extends Error {}
-
-class AsyncGitHubRegistryClient implements RegistryClient {
-  async fetchTree(owner: string, repo: string, branch: string): Promise<TreeEntry[]> {
-    const { stdout } = await execFileAsync(
-      'gh',
-      ['api', `/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`],
-      { encoding: 'utf8', timeout: 30_000 },
-    );
-    return (JSON.parse(stdout) as { tree: TreeEntry[] }).tree;
-  }
-
-  async fetchJsonContent(owner: string, repo: string, filePath: string, ref: string): Promise<unknown> {
-    const { stdout } = await execFileAsync(
-      'gh',
-      ['api', `/repos/${owner}/${repo}/contents/${filePath}?ref=${ref}`],
-      { encoding: 'utf8', timeout: 30_000 },
-    );
-    const content = JSON.parse(stdout) as { content: string };
-    return JSON.parse(Buffer.from(content.content, 'base64').toString('utf8'));
-  }
-}
-
-class AsyncGitHubAuthInspector implements GitHubAuthInspector {
-  async getActiveLogin(): Promise<string | null> {
-    try {
-      const { stdout, stderr } = await execFileAsync(
-        'gh',
-        ['auth', 'status', '--hostname', 'github.com', '--active'],
-        { encoding: 'utf8', timeout: 10_000 },
-      );
-      return parseActiveLogin(`${stdout}\n${stderr}`);
-    } catch (error) {
-      return parseActiveLogin(commandOutput(error));
-    }
-  }
-}
 
 export class MarketplaceRegistryService {
   constructor(
     private readonly configStore: ConfigStore,
-    private readonly registryClient: RegistryClient = new AsyncGitHubRegistryClient(),
-    private readonly authInspector: GitHubAuthInspector = new AsyncGitHubAuthInspector(),
+    private readonly registryClient: RegistryClient = new GitHubRegistryClient(),
   ) {}
 
   listGenesisRegistries(): MarketplaceRegistry[] {
@@ -89,7 +45,7 @@ export class MarketplaceRegistryService {
     } catch (error) {
       return {
         success: false,
-        error: await marketplaceValidationMessage(registry, error, this.authInspector),
+        error: marketplaceValidationMessage(registry, error),
       };
     }
 
@@ -123,7 +79,7 @@ export class MarketplaceRegistryService {
     } catch (error) {
       return {
         success: false,
-        error: await marketplaceValidationMessage(registry, error, this.authInspector),
+        error: marketplaceValidationMessage(registry, error),
       };
     }
   }
@@ -293,32 +249,17 @@ function isSafeRelativePath(value: string): boolean {
   return normalized === '.' || (!normalized.startsWith('..') && !normalized.includes('/../'));
 }
 
-async function marketplaceValidationMessage(
+function marketplaceValidationMessage(
   registry: MarketplaceRegistry,
   error: unknown,
-  authInspector: GitHubAuthInspector,
-): Promise<string> {
+): string {
   if (error instanceof MarketplaceManifestError) {
     return `Marketplace ${registry.label} is invalid: ${error.message}`;
   }
-  const activeLogin = await authInspector.getActiveLogin();
-  const activeAccount = activeLogin ? ` with the active GitHub CLI account "${activeLogin}"` : '';
-  return `Unable to access marketplace ${registry.label}${activeAccount}. Chamber uses the GitHub CLI to read marketplace repositories. Run "gh auth status --hostname github.com" to confirm the active account, then run "gh auth switch --user <account-with-access>" or "gh auth login" before trying again.`;
+  return `Unable to access marketplace ${registry.label}. Chamber tried the public GitHub API and any stored Chamber GitHub credentials. Sign in to Chamber with an account that can access this repository, or confirm the marketplace URL and repository permissions.`;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function parseActiveLogin(output: string): string | null {
-  const match = output.match(/Logged in to github\.com account ([^\s]+) /);
-  return match?.[1] ?? null;
-}
-
-function commandOutput(error: unknown): string {
-  if (!isRecord(error)) return String(error);
-  const stdout = typeof error.stdout === 'string' ? error.stdout : '';
-  const stderr = typeof error.stderr === 'string' ? error.stderr : '';
-  const message = error instanceof Error ? error.message : '';
-  return `${stdout}\n${stderr}\n${message}`;
-}

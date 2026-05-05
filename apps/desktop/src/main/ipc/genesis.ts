@@ -15,7 +15,7 @@ import {
 } from '@chamber/services';
 
 interface GenesisMindTemplateCatalogPort {
-  listTemplates(): GenesisMindTemplate[];
+  listTemplates(): Promise<GenesisMindTemplate[]>;
 }
 
 interface GenesisMindTemplateInstallerPort {
@@ -48,7 +48,7 @@ export function setupGenesisIPC(
   });
 
   ipcMain.handle('genesis:listTemplates', async () => {
-    return templateCatalog.listTemplates();
+    return await templateCatalog.listTemplates();
   });
 
   ipcMain.handle('genesis:create', async (event, config: GenesisConfig) => {

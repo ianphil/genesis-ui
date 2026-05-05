@@ -14,17 +14,17 @@ class FakeRegistryClient {
   json = new Map<string, unknown>();
   blobs = new Map<string, Buffer>();
 
-  fetchTree(owner = 'ianphil', repo = 'genesis-minds'): TreeEntry[] {
+  async fetchTree(owner = 'ianphil', repo = 'genesis-minds'): Promise<TreeEntry[]> {
     return this.treeByRepo.get(repoKey(owner, repo)) ?? this.tree;
   }
 
-  fetchJsonContent(owner: string, repo: string, filePath: string): unknown {
+  async fetchJsonContent(owner: string, repo: string, filePath: string): Promise<unknown> {
     const content = this.json.get(`${repoKey(owner, repo)}:${filePath}`) ?? this.json.get(filePath);
     if (!content) throw new Error(`Missing JSON fixture for ${filePath}`);
     return content;
   }
 
-  fetchBlob(_owner: string, _repo: string, sha: string): Buffer {
+  async fetchBlob(_owner: string, _repo: string, sha: string): Promise<Buffer> {
     const content = this.blobs.get(sha);
     if (!content) throw new Error(`Missing blob fixture for ${sha}`);
     return content;

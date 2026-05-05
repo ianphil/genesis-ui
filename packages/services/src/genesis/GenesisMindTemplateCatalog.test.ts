@@ -6,11 +6,11 @@ class FakeRegistryClient {
   tree: TreeEntry[] = [];
   json = new Map<string, unknown>();
 
-  fetchTree(): TreeEntry[] {
+  async fetchTree(): Promise<TreeEntry[]> {
     return this.tree;
   }
 
-  fetchJsonContent(_owner: string, _repo: string, filePath: string): unknown {
+  async fetchJsonContent(_owner: string, _repo: string, filePath: string): Promise<unknown> {
     const content = this.json.get(filePath);
     if (!content) throw new Error(`Missing JSON fixture for ${filePath}`);
     return content;
@@ -25,10 +25,10 @@ describe('GenesisMindTemplateCatalog', () => {
     seedLucyMarketplace(registryClient);
   });
 
-  it('discovers templates from the default genesis minds marketplace', () => {
+  it('discovers templates from the default genesis minds marketplace', async () => {
     const catalog = new GenesisMindTemplateCatalog(registryClient);
 
-    expect(catalog.listTemplates()).toEqual([
+    await expect(catalog.listTemplates()).resolves.toEqual([
       expect.objectContaining({
         id: 'lucy',
         displayName: 'Lucy',
@@ -59,23 +59,23 @@ describe('GenesisMindTemplateCatalog', () => {
     ]);
   });
 
-  it('throws when a plugin entry points at a missing mind manifest', () => {
+  it('throws when a plugin entry points at a missing mind manifest', async () => {
     registryClient.tree = registryClient.tree.filter((entry) => entry.path !== 'plugins/genesis-minds/minds/lucy/mind.json');
 
     const catalog = new GenesisMindTemplateCatalog(registryClient);
 
-    expect(() => catalog.listTemplates()).toThrow('Template manifest not found: plugins/genesis-minds/minds/lucy/mind.json');
+    await expect(catalog.listTemplates()).rejects.toThrow('Template manifest not found: plugins/genesis-minds/minds/lucy/mind.json');
   });
 
-  it('throws when a required template file is missing', () => {
+  it('throws when a required template file is missing', async () => {
     registryClient.tree = registryClient.tree.filter((entry) => entry.path !== 'plugins/genesis-minds/minds/lucy/SOUL.md');
 
     const catalog = new GenesisMindTemplateCatalog(registryClient);
 
-    expect(() => catalog.listTemplates()).toThrow('Template lucy is missing required file: SOUL.md');
+    await expect(catalog.listTemplates()).rejects.toThrow('Template lucy is missing required file: SOUL.md');
   });
 
-  it('rejects template paths that escape the mind root', () => {
+  it('rejects template paths that escape the mind root', async () => {
     registryClient.json.set('plugins/genesis-minds/minds/lucy/mind.json', {
       ...lucyManifest(),
       requiredFiles: ['../escape.md'],
@@ -84,7 +84,7 @@ describe('GenesisMindTemplateCatalog', () => {
 
     const catalog = new GenesisMindTemplateCatalog(registryClient);
 
-    expect(() => catalog.listTemplates()).toThrow('Template lucy has unsafe required file path: ../escape.md');
+    await expect(catalog.listTemplates()).rejects.toThrow('Template lucy has unsafe required file path: ../escape.md');
   });
 });
 

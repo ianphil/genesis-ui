@@ -18,8 +18,8 @@ export const DEFAULT_GENESIS_MIND_TEMPLATE_SOURCE: GenesisMindTemplateMarketplac
 };
 
 interface RegistryClient {
-  fetchTree(owner: string, repo: string, branch: string): TreeEntry[];
-  fetchJsonContent(owner: string, repo: string, filePath: string, ref: string): unknown;
+  fetchTree(owner: string, repo: string, branch: string): Promise<TreeEntry[]>;
+  fetchJsonContent(owner: string, repo: string, filePath: string, ref: string): Promise<unknown>;
 }
 
 interface PluginMindEntry {
@@ -45,25 +45,25 @@ export class GenesisMindTemplateCatalog {
     private readonly source: GenesisMindTemplateMarketplaceSource = DEFAULT_GENESIS_MIND_TEMPLATE_SOURCE,
   ) {}
 
-  listTemplates(): GenesisMindTemplate[] {
-    const tree = this.registryClient.fetchTree(this.source.owner, this.source.repo, this.source.ref);
+  async listTemplates(): Promise<GenesisMindTemplate[]> {
+    const tree = await this.registryClient.fetchTree(this.source.owner, this.source.repo, this.source.ref);
     const blobPaths = new Set(tree.filter((entry) => entry.type === 'blob').map((entry) => entry.path));
 
     this.requireBlob(blobPaths, 'marketplace-config.json', 'Marketplace config not found');
     const pluginPath = `plugins/${this.source.plugin}/plugin.json`;
     this.requireBlob(blobPaths, pluginPath, `Plugin manifest not found: ${pluginPath}`);
 
-    const plugin = this.readRecord(pluginPath);
+    const plugin = await this.readRecord(pluginPath);
     const entries = this.readMindEntries(plugin, pluginPath);
 
-    return entries.map((entry) => this.readTemplate(entry, blobPaths));
+    return Promise.all(entries.map((entry) => this.readTemplate(entry, blobPaths)));
   }
 
-  private readTemplate(entry: PluginMindEntry, blobPaths: Set<string>): GenesisMindTemplate {
+  private async readTemplate(entry: PluginMindEntry, blobPaths: Set<string>): Promise<GenesisMindTemplate> {
     const manifestPath = this.safeJoin(`plugins/${this.source.plugin}`, entry.manifest, `Plugin mind ${entry.id} has unsafe manifest path`);
     this.requireBlob(blobPaths, manifestPath, `Template manifest not found: ${manifestPath}`);
 
-    const manifest = this.readMindManifest(this.readRecord(manifestPath), manifestPath);
+    const manifest = this.readMindManifest(await this.readRecord(manifestPath), manifestPath);
     const manifestDir = path.posix.dirname(manifestPath);
     const rootPath = this.safeJoin(manifestDir, manifest.root, `Template ${manifest.id} has unsafe root path: ${manifest.root}`);
 
@@ -98,8 +98,8 @@ export class GenesisMindTemplateCatalog {
     };
   }
 
-  private readRecord(filePath: string): Record<string, unknown> {
-    const content = this.registryClient.fetchJsonContent(this.source.owner, this.source.repo, filePath, this.source.ref);
+  private async readRecord(filePath: string): Promise<Record<string, unknown>> {
+    const content = await this.registryClient.fetchJsonContent(this.source.owner, this.source.repo, filePath, this.source.ref);
     if (!isRecord(content)) {
       throw new Error(`Expected ${filePath} to contain a JSON object`);
     }

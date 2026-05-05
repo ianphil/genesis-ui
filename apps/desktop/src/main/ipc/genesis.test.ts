@@ -128,7 +128,7 @@ function createScaffold(): MindScaffold & {
 
 function createCatalog() {
   return {
-    listTemplates: vi.fn(() => [lucyTemplate]),
+    listTemplates: vi.fn().mockResolvedValue([lucyTemplate]),
   };
 }
 
