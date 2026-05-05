@@ -16,7 +16,14 @@ function nonEmptyString(value: unknown, fallback: string): string {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : fallback;
 }
 
-export function handleChatEvent(messages: ChatMessage[], messageId: string, event: ChatEvent): ChatMessage[] {
+function updateChatMessage<T extends ChatMessage>(
+  message: T,
+  updates: Partial<Pick<ChatMessage, 'blocks' | 'isStreaming'>>,
+): T {
+  return { ...message, ...updates };
+}
+
+export function handleChatEvent<T extends ChatMessage>(messages: T[], messageId: string, event: ChatEvent): T[] {
   return messages.map((m) => {
     if (m.id !== messageId) return m;
 
@@ -31,7 +38,7 @@ export function handleChatEvent(messages: ChatMessage[], messageId: string, even
         } else {
           blocks.push({ type: 'text', sdkMessageId: event.sdkMessageId, content: event.content });
         }
-        return { ...m, blocks };
+        return updateChatMessage(m, { blocks });
       }
 
       case 'tool_start': {
@@ -43,7 +50,7 @@ export function handleChatEvent(messages: ChatMessage[], messageId: string, even
           arguments: event.args,
           parentToolCallId: event.parentToolCallId,
         });
-        return { ...m, blocks };
+        return updateChatMessage(m, { blocks });
       }
 
       case 'tool_progress': {
@@ -52,7 +59,7 @@ export function handleChatEvent(messages: ChatMessage[], messageId: string, even
           const block = blocks[idx] as Extract<ContentBlock, { type: 'tool_call' }>;
           blocks[idx] = { ...block, output: (block.output || '') + event.message + '\n' };
         }
-        return { ...m, blocks };
+        return updateChatMessage(m, { blocks });
       }
 
       case 'tool_output': {
@@ -61,7 +68,7 @@ export function handleChatEvent(messages: ChatMessage[], messageId: string, even
           const block = blocks[idx] as Extract<ContentBlock, { type: 'tool_call' }>;
           blocks[idx] = { ...block, output: (block.output || '') + event.output };
         }
-        return { ...m, blocks };
+        return updateChatMessage(m, { blocks });
       }
 
       case 'tool_done': {
@@ -75,7 +82,7 @@ export function handleChatEvent(messages: ChatMessage[], messageId: string, even
             ...(event.error && { error: event.error }),
           };
         }
-        return { ...m, blocks };
+        return updateChatMessage(m, { blocks });
       }
 
       case 'reasoning': {
@@ -85,7 +92,7 @@ export function handleChatEvent(messages: ChatMessage[], messageId: string, even
         } else {
           blocks.push({ type: 'reasoning', reasoningId: event.reasoningId, content: event.content });
         }
-        return { ...m, blocks };
+        return updateChatMessage(m, { blocks });
       }
 
       case 'message_final': {
@@ -93,7 +100,7 @@ export function handleChatEvent(messages: ChatMessage[], messageId: string, even
         const hasThisMessage = blocks.some(b => b.type === 'text' && b.sdkMessageId === event.sdkMessageId);
         if (!hasThisMessage && event.content) {
           blocks.push({ type: 'text', sdkMessageId: event.sdkMessageId, content: event.content });
-          return { ...m, blocks };
+          return updateChatMessage(m, { blocks });
         }
         return m;
       }
@@ -102,14 +109,13 @@ export function handleChatEvent(messages: ChatMessage[], messageId: string, even
         return m; // No-op in blocks — UI uses isStreaming to show indicator
 
       case 'done':
-        return { ...m, isStreaming: false };
+        return updateChatMessage(m, { isStreaming: false });
 
       case 'error':
-        return {
-          ...m,
+        return updateChatMessage(m, {
           isStreaming: false,
           blocks: [...blocks, { type: 'text' as const, content: `Error: ${event.message}` }],
-        };
+        });
 
       default:
         return m;
@@ -485,7 +491,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       const isDone = chatEvent.type === 'done' || chatEvent.type === 'error';
       return {
         ...state,
-        chatroomMessages: newMessages as ChatroomMessage[],
+        chatroomMessages: newMessages,
         chatroomStreamingByMind: isDone
           ? { ...state.chatroomStreamingByMind, [mindId]: false }
           : { ...state.chatroomStreamingByMind, [mindId]: true },
