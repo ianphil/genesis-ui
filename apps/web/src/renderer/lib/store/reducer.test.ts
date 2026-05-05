@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, expectTypeOf } from 'vitest';
 import { handleChatEvent, appReducer, initialState } from '.';
 import type { AppState, AppAction } from '.';
 import type { ChatMessage } from '@chamber/shared/types';
@@ -180,6 +180,20 @@ describe('handleChatEvent', () => {
     const initial = assistantMsg();
     const msgs = handleChatEvent(initial, 'wrong-id', makeChatEvent('chunk', { content: 'x' }));
     expect(msgs[0].blocks).toHaveLength(0);
+  });
+
+  it('preserves extended chat message types', () => {
+    const initial: ChatroomMessage[] = [{
+      ...makeMessage([], { id: 'msg-1', isStreaming: true }),
+      sender: { mindId: 'agent-1', name: 'Agent One' },
+      roundId: 'round-1',
+    }];
+
+    const msgs = handleChatEvent(initial, 'msg-1', makeChatEvent('done'));
+
+    expectTypeOf(msgs).toEqualTypeOf<ChatroomMessage[]>();
+    expect(msgs[0].sender).toEqual({ mindId: 'agent-1', name: 'Agent One' });
+    expect(msgs[0].roundId).toBe('round-1');
   });
 });
 
