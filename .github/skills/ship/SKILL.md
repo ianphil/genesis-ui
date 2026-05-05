@@ -155,7 +155,7 @@ npm run smoke:sdk
 If server SDK paths changed, also run:
 
 ```powershell
-npm run smoke:server
+npm run smoke:server-sdk
 ```
 
 If browser UI routing/chat paths changed and existing coverage applies, run:

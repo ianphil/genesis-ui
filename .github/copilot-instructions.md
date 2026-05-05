@@ -170,7 +170,7 @@ Vitest is the test runner. Configuration is in `config/vitest.config.ts`.
 - **Mocks/fakes**: prefer fakes (lambdas, in-memory stubs) over `vi.mock` of whole modules. Use `vi.fn()` for spies. Match the dependency-injection style — pass fakes through constructors.
 - **Renderer tests**: use `@testing-library/react` and `@testing-library/jest-dom`. Set `environment: 'jsdom'` per-file via `// @vitest-environment jsdom` when needed (the global default is `node`).
 - **Integration tests**: live in `src/main/integration/`.
-- **Smoke**: `npm run smoke:sdk` exercises the live SDK runtime via `scripts/run-sdk-smoke-test.js`; `npm run smoke:server` validates the server SDK path; `npm run smoke:web` and `npm run smoke:desktop` run browser and Electron Playwright smokes. Run the smoke that matches the changed surface.
+- **Smoke**: `npm run smoke:sdk` exercises the live SDK runtime via `scripts/run-sdk-smoke-test.js`; `npm run smoke:server-sdk` validates the server SDK path; `npm run smoke:web` and `npm run smoke:desktop` run browser and Electron Playwright smokes. Run the smoke that matches the changed surface.
 - **Packaging sandbox**: `npm run make:sandbox` builds the installer and runs `scripts/sandbox-test.js`. Run when packaging, runtime resolution, or first-launch behavior changes.
 
 ## Lint, Type-Check, Build

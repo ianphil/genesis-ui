@@ -63,9 +63,9 @@ Choose the narrowest smoke command that proves the changed path:
 | Changed area | Default smoke |
 |---|---|
 | Desktop startup, installer, Forge, packaging config, app icons | `npm run package` |
-| Packaged server/web routing | `npm run smoke:packaged` |
+| Packaged server/web routing | `npm run smoke:packaged-runtime` |
 | Copilot SDK session/runtime paths | `npm run smoke:sdk` |
-| Server SDK paths | `npm run smoke:server` |
+| Server SDK paths | `npm run smoke:server-sdk` |
 | Browser UI routing or chat flow | `npm run smoke:web` when covered |
 
 Do not invent new smoke scripts. If no existing smoke covers the path, document the closest executable verification and ask before broadening scope.

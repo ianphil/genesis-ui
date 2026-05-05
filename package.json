@@ -25,12 +25,12 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run --config config/vitest.config.ts",
     "test:coverage": "vitest run --config config/vitest.config.ts --coverage",
+    "playwright:install": "node scripts/install-playwright-browsers.js",
     "smoke:sdk": "node scripts/run-sdk-smoke-test.js",
-    "smoke:server": "npm --workspace @chamber/server run build && node scripts/run-server-sdk-smoke-test.js",
-    "smoke:install": "node scripts/install-playwright-browsers.js",
-    "smoke:web": "npm run smoke:install && playwright test --config config/playwright.config.ts --project=web",
-    "smoke:desktop": "npm run smoke:install && playwright test --config config/playwright.config.ts --project=electron --workers=1",
-    "smoke:packaged": "npm --workspace @chamber/server run build && node scripts/packaged-smoke.js"
+    "smoke:server-sdk": "npm --workspace @chamber/server run build && node scripts/run-server-sdk-smoke-test.js",
+    "smoke:web": "npm run playwright:install && playwright test --config config/playwright.config.ts --project=web",
+    "smoke:desktop": "npm run playwright:install && playwright test --config config/playwright.config.ts --project=electron --workers=1",
+    "smoke:packaged-runtime": "npm --workspace @chamber/server run build && node scripts/packaged-smoke.js"
   },
   "keywords": [],
   "author": {

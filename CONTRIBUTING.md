@@ -46,7 +46,7 @@ Two Playwright projects live under [tests/e2e/](tests/e2e):
 | `npm run smoke:web` | Vite web shell + fake-chat server | nothing extra |
 | `npm run smoke:desktop` | Spawns the Electron desktop app, connects via CDP | working Electron build |
 
-Both auto-install the Chromium headless shell on first run via `npm run smoke:install` (idempotent — fast no-op once the binary is present).
+Both auto-install the Chromium headless shell on first run via `npm run playwright:install` (idempotent — fast no-op once the binary is present).
 
 ### Smoke tests
 
@@ -55,10 +55,10 @@ Run the smoke test that matches the surface you touched:
 | Script | Purpose |
 |---|---|
 | `npm run smoke:sdk` | Copilot SDK runtime smoke |
-| `npm run smoke:server` | Loopback server SDK smoke |
+| `npm run smoke:server-sdk` | Loopback server SDK smoke |
 | `npm run smoke:web` | Browser app smoke |
 | `npm run smoke:desktop` | Electron desktop app smoke |
-| `npm run smoke:packaged` | Packaged app/runtime smoke |
+| `npm run smoke:packaged-runtime` | Packaged app/runtime smoke |
 
 Useful environment variables:
 
