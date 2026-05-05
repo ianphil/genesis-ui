@@ -66,10 +66,10 @@ export function setupMindIPC(mindManager: MindManager, config: MindIPCConfig): v
 
     // Create popout window
     const win = new BrowserWindow({
-      width: 900,
-      height: 700,
+      width: 860,
+      height: 900,
       minWidth: 500,
-      minHeight: 400,
+      minHeight: 520,
       title: `${mind.identity.name} — Chamber`,
       titleBarStyle: 'hiddenInset',
       titleBarOverlay: process.platform === 'win32' ? {
@@ -84,6 +84,7 @@ export function setupMindIPC(mindManager: MindManager, config: MindIPCConfig): v
         contextIsolation: true,
         nodeIntegration: false,
         sandbox: false,
+        backgroundThrottling: false,
       },
     });
 

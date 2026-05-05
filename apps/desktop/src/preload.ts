@@ -66,6 +66,11 @@ const electronAPI: ElectronAPI = {
     getOrchestration: () => ipcRenderer.invoke('chatroom:get-orchestration'),
     onEvent: (callback) => createIpcListener(ipcRenderer, 'chatroom:event', callback),
   },
+  voice: {
+    recognizeOnce: (options) => ipcRenderer.invoke('voice:recognizeOnce', options),
+    stopRecognition: () => ipcRenderer.invoke('voice:stopRecognition'),
+    synthesize: (text, options) => ipcRenderer.invoke('voice:synthesize', text, options),
+  },
   updater: {
     getState: () => ipcRenderer.invoke('updater:get-state'),
     check: () => ipcRenderer.invoke('updater:check'),

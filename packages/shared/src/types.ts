@@ -187,6 +187,20 @@ export interface DesktopUpdateActionResult {
   message?: string;
 }
 
+export interface VoiceRecognitionResult {
+  text?: string;
+  error?: string;
+  confidence?: number;
+  provider: 'windows-system-speech';
+}
+
+export interface VoiceSynthesisResult {
+  audioBase64?: string;
+  mimeType?: string;
+  error?: string;
+  provider: 'edge-tts';
+}
+
 export interface ElectronAPI {
   chat: {
     send: (mindId: string, message: string, messageId: string, model?: string, attachments?: ChatImageAttachment[]) => Promise<void>;
@@ -238,6 +252,11 @@ export interface ElectronAPI {
     removeGenesisRegistry: (id: string) => Promise<MarketplaceRegistryActionResult>;
   };
   chatroom: ChatroomAPI;
+  voice: {
+    recognizeOnce: (options?: { language?: string; timeoutMs?: number }) => Promise<VoiceRecognitionResult>;
+    stopRecognition: () => Promise<void>;
+    synthesize: (text: string, options?: { voice?: string }) => Promise<VoiceSynthesisResult>;
+  };
   updater: {
     getState: () => Promise<DesktopUpdateState>;
     check: () => Promise<DesktopUpdateActionResult>;
