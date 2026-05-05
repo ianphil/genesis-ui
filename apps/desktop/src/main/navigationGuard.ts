@@ -30,7 +30,7 @@ export function shouldOpenExternally(targetUrl: string, currentUrl: string): boo
 export function installExternalNavigationGuard(webContents: WebContents): void {
   webContents.setWindowOpenHandler(({ url }) => {
     if (shouldOpenExternally(url, webContents.getURL())) {
-      void shell.openExternal(url);
+      openExternal(url);
       return { action: 'deny' };
     }
 
@@ -40,7 +40,11 @@ export function installExternalNavigationGuard(webContents: WebContents): void {
   webContents.on('will-navigate', (event, url) => {
     if (!shouldOpenExternally(url, webContents.getURL())) return;
     event.preventDefault();
-    void shell.openExternal(url);
+    openExternal(url);
   });
 }
 
+function openExternal(url: string): void {
+  if (process.env.CHAMBER_E2E_DISABLE_OPEN_EXTERNAL === '1') return;
+  void shell.openExternal(url);
+}
