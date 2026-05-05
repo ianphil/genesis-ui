@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.40.0 (2026-05-05)
+
+### Chat
+
+- **Persist model choices per agent** - Agent chat now stores each mind's selected model in its config and recreates the SDK session with that model so switching minds no longer shares one global picker value. (#46)
+- **Inject local datetime context** - SDK prompts now include the current local datetime and timezone across chat, A2A tasks, chatroom orchestration, Genesis, and background prompt sends. (#32)
+
 ## v0.39.9 (2026-05-05)
 
 ### Desktop
@@ -88,7 +95,7 @@
 ### macOS
 
 - **Add macOS build support** — Chamber can now build macOS dmg/zip artifacts with platform-aware builder resources, optional signing/notarization settings, a macOS tray fallback icon path, and a draggable hidden-inset titlebar strip. (#177)
-- **Refresh the packaged Copilot CLI pin** — the development and committed desktop runtimes now pin `@github/copilot@1.0.41-0` so package smoke checks match the CLI binary shipped by the npm package.
+- **Refresh the packaged Copilot CLI pin** — the development and committed desktop runtimes now pin `@github/copilot@1.0.41-1` so package smoke checks match the CLI binary shipped by the npm package.
 
 ### Genesis
 

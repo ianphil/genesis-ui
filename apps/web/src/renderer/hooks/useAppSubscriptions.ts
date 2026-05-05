@@ -42,14 +42,8 @@ export function useAppSubscriptions() {
 
     const loadModels = async () => {
       try {
-        const models = await window.electronAPI.chat.listModels();
+        const models = await window.electronAPI.chat.listModels(activeMindId ?? undefined);
         dispatch({ type: 'SET_AVAILABLE_MODELS', payload: models });
-
-        const persisted = localStorage.getItem('chamber:selectedModel');
-        const valid = persisted && models.some(m => m.id === persisted);
-        if (!valid && models.length > 0) {
-          dispatch({ type: 'SET_SELECTED_MODEL', payload: models[0].id });
-        }
       } catch (err) {
         log.error('Failed to load models:', err);
       }
