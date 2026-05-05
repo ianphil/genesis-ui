@@ -119,6 +119,22 @@ describe('MindScaffold.generateSoul — CopilotClientFactory integration', () =>
     expect(mockDestroyClient).toHaveBeenCalledWith(fakeClient);
   });
 
+  it('does not enable ask_user during genesis generation', async () => {
+    const scaffold = new MindScaffold(undefined, fakeFactory as unknown as CopilotClientFactory);
+
+    await scaffold.create({
+      name: 'askless',
+      role: 'assistant',
+      voice: 'neutral',
+      voiceDescription: 'direct',
+      basePath: 'C:\\agents',
+    });
+
+    const sessionConfig = (mockCreateSession.mock.calls as unknown as Array<[Record<string, unknown>]>)[0]?.[0];
+    expect(sessionConfig).toBeDefined();
+    expect(sessionConfig).not.toHaveProperty('onUserInputRequest');
+  });
+
   it('does not scaffold a .github/extensions directory or install remote extensions', async () => {
     const scaffold = new MindScaffold(undefined, fakeFactory as unknown as CopilotClientFactory);
 

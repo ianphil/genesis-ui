@@ -600,6 +600,17 @@ describe('MindManager', () => {
       );
     });
 
+    it('does not enable ask_user for task sessions without a user input handler', async () => {
+      const mind = await manager.loadMind('/tmp/agents/q');
+      mockCreateSession.mockClear();
+
+      await manager.createTaskSession(mind.mindId, 'task-1');
+
+      const callArg = mockCreateSession.mock.calls[0]?.[0];
+      expect(callArg).toBeDefined();
+      expect(callArg).not.toHaveProperty('onUserInputRequest');
+    });
+
     it('accepts custom onUserInputRequest callback', async () => {
       const mind = await manager.loadMind('/tmp/agents/q');
       // New SDK UserInputHandler signature: (request: UserInputRequest, invocation) => UserInputResponse
