@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.39.2 (2026-05-04)
+
+### Genesis
+
+- **Surface marketplace loading errors** — the Genesis voice screen now shows a clear error when marketplace templates fail to load instead of silently returning an empty list. (#86)
+- **Fix dark-on-dark custom voice input** — added `text-foreground` to the custom voice text input so it's readable on dark themes.
+- **Split voice input into Name + Backstory** — the custom voice flow now has separate fields for the mind name (used as the directory slug) and an optional backstory that enriches SOUL.md.
+- **Fix custom role input** — selecting "Something else..." on the role screen now shows a text input instead of immediately submitting the literal string.
+
+### Developer Experience
+
+- **Add Logger utility** — new `Logger.create('Tag')` API with level gating (`debug`/`info`/`warn`/`error`/`silent`) controlled by `CHAMBER_LOG_LEVEL` env var. All ~50 `console.*` calls across the codebase now route through Logger. (#86)
+- **Pre-start SDK version check** — `npm start` now validates that installed `@github/copilot` and `@github/copilot-sdk` versions match `package.json` pins before launching Electron.
+- **Skip marketplace tests on auth mismatch** — e2e tests that need `agency-microsoft/genesis-minds` now skip with a clear message when the active `gh` account lacks access, instead of failing with a timeout.
+
+### Testing
+
+- **Expand Ernest e2e smoke** — the Genesis smoke test now exercises the backstory field and custom role input, covering all new Genesis inputs.
+
 ## v0.39.1 (2026-05-04)
 
 ### Packaging
