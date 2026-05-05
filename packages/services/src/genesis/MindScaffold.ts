@@ -154,7 +154,6 @@ export class MindScaffold {
       streaming: true,
       workingDirectory: mindPath,
       onPermissionRequest: approveAllCompat,
-      onUserInputRequest: async () => ({ answer: 'Proceed with genesis.', wasFreeform: true }),
     };
 
     const session = await client.createSession(

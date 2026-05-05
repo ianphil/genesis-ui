@@ -4,7 +4,7 @@
 import { EventEmitter } from 'events';
 import * as fs from 'fs';
 import * as path from 'path';
-import type { PermissionHandler } from '@github/copilot-sdk';
+import type { PermissionHandler, SessionConfig } from '@github/copilot-sdk';
 import { Logger } from '../logger';
 
 const log = Logger.create('MindManager');
@@ -368,7 +368,7 @@ export class MindManager extends EventEmitter {
     onPermissionRequest: PermissionHandler = approveAllCompat,
     approveAll = true,
   ): Promise<CopilotSession> {
-    const session = await client.createSession({
+    const sessionConfig: SessionConfig = {
       workingDirectory: mindPath,
       enableConfigDiscovery: true,
       tools,
@@ -380,8 +380,9 @@ export class MindManager extends EventEmitter {
         },
       },
       onPermissionRequest,
-      onUserInputRequest: onUserInputRequest ?? (async () => ({ answer: 'Not available in this context', wasFreeform: true })),
-    });
+      ...(onUserInputRequest ? { onUserInputRequest } : {}),
+    };
+    const session = await client.createSession(sessionConfig);
 
     if (approveAll) {
       await session.rpc.permissions.setApproveAll({ enabled: true });
