@@ -18,7 +18,12 @@ vi.mock('fs', () => ({
   }),
 }));
 
+vi.mock('../lens/MindBootstrap', () => ({
+  installLensSkill: vi.fn(),
+}));
+
 import * as fs from 'fs';
+import { installLensSkill } from '../lens/MindBootstrap';
 
 const mockStart = vi.fn();
 const mockStop = vi.fn();
@@ -237,6 +242,28 @@ describe('MindManager', () => {
       expect(localManager.getMind(mind.mindId)?.session).toBe(secondModelSession);
       expect(originalSession.disconnect).toHaveBeenCalledTimes(1);
       expect(firstModelSession.disconnect).toHaveBeenCalledTimes(1);
+    });
+
+    it('installs or upgrades the managed Lens skill before creating the SDK session', async () => {
+      await manager.loadMind('/tmp/agents/q');
+
+      expect(installLensSkill).toHaveBeenCalledWith('/tmp/agents/q');
+      expect(mockClientFactory.createClient).toHaveBeenCalledWith('/tmp/agents/q');
+      expect(vi.mocked(installLensSkill).mock.invocationCallOrder[0])
+        .toBeLessThan(mockClientFactory.createClient.mock.invocationCallOrder[0]);
+    });
+
+    it('continues loading when the managed Lens skill upgrade fails', async () => {
+      vi.mocked(installLensSkill).mockImplementationOnce(() => {
+        throw new Error('skill asset missing');
+      });
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(vi.fn());
+
+      const mind = await manager.loadMind('/tmp/agents/q');
+
+      expect(mind.status).toBe('ready');
+      expect(mockClientFactory.createClient).toHaveBeenCalledWith('/tmp/agents/q');
+      warnSpy.mockRestore();
     });
 
     it('starts Lens watching and emits view changes after watcher rescans', async () => {

@@ -16,6 +16,7 @@ vi.mock('fs', () => ({
 
 import * as fs from 'fs';
 import { ViewDiscovery } from './ViewDiscovery';
+import type { LensViewManifest } from '@chamber/shared/types';
 
 const mockExistsSync = vi.mocked(fs.existsSync);
 const mockReaddirSync = vi.mocked(fs.readdirSync);
@@ -108,6 +109,45 @@ describe('ViewDiscovery', () => {
       await expect(discovery.scan('/tmp/test/mind')).resolves.toEqual([]);
     });
 
+    it('accepts Canvas Lens manifests with html sources', async () => {
+      mockExistsSync.mockReturnValue(true);
+      mockReaddirSync.mockReturnValue([
+        { name: 'command-center', isDirectory: () => true },
+      ] as unknown as ReturnType<typeof fs.readdirSync>);
+      mockReadFileSync.mockReturnValue(JSON.stringify({
+        name: 'Command Center',
+        icon: 'layout',
+        view: 'canvas',
+        source: 'index.html',
+      }));
+
+      const views = await discovery.scan('/tmp/test/mind');
+
+      expect(views).toEqual([
+        expect.objectContaining({
+          id: 'command-center',
+          name: 'Command Center',
+          view: 'canvas',
+          source: 'index.html',
+        }),
+      ]);
+    });
+
+    it('skips Canvas Lens manifests with non-html sources', async () => {
+      mockExistsSync.mockReturnValue(true);
+      mockReaddirSync.mockReturnValue([
+        { name: 'bad-canvas', isDirectory: () => true },
+      ] as unknown as ReturnType<typeof fs.readdirSync>);
+      mockReadFileSync.mockReturnValue(JSON.stringify({
+        name: 'Bad Canvas',
+        icon: 'layout',
+        view: 'canvas',
+        source: 'data.json',
+      }));
+
+      await expect(discovery.scan('/tmp/test/mind')).resolves.toEqual([]);
+    });
+
     it('skips manifests with missing source', async () => {
       mockExistsSync.mockReturnValue(true);
       mockReaddirSync.mockReturnValue([
@@ -151,6 +191,66 @@ describe('ViewDiscovery', () => {
     });
   });
 
+  describe('lens_create tool', () => {
+    it('creates the Lens directory, manifest, and Canvas source file', async () => {
+      mockExistsSync.mockReturnValue(false);
+      const tool = discovery.getToolsForMind('mind-1', 'C:\\test\\mind')
+        .find((candidate) => candidate.name === 'lens_create');
+      if (!tool) throw new Error('Expected lens_create tool');
+
+      const result = await tool.handler({
+        viewId: 'cron-jobs',
+        name: 'Cron Jobs',
+        icon: 'clock',
+        view: 'canvas',
+        source: 'index.html',
+        content: '<!doctype html><html><body class="ch-page">Cron</body></html>',
+      }, {} as never) as { ok: boolean; view: LensViewManifest };
+
+      expect(result.ok).toBe(true);
+      expect(result.view).toEqual(expect.objectContaining({
+        id: 'cron-jobs',
+        name: 'Cron Jobs',
+        view: 'canvas',
+        source: 'index.html',
+      }));
+      expect(fs.mkdirSync).toHaveBeenCalledWith(
+        path.join('C:\\test\\mind', '.github', 'lens', 'cron-jobs'),
+        { recursive: true },
+      );
+      expect(fs.writeFileSync).toHaveBeenCalledWith(
+        path.join('C:\\test\\mind', '.github', 'lens', 'cron-jobs', 'view.json'),
+        expect.stringContaining('"view": "canvas"'),
+        'utf-8',
+      );
+      expect(fs.writeFileSync).toHaveBeenCalledWith(
+        path.join('C:\\test\\mind', '.github', 'lens', 'cron-jobs', 'index.html'),
+        expect.stringContaining('Cron'),
+        'utf-8',
+      );
+    });
+
+    it('rejects unsafe Lens ids and Canvas sources', async () => {
+      await expect(discovery.createView('/tmp/mind', {
+        viewId: '../bad',
+        name: 'Bad',
+        icon: 'clock',
+        view: 'canvas',
+        source: 'index.html',
+        content: '<html></html>',
+      })).rejects.toThrow('viewId');
+
+      await expect(discovery.createView('/tmp/mind', {
+        viewId: 'bad-source',
+        name: 'Bad',
+        icon: 'clock',
+        view: 'canvas',
+        source: 'data.json',
+        content: '<html></html>',
+      })).rejects.toThrow('Canvas Lens sources must be .html files');
+    });
+  });
+
   describe('getViewData', () => {
     it('returns parsed data for valid view', async () => {
       mockExistsSync.mockReturnValue(true);
@@ -185,6 +285,23 @@ describe('ViewDiscovery', () => {
 
       mockReadFileSync.mockReturnValueOnce(JSON.stringify(['not', 'an', 'object']));
       expect(discovery.getViewData('test', '/tmp/test/mind')).toBeNull();
+    });
+
+    it('does not parse Canvas Lens html as JSON data', async () => {
+      mockExistsSync.mockReturnValue(true);
+      mockReaddirSync.mockReturnValue([
+        { name: 'canvas', isDirectory: () => true },
+      ] as unknown as ReturnType<typeof fs.readdirSync>);
+      mockReadFileSync.mockReturnValueOnce(JSON.stringify({
+        name: 'Canvas',
+        icon: 'layout',
+        view: 'canvas',
+        source: 'index.html',
+      }));
+
+      await discovery.scan('/tmp/test/mind');
+
+      expect(discovery.getViewData('canvas', '/tmp/test/mind')).toBeNull();
     });
   });
 

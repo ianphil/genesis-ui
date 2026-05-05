@@ -1,151 +1,167 @@
 ---
 name: lens
-description: Create and manage Lens views — declarative UI panels that appear in the Chamber activity bar. Use when the user asks to "create a view", "show me X in the UI", "add a dashboard", "make a panel for", or wants to visualize data, config, or status in the desktop app.
+version: 2.0.0
+description: Create and manage Chamber Lens views, including structured JSON views and rich Canvas-backed Chamber-native UI. Use when the user asks to create a view, dashboard, panel, report, form, command center, or app-like screen inside Chamber.
 ---
 
-# Lens — Declarative UI Views
+# Lens — Chamber Views
 
-Create `view.json` manifests in `.github/lens/<view-name>/` to add views to the Chamber activity bar.
+Create views in `.github/lens/<view-name>/` to add panels to the Chamber activity bar. Lens is the navigation and discovery model. Use the right renderer for the job:
 
-## Creating a View
+- Use classic JSON Lens views for simple structured data.
+- Use Canvas Lens views for rich dashboards, workflows, reports, forms, and app-like UI.
 
-1. Create `.github/lens/<view-name>/view.json`
-2. The UI discovers it automatically — a new icon appears
-3. For prompt-driven views, you write the data file when the user clicks Refresh
+## Creating Views
 
-## view.json Reference
+Prefer the `lens_create` tool whenever it is available. It creates the Lens directory, `view.json`, and source file in one operation, so you do not need shell access or a separate mkdir step.
+
+Example Canvas Lens creation:
+
+```json
+{
+  "viewId": "cron-jobs",
+  "name": "Cron Jobs",
+  "icon": "clock",
+  "view": "canvas",
+  "source": "index.html",
+  "content": "<!doctype html><html><body class=\"ch-page\"><section class=\"ch-card\"><h1>Cron Jobs</h1></section></body></html>"
+}
+```
+
+Example classic JSON Lens creation:
+
+```json
+{
+  "viewId": "cron-table",
+  "name": "Cron Table",
+  "icon": "clock",
+  "view": "table",
+  "source": "data.json",
+  "content": [{ "name": "Daily smoke", "status": "enabled" }]
+}
+```
+
+Only fall back to direct file creation when `lens_create` is not available and the parent directory already exists.
+
+## Canvas Lens Views
+
+Canvas Lens is the preferred renderer for expressive UI. Create an HTML file and a `view.json` manifest:
+
+```json
+{
+  "name": "Command Center",
+  "icon": "layout",
+  "view": "canvas",
+  "source": "index.html",
+  "prompt": "Build a Chamber-native dashboard for the user's current priorities.",
+  "refreshOn": "click"
+}
+```
+
+`source` must be an HTML file inside the same view folder. Chamber renders it in-app inside a sandboxed frame, injects Chamber theme styles, and provides a bridge at `window.canvas`.
+
+### Chamber Design Kit
+
+Use the injected classes so your UI feels native:
+
+- `ch-page` — full page wrapper
+- `ch-grid` — responsive card grid
+- `ch-card` — Chamber card surface
+- `ch-button` — primary button
+- `ch-button-secondary` — secondary button
+- `ch-input` — text/input control
+- `ch-table` — table styling
+- `ch-badge` — compact status badge
+- `ch-muted` — muted text
+
+Use CSS variables when custom styling is needed:
+
+```css
+color: var(--ch-foreground);
+background: var(--ch-card);
+border-color: var(--ch-border);
+accent-color: var(--ch-genesis);
+```
+
+Do not hard-code a separate visual theme unless the user explicitly asks. Default to dark Chamber-native UI.
+
+### Canvas Actions
+
+Canvas HTML does not get direct SDK access. Send user intent back to Chamber:
+
+```html
+<button class="ch-button" onclick="window.canvas.sendAction('approve', { id: 'task-123' })">
+  Approve
+</button>
+```
+
+Chamber routes actions to the active mind. Use your normal tools and context to satisfy the action, then update the HTML source file if the UI should change.
+
+## Classic JSON Lens Views
+
+Classic views still work well for simple structured data.
 
 ```json
 {
   "name": "Display Name",
-  "icon": "lucide-icon-name",
-  "view": "form | table | briefing",
+  "icon": "layout",
+  "view": "form | table | briefing | detail | status-board | timeline | editor",
   "source": "data.json",
   "prompt": "Optional: what to gather when user clicks Refresh",
   "refreshOn": "click"
 }
 ```
 
-### Fields
+When `prompt` is set, Chamber sends it to you with an output path appended. For classic JSON views, write only valid JSON to that path.
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| `name` | Yes | Display name in tooltip and header |
-| `icon` | Yes | Lucide icon: `zap`, `newspaper`, `users`, `clock`, `settings`, `layout` |
-| `view` | Yes | `form` (key-value), `table` (rows), or `briefing` (card grid) |
-| `source` | Yes | Data filename, relative to view folder |
-| `prompt` | No | Prompt sent to you on Refresh. Describe what data to gather. |
-| `refreshOn` | No | `"click"` — manual refresh only |
-| `schema` | No | JSON Schema for field/column labels |
+### View Types
 
-## View Types
-
-### `form` — Key-Value Pairs
-Data: flat JSON object. Each key becomes a row.
-```json
-{ "agent": "Q", "status": "Online", "extensions": 5 }
-```
-
-### `briefing` — Card Grid  
-Data: flat JSON object. Numbers render large, strings render normal.
-```json
-{ "inbox_items": 12, "initiatives": 3, "top_priority": "Ship Lens" }
-```
-
-### `table` — Data Table
-Data: JSON array of objects. Each object is a row.
-```json
-[
-  { "name": "Kent", "role": "PM" },
-  { "name": "Michael", "role": "SWE" }
-]
-```
-
-For table column headers, use `schema.items.properties`:
-```json
-{
-  "schema": {
-    "items": {
-      "properties": {
-        "name": { "type": "string", "title": "Name" },
-        "role": { "type": "string", "title": "Role" }
-      }
-    }
-  }
-}
-```
-
-### `detail` — Single Item Detail Card
-Data: flat JSON object. `name`/`title` becomes heading, `description` becomes body, `status` becomes badge.
-```json
-{ "name": "Lens Framework", "status": "Active", "description": "Declarative UI views", "phase": 4 }
-```
-
-### `status-board` — Status Cards with Indicators
-Data: JSON array with `name` and `status` fields. Shows 🟢🟡🔴 based on status text (ok/running = green, error/fail = red, warn/pending = yellow).
-```json
-[
-  { "name": "daily-report", "status": "ok", "last_run": "2h ago" },
-  { "name": "sync-contacts", "status": "error", "last_run": "failed" }
-]
-```
-
-### `timeline` — Chronological Feed
-Data: JSON array. Auto-extracts `title`, `time`/`timestamp`, `description`.
-```json
-[
-  { "title": "Deployed v0.8.0", "time": "3:25 AM", "description": "Lens Phase 4 shipped" },
-  { "title": "Created newspaper view", "time": "3:12 AM" }
-]
-```
-
-### `editor` — Editable Form
-Data: flat JSON object. Schema `properties` define field types. Supports `string`, `number`, `boolean`, and `enum` (dropdown). Save button sends changes back through the agent.
-```json
-{
-  "schema": {
-    "properties": {
-      "name": { "type": "string", "title": "Name" },
-      "enabled": { "type": "boolean", "title": "Enabled" },
-      "level": { "type": "string", "title": "Level", "enum": ["low", "medium", "high"] }
-    }
-  }
-}
-```
-
-## Prompt-Driven Views
-
-When `prompt` is set, the UI sends the prompt to you with the output path appended. You gather data and write ONLY valid JSON to that path. No markdown, no explanation — just the JSON.
-
-## Static Views
-
-When `prompt` is not set, the `source` file must already exist. Create it alongside the `view.json`. The UI re-reads it when the file changes on disk.
-
-## Deleting a View
-
-Delete the folder from `.github/lens/`. The UI removes the icon automatically.
+- `form` — flat JSON object as key/value rows.
+- `briefing` — flat JSON object as card grid.
+- `table` — JSON array of objects.
+- `detail` — single object detail card.
+- `status-board` — array of status objects.
+- `timeline` — chronological array.
+- `editor` — editable flat object with schema-driven fields.
 
 ## Examples
 
-Quick status view:
+Canvas dashboard:
+
+```html
+<!doctype html>
+<html>
+  <body class="ch-page">
+    <section class="ch-grid">
+      <article class="ch-card">
+        <p class="ch-muted">Top priority</p>
+        <h1>Ship Canvas Lens</h1>
+        <button class="ch-button" onclick="window.canvas.sendAction('start', { item: 'canvas-lens' })">
+          Start
+        </button>
+      </article>
+    </section>
+  </body>
+</html>
+```
+
+Classic briefing:
+
 ```json
 {
-  "name": "Status",
-  "icon": "zap",
-  "view": "form",
-  "source": "data.json",
-  "prompt": "Report your name, mind path, extension count, and model. Write as flat JSON.",
+  "name": "Newspaper",
+  "icon": "newspaper",
+  "view": "briefing",
+  "source": "briefing.json",
+  "prompt": "Generate a morning briefing. Write a flat JSON object.",
   "refreshOn": "click"
 }
 ```
 
-Contacts table (static):
-```json
-{
-  "name": "Contacts",
-  "icon": "users",
-  "view": "table",
-  "source": "contacts.json",
-  "schema": { "items": { "properties": { "name": { "title": "Name" }, "url": { "title": "URL" } } } }
-}
-```
+## Rules
+
+- Keep all Lens files inside `.github/lens/<view-name>/`.
+- Never write credentials into Lens files.
+- Canvas UI sends intent; the mind uses SDK tools through Chamber.
+- Prefer Canvas Lens for rich UI, but keep simple data views as classic JSON Lens.
+- Delete the view folder to remove a view from Chamber.

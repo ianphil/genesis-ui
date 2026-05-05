@@ -3,7 +3,9 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import type { LensViewManifest } from '@chamber/shared/types';
+import type { CanvasLensAction, LensViewManifest } from '@chamber/shared/types';
+import type { ChamberToolProvider } from '../chamberTools';
+import type { Tool } from '../mind/types';
 import { Logger } from '../logger';
 
 const log = Logger.create('ViewDiscovery');
@@ -18,13 +20,26 @@ const SUPPORTED_LENS_VIEWS = new Set<LensViewManifest['view']>([
   'detail',
   'timeline',
   'editor',
+  'canvas',
 ]);
 
 export interface ViewRefreshHandler {
   sendBackgroundPrompt(mindPath: string, prompt: string): Promise<void>;
 }
 
-export class ViewDiscovery {
+interface CreateLensViewInput {
+  viewId: string;
+  name: string;
+  icon: string;
+  view: LensViewManifest['view'];
+  source: string;
+  content: unknown;
+  prompt?: string;
+  refreshOn?: 'click' | 'interval';
+  schema?: Record<string, unknown>;
+}
+
+export class ViewDiscovery implements ChamberToolProvider {
   private viewsByMind = new Map<string, LensViewManifest[]>();
   private watchersByMind = new Map<string, fs.FSWatcher[]>();
   private scanTimersByMind = new Map<string, ReturnType<typeof setTimeout>>();
@@ -36,6 +51,48 @@ export class ViewDiscovery {
 
   setRefreshHandler(handler: ViewRefreshHandler): void {
     this.refreshHandler = handler;
+  }
+
+  getToolsForMind(_mindId: string, mindPath: string): Tool[] {
+    return [{
+      name: 'lens_create',
+      description: 'Create or replace a Chamber Lens view. Creates the .github/lens/<viewId>/ directory, view.json manifest, and source file in one safe operation.',
+      parameters: {
+        type: 'object',
+        properties: {
+          viewId: {
+            type: 'string',
+            description: 'Directory id for the Lens view. Use lowercase letters, numbers, hyphens, or underscores.',
+          },
+          name: { type: 'string', description: 'Display name for the Activity Bar tooltip and view header.' },
+          icon: { type: 'string', description: 'Lucide icon name, for example layout, table, newspaper, clock, or zap.' },
+          view: {
+            type: 'string',
+            enum: [...SUPPORTED_LENS_VIEWS],
+            description: 'Lens renderer type. Use canvas for rich HTML UI.',
+          },
+          source: {
+            type: 'string',
+            description: 'Source filename inside the view folder. Canvas views must use an .html file such as index.html.',
+          },
+          content: {
+            description: 'Source file content. For canvas, provide HTML. For classic JSON views, provide a JSON object/array or a JSON string.',
+          },
+          prompt: { type: 'string', description: 'Optional refresh prompt.' },
+          refreshOn: { type: 'string', enum: ['click', 'interval'], description: 'Optional refresh behavior.' },
+          schema: { type: 'object', description: 'Optional JSON schema for classic Lens views.' },
+        },
+        required: ['viewId', 'name', 'icon', 'view', 'source', 'content'],
+      },
+      handler: async (args) => {
+        const view = await this.createView(mindPath, args as unknown as CreateLensViewInput);
+        return {
+          ok: true,
+          view,
+          message: `Created Lens view "${view.name}" at .github/lens/${view.id}/.`,
+        };
+      },
+    }] as Tool[];
   }
 
   async scan(mindPath: string): Promise<LensViewManifest[]> {
@@ -87,6 +144,7 @@ export class ViewDiscovery {
     const views = mindPath ? this.getViews(mindPath) : this.getViews();
     const view = views.find(v => v.id === viewId);
     if (!view || !view._basePath) return null;
+    if (view.view === 'canvas') return null;
 
     const dataPath = path.join(view._basePath, view.source);
     if (!fs.existsSync(dataPath)) return null;
@@ -99,13 +157,62 @@ export class ViewDiscovery {
     }
   }
 
+  getViewSourcePath(viewId: string, mindPath: string): string | null {
+    const view = this.getViews(mindPath).find(v => v.id === viewId);
+    if (!view || !view._basePath) return null;
+    return path.join(view._basePath, view.source);
+  }
+
+  async createView(mindPath: string, input: CreateLensViewInput): Promise<LensViewManifest> {
+    const viewId = parseViewId(input.viewId);
+    const source = parseSource(input.source, input.view);
+    if (typeof input.name !== 'string' || input.name.trim() === '') {
+      throw new Error('lens_create requires a non-empty name');
+    }
+    if (typeof input.icon !== 'string' || input.icon.trim() === '') {
+      throw new Error('lens_create requires a non-empty icon');
+    }
+    if (!isLensViewType(input.view)) {
+      throw new Error(`Unsupported Lens view type: ${String(input.view)}`);
+    }
+
+    const lensDir = path.join(mindPath, '.github', 'lens');
+    const viewDir = path.join(lensDir, viewId);
+    fs.mkdirSync(viewDir, { recursive: true });
+
+    const manifest = {
+      name: input.name,
+      icon: input.icon,
+      view: input.view,
+      source,
+      ...(input.prompt ? { prompt: input.prompt } : {}),
+      ...(input.refreshOn ? { refreshOn: input.refreshOn } : {}),
+      ...(input.schema ? { schema: input.schema } : {}),
+    };
+
+    fs.writeFileSync(path.join(viewDir, 'view.json'), JSON.stringify(manifest, null, 2) + '\n', 'utf-8');
+    fs.writeFileSync(path.join(viewDir, source), formatSourceContent(input.content, input.view), 'utf-8');
+
+    await this.scan(mindPath);
+    return this.getViews(mindPath).find(view => view.id === viewId)
+      ?? parseLensViewManifest(manifest, viewId, viewDir)
+      ?? {
+        ...manifest,
+        id: viewId,
+        _basePath: viewDir,
+      };
+  }
+
   async refreshView(viewId: string, mindPath: string): Promise<Record<string, unknown> | null> {
     const views = this.getViews(mindPath);
     const view = views.find(v => v.id === viewId);
     if (!view || !view.prompt || !view._basePath) return this.getViewData(viewId, mindPath);
 
     const dataPath = path.join(view._basePath, view.source);
-    const fullPrompt = `${view.prompt}\n\nWrite the JSON output to: ${dataPath}`;
+    const outputInstruction = view.view === 'canvas'
+      ? `Write the Chamber-branded HTML output to: ${dataPath}`
+      : `Write the JSON output to: ${dataPath}`;
+    const fullPrompt = `${view.prompt}\n\n${outputInstruction}`;
 
     try {
       await this.refreshHandler?.sendBackgroundPrompt(mindPath, fullPrompt);
@@ -129,6 +236,26 @@ export class ViewDiscovery {
     } catch {
       return this.getViewData(viewId, mindPath);
     }
+  }
+
+  async sendCanvasAction(viewId: string, action: CanvasLensAction, mindPath: string): Promise<void> {
+    const views = this.getViews(mindPath);
+    const view = views.find(v => v.id === viewId);
+    if (!view || view.view !== 'canvas' || !view._basePath) return;
+
+    const sourcePath = path.join(view._basePath, view.source);
+    const fullPrompt = [
+      `The user interacted with the Canvas Lens view "${view.name}" (source: ${sourcePath}).`,
+      '',
+      `Action: ${action.action}`,
+      action.intent ? `Intent: ${action.intent}` : null,
+      action.correlationId ? `Correlation ID: ${action.correlationId}` : null,
+      `Data: ${JSON.stringify(action.data ?? {})}`,
+      '',
+      'Use your normal Chamber tools and context to satisfy the action. If the UI should change, update the Canvas Lens HTML source file at the path above.',
+    ].filter((line): line is string => line !== null).join('\n');
+
+    await this.refreshHandler?.sendBackgroundPrompt(mindPath, fullPrompt);
   }
 
   startWatching(mindPath: string, onChanged: () => void): void {
@@ -209,6 +336,7 @@ function parseLensViewManifest(value: unknown, id: string, basePath: string): Le
   if (typeof value.name !== 'string' || typeof value.icon !== 'string') return null;
   if (!isLensViewType(value.view)) return null;
   if (!isSafeRelativeSource(value.source)) return null;
+  if (value.view === 'canvas' && !isHtmlSource(value.source)) return null;
 
   return {
     ...value,
@@ -229,6 +357,37 @@ function isSafeRelativeSource(value: unknown): value is string {
   if (typeof value !== 'string' || value.trim() === '') return false;
   if (path.isAbsolute(value) || path.win32.isAbsolute(value) || path.posix.isAbsolute(value)) return false;
   return !value.split(/[\\/]+/).includes('..');
+}
+
+function isHtmlSource(value: string): boolean {
+  return path.extname(value).toLowerCase() === '.html';
+}
+
+function parseViewId(value: unknown): string {
+  if (typeof value !== 'string' || !/^[a-z0-9][a-z0-9_-]*$/i.test(value)) {
+    throw new Error('lens_create viewId must use letters, numbers, hyphens, or underscores');
+  }
+  return value;
+}
+
+function parseSource(value: unknown, view: LensViewManifest['view']): string {
+  if (!isSafeRelativeSource(value)) {
+    throw new Error('lens_create source must be a safe relative filename');
+  }
+  if (view === 'canvas' && !isHtmlSource(value)) {
+    throw new Error('Canvas Lens sources must be .html files');
+  }
+  return value;
+}
+
+function formatSourceContent(content: unknown, view: LensViewManifest['view']): string {
+  if (typeof content === 'string') {
+    return content.endsWith('\n') ? content : `${content}\n`;
+  }
+  if (view === 'canvas') {
+    throw new Error('Canvas Lens content must be an HTML string');
+  }
+  return `${JSON.stringify(content, null, 2)}\n`;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
