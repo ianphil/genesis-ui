@@ -24,9 +24,11 @@ function isContentBlock(value: unknown): value is ContentBlock {
     case 'image':
       return typeof value.name === 'string' && typeof value.mimeType === 'string' && typeof value.dataUrl === 'string';
     case 'tool_call':
-      return typeof value.toolCallId === 'string' && typeof value.toolName === 'string' && typeof value.status === 'string';
+      return typeof value.toolCallId === 'string'
+        && typeof value.toolName === 'string'
+        && (value.status === 'running' || value.status === 'done' || value.status === 'error');
     case 'reasoning':
-      return typeof value.content === 'string';
+      return typeof value.reasoningId === 'string' && typeof value.content === 'string';
     default:
       return false;
   }

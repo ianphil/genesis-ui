@@ -26,4 +26,36 @@ describe('chatStateSync', () => {
     expect(parseChatStateSyncMessage({ type: 'state', payload: { messagesByMind: { 'mind-1': [{ id: 'msg-1' }] }, streamingByMind: {} } })).toBeNull();
     expect(parseChatStateSyncMessage({ type: 'unknown' })).toBeNull();
   });
+
+  it('rejects unsound tool and reasoning blocks', () => {
+    expect(parseChatStateSyncMessage({
+      type: 'state',
+      payload: {
+        messagesByMind: {
+          'mind-1': [{
+            id: 'msg-1',
+            role: 'assistant',
+            blocks: [{ type: 'tool_call', toolCallId: 'tool-1', toolName: 'grep', status: 'pending' }],
+            timestamp: 1000,
+          }],
+        },
+        streamingByMind: {},
+      },
+    })).toBeNull();
+
+    expect(parseChatStateSyncMessage({
+      type: 'state',
+      payload: {
+        messagesByMind: {
+          'mind-1': [{
+            id: 'msg-1',
+            role: 'assistant',
+            blocks: [{ type: 'reasoning', content: 'thinking' }],
+            timestamp: 1000,
+          }],
+        },
+        streamingByMind: {},
+      },
+    })).toBeNull();
+  });
 });
