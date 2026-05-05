@@ -53,6 +53,7 @@ import { setupAuthIPC } from './main/ipc/auth';
 import { setupA2AIPC } from './main/ipc/a2a';
 import { setupChatroomIPC } from './main/ipc/chatroom';
 import { setupUpdaterIPC } from './main/ipc/updater';
+import { setupVoiceIPC } from './main/ipc/voice';
 
 import { EventEmitter } from 'events';
 import { wireLifecycleEvents } from './main/wireLifecycleEvents';
@@ -456,6 +457,7 @@ app.on('ready', async () => {
   setupA2AIPC(a2aEventBus, agentCardRegistry, taskManager);
   setupChatroomIPC(chatroomService);
   setupUpdaterIPC(updaterService);
+  setupVoiceIPC();
 
   // Window controls
   ipcMain.on('window:minimize', () => mainWindow?.minimize());
