@@ -432,7 +432,16 @@ app.on('ready', async () => {
   setupGenesisIPC(
     mindManager,
     scaffold,
-    { listTemplates: () => genesisTemplateCatalog.listTemplates().templates },
+    { listTemplates: () => {
+      const result = genesisTemplateCatalog.listTemplates();
+      if (result.templates.length === 0) {
+        const errors = result.sources.filter(s => s.status === 'error');
+        if (errors.length > 0) {
+          throw new Error(errors.map(s => s.message).join('; '));
+        }
+      }
+      return result.templates;
+    }},
     genesisTemplateInstaller,
   );
   setupMarketplaceIPC(marketplaceRegistryService);

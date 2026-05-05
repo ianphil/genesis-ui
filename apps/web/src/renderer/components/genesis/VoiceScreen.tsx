@@ -143,7 +143,7 @@ export function VoiceScreen({ templates, templateError, onSelect, onSelectTempla
                   onKeyDown={(e) => { if (e.key === 'Enter') handleCustomSubmit(); }}
                   placeholder="e.g. Tony Stark, Gandalf, your cool aunt..."
                   className="w-full bg-transparent border-b-2 border-muted-foreground/30 focus:border-foreground
-                             text-lg text-center py-2 outline-none transition-colors placeholder:text-muted-foreground/30"
+                             text-lg text-center text-foreground py-2 outline-none transition-colors placeholder:text-muted-foreground/30"
                 />
                 {customInput.trim() && (
                   <button
