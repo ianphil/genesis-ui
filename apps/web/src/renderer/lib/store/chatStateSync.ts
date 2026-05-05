@@ -1,12 +1,15 @@
 import type { ChatMessage, ContentBlock } from '@chamber/shared/types';
-import type { AppState } from './state';
 
-export const CHAT_STATE_STORAGE_KEY = 'chamber:chatState:v1';
+export const CHAT_STATE_CHANNEL = 'chamber:chatState:v1';
 
-export interface PersistedChatState {
+export interface SyncedChatState {
   messagesByMind: Record<string, ChatMessage[]>;
   streamingByMind: Record<string, boolean>;
 }
+
+export type ChatStateSyncMessage =
+  | { type: 'request-state' }
+  | { type: 'state'; payload: SyncedChatState };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -49,27 +52,30 @@ function isStreamingByMind(value: unknown): value is Record<string, boolean> {
     && Object.values(value).every((streaming) => typeof streaming === 'boolean');
 }
 
-export function parsePersistedChatState(raw: string | null): PersistedChatState | null {
-  if (!raw) return null;
-
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (!isRecord(parsed)) return null;
-    if (!isMessagesByMind(parsed.messagesByMind)) return null;
-    if (!isStreamingByMind(parsed.streamingByMind)) return null;
-    return {
-      messagesByMind: parsed.messagesByMind,
-      streamingByMind: parsed.streamingByMind,
-    };
-  } catch {
-    return null;
-  }
+function isSyncedChatState(value: unknown): value is SyncedChatState {
+  return isRecord(value)
+    && isMessagesByMind(value.messagesByMind)
+    && isStreamingByMind(value.streamingByMind);
 }
 
-export function serializeChatState(state: Pick<AppState, 'messagesByMind' | 'streamingByMind'>): string {
-  return JSON.stringify({
-    messagesByMind: state.messagesByMind,
-    streamingByMind: state.streamingByMind,
-  } satisfies PersistedChatState);
+export function parseChatStateSyncMessage(value: unknown): ChatStateSyncMessage | null {
+  if (!isRecord(value) || typeof value.type !== 'string') return null;
+
+  if (value.type === 'request-state') return { type: 'request-state' };
+  if (value.type === 'state' && isSyncedChatState(value.payload)) {
+    return { type: 'state', payload: value.payload };
+  }
+
+  return null;
+}
+
+export function createChatStateSyncMessage(state: SyncedChatState): ChatStateSyncMessage {
+  return {
+    type: 'state',
+    payload: {
+      messagesByMind: state.messagesByMind,
+      streamingByMind: state.streamingByMind,
+    },
+  };
 }
 

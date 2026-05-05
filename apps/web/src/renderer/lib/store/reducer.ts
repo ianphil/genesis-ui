@@ -196,7 +196,12 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, minds: action.payload };
 
     case 'SET_ACTIVE_MIND':
-      return { ...state, activeMindId: action.payload, isStreaming: false, streamingByMind: state.streamingByMind };
+      return {
+        ...state,
+        activeMindId: action.payload,
+        isStreaming: action.payload ? Boolean(state.streamingByMind[action.payload]) : false,
+        streamingByMind: state.streamingByMind,
+      };
 
     case 'ADD_MIND': {
       const exists = state.minds.some(m => m.mindId === action.payload.mindId);

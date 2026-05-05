@@ -268,6 +268,15 @@ describe('appReducer', () => {
     expect(state.activeMindId).toBe('other-mind');
   });
 
+  it('SET_ACTIVE_MIND preserves the selected mind streaming state', () => {
+    const state = appReducer({
+      ...withActiveMind,
+      streamingByMind: { 'other-mind': true },
+    }, { type: 'SET_ACTIVE_MIND', payload: 'other-mind' });
+
+    expect(state.isStreaming).toBe(true);
+  });
+
   it('ADD_MIND appends a new mind and sets it active if none active', () => {
     const mind = { mindId: 'new', mindPath: '/new', identity: { name: 'New', systemMessage: '' }, status: 'ready' as const };
     const state = appReducer(initialState, { type: 'ADD_MIND', payload: mind });

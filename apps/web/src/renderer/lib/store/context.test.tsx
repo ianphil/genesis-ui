@@ -2,10 +2,33 @@
  * @vitest-environment jsdom
  */
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeMessage, makeTextBlock } from '../../../test/helpers';
 import { AppStateProvider, useAppState } from './context';
-import { CHAT_STATE_STORAGE_KEY, serializeChatState } from './chatStatePersistence';
+import { CHAT_STATE_CHANNEL, createChatStateSyncMessage } from './chatStateSync';
+
+class FakeBroadcastChannel {
+  static channels = new Map<string, Set<FakeBroadcastChannel>>();
+
+  onmessage: ((event: MessageEvent) => void) | null = null;
+
+  constructor(public readonly name: string) {
+    const channels = FakeBroadcastChannel.channels.get(name) ?? new Set<FakeBroadcastChannel>();
+    channels.add(this);
+    FakeBroadcastChannel.channels.set(name, channels);
+  }
+
+  postMessage(data: unknown): void {
+    for (const channel of FakeBroadcastChannel.channels.get(this.name) ?? []) {
+      if (channel === this) continue;
+      channel.onmessage?.({ data } as MessageEvent);
+    }
+  }
+
+  close(): void {
+    FakeBroadcastChannel.channels.get(this.name)?.delete(this);
+  }
+}
 
 function ChatStateProbe() {
   const { messagesByMind } = useAppState();
@@ -14,38 +37,47 @@ function ChatStateProbe() {
   return <div>{text}</div>;
 }
 
-describe('AppStateProvider chat persistence', () => {
-  afterEach(() => {
-    cleanup();
-    localStorage.clear();
+describe('AppStateProvider chat sync', () => {
+  beforeEach(() => {
+    FakeBroadcastChannel.channels.clear();
+    vi.stubGlobal('BroadcastChannel', FakeBroadcastChannel);
   });
 
-  it('hydrates messages for a newly opened renderer window', () => {
-    localStorage.setItem(CHAT_STATE_STORAGE_KEY, serializeChatState({
-      messagesByMind: {
-        'mind-1': [makeMessage([makeTextBlock('existing conversation')], { id: 'msg-1' })],
-      },
-      streamingByMind: {},
-    }));
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  it('requests messages for a newly opened renderer window', async () => {
+    const remote = new BroadcastChannel(CHAT_STATE_CHANNEL);
+    remote.onmessage = (event) => {
+      if (event.data?.type !== 'request-state') return;
+      remote.postMessage(createChatStateSyncMessage({
+        messagesByMind: {
+          'mind-1': [makeMessage([makeTextBlock('existing conversation')], { id: 'msg-1' })],
+        },
+        streamingByMind: {},
+      }));
+    };
 
     render(<AppStateProvider><ChatStateProbe /></AppStateProvider>);
 
-    expect(screen.getByText('existing conversation')).toBeTruthy();
+    await waitFor(() => {
+      expect(screen.getByText('existing conversation')).toBeTruthy();
+    });
   });
 
   it('receives chat state updates written by another renderer window', async () => {
+    const remote = new BroadcastChannel(CHAT_STATE_CHANNEL);
     render(<AppStateProvider><ChatStateProbe /></AppStateProvider>);
     expect(screen.getByText('empty')).toBeTruthy();
 
     act(() => {
-      window.dispatchEvent(new StorageEvent('storage', {
-        key: CHAT_STATE_STORAGE_KEY,
-        newValue: serializeChatState({
-          messagesByMind: {
-            'mind-1': [makeMessage([makeTextBlock('returned conversation')], { id: 'msg-1' })],
-          },
-          streamingByMind: {},
-        }),
+      remote.postMessage(createChatStateSyncMessage({
+        messagesByMind: {
+          'mind-1': [makeMessage([makeTextBlock('returned conversation')], { id: 'msg-1' })],
+        },
+        streamingByMind: {},
       }));
     });
 
