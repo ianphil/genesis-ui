@@ -1,47 +1,87 @@
 ---
 name: lens
 version: 2.0.0
-description: Create and manage Chamber Lens views, including structured JSON views and rich Canvas-backed Chamber-native UI. Use when the user asks to create a view, dashboard, panel, report, form, command center, or app-like screen inside Chamber.
+description: Create, inspect, fix, and manage Chamber Lens views. Use this skill whenever the user mentions Lens, lenses, Chamber views, dashboards, panels, reports, forms, command centers, app-like screens, self-modifying UI, or says a Lens icon/view is missing. Always use this skill before creating or editing files under .github/lens.
 ---
 
 # Lens — Chamber Views
 
-Create views in `.github/lens/<view-name>/` to add panels to the Chamber activity bar. Lens is the navigation and discovery model. Use the right renderer for the job:
+Create views in `.github/lens/<view-name>/` to add panels to the Chamber activity bar. Lens is the navigation and discovery model.
 
 - Use classic JSON Lens views for simple structured data.
 - Use Canvas Lens views for rich dashboards, workflows, reports, forms, and app-like UI.
 
-## Creating Views
+## Non-Negotiable Discovery Contract
 
-Prefer the `lens_create` tool whenever it is available. It creates the Lens directory, `view.json`, and source file in one operation, so you do not need shell access or a separate mkdir step.
+Chamber discovers only folders under `.github/lens/` that contain a valid `view.json`.
 
-Example Canvas Lens creation:
+For a Canvas Lens, `view.json` must use this exact shape:
 
 ```json
 {
-  "viewId": "cron-jobs",
   "name": "Cron Jobs",
   "icon": "clock",
   "view": "canvas",
   "source": "index.html",
-  "content": "<!doctype html><html><body class=\"ch-page\"><section class=\"ch-card\"><h1>Cron Jobs</h1></section></body></html>"
+  "prompt": "Optional refresh prompt.",
+  "refreshOn": "click"
 }
 ```
 
-Example classic JSON Lens creation:
+For a classic JSON Lens, `view.json` must use this exact shape:
 
 ```json
 {
-  "viewId": "cron-table",
-  "name": "Cron Table",
+  "name": "Cron Jobs",
   "icon": "clock",
   "view": "table",
   "source": "data.json",
-  "content": [{ "name": "Daily smoke", "status": "enabled" }]
+  "prompt": "Optional refresh prompt.",
+  "refreshOn": "click"
 }
 ```
 
-Only fall back to direct file creation when `lens_create` is not available and the parent directory already exists.
+Never use `title`, `renderer`, `type`, `component`, `template`, or `file` in `view.json`. Chamber ignores those fields. The required fields are `name`, `icon`, `view`, and `source`.
+
+Before finishing any Lens task, inspect the files and verify:
+
+- `.github/lens/<view-name>/view.json` exists.
+- `view.json` has `name`, `icon`, `view`, and `source`.
+- Canvas Lens uses `"view": "canvas"` and `"source": "index.html"`.
+- Classic JSON Lens uses a supported JSON view and a `.json` source file.
+- The source file named by `source` exists in the same folder.
+
+## Creating Views
+
+Create each Lens as a folder with exactly the files Chamber expects:
+
+```text
+.github/lens/<view-name>/
+  view.json
+  index.html     # Canvas Lens
+```
+
+or:
+
+```text
+.github/lens/<view-name>/
+  view.json
+  data.json      # classic JSON Lens
+```
+
+Use a short, stable, lowercase folder name like `cron-jobs`, `daily-briefing`, or `release-command-center`. Keep all Lens files inside that folder. If the folder does not exist, create it before writing files. Do not place Lens files at the root of `.github/lens/`; Chamber discovers only folders that contain a `view.json`.
+
+For rich UI, write both:
+
+1. `.github/lens/<view-name>/view.json`
+2. `.github/lens/<view-name>/index.html`
+
+For simple structured UI, write both:
+
+1. `.github/lens/<view-name>/view.json`
+2. `.github/lens/<view-name>/data.json`
+
+Before you finish, re-open or inspect the files you wrote and make sure `view.json` points to the source file you actually created.
 
 ## Canvas Lens Views
 
@@ -84,6 +124,29 @@ accent-color: var(--ch-genesis);
 ```
 
 Do not hard-code a separate visual theme unless the user explicitly asks. Default to dark Chamber-native UI.
+
+### Chamber UI Rubric
+
+Before writing Canvas HTML, design the view like a native Chamber screen:
+
+- Start with `<body class="ch-page">`; never leave raw browser-default body styling.
+- Use `ch-grid` for responsive layout and `ch-card` for every major content group.
+- Put the primary insight or action in the first card. Do not start with a generic title-only page.
+- Use `ch-muted` for labels, timestamps, and secondary explanation.
+- Use `ch-badge` for status values such as enabled, blocked, passing, stale, or needs attention.
+- Use `ch-button` for the main action and `ch-button-secondary` for lower-priority actions.
+- Prefer concise cards, status rows, and action clusters over long unstyled paragraphs.
+- Keep spacing generous, dark, and calm. Avoid rainbow colors, default blue links, raw tables without `ch-table`, and unstyled form controls.
+- If the user asked for operational data, show summary cards first, then details.
+- If the view has actions, wire buttons through `window.canvas.sendAction(...)`; do not fake interactivity.
+
+Self-check before saving:
+
+- Does the page use Chamber classes rather than raw default HTML?
+- Is the most useful information visible without scrolling?
+- Are statuses visually scannable?
+- Are actions explicit and routed through `window.canvas.sendAction(...)`?
+- Would this look plausible as a built-in Chamber pane?
 
 ### Canvas Actions
 

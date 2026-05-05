@@ -71,6 +71,11 @@ export function seedLensDefaults(mindPath: string): void {
   }
 }
 
+export function bootstrapMindCapabilities(mindPath: string): void {
+  seedLensDefaults(mindPath);
+  installLensSkill(mindPath);
+}
+
 export function installLensSkill(mindPath: string): void {
   const skillDir = path.join(mindPath, '.github', 'skills', 'lens');
   const skillPath = path.join(skillDir, 'SKILL.md');
@@ -113,11 +118,22 @@ export function installLensSkill(mindPath: string): void {
   }
 
   if (isLegacyBundledLensSkill(installedContent)) {
-    log.warn('Lens skill looks like an edited legacy skill; skipping install to preserve local edits');
+    log.info(`Upgrading legacy Lens skill to ${LENS_SKILL_VERSION}`);
+    backupLegacyLensSkill(skillDir, installedContent);
+    writeManagedLensSkill(skillDir, skillPath, metadataPath, content, contentSha256);
     return;
   }
 
   log.warn('Lens skill is unmanaged; skipping install to preserve local edits');
+}
+
+function backupLegacyLensSkill(skillDir: string, installedContent: string): void {
+  const baseBackupPath = path.join(skillDir, 'SKILL.legacy-backup.md');
+  let backupPath = baseBackupPath;
+  for (let index = 1; fs.existsSync(backupPath); index += 1) {
+    backupPath = path.join(skillDir, `SKILL.legacy-backup-${index}.md`);
+  }
+  fs.writeFileSync(backupPath, installedContent);
 }
 
 function readBundledLensSkill(): string | null {
@@ -145,7 +161,6 @@ function isLegacyBundledLensSkill(content: string): boolean {
   const normalized = content.toLowerCase();
   return content.includes('name: lens')
     && !content.includes('version:')
-    && content.includes('# Lens — Declarative UI Views')
     && normalized.includes('.github/lens')
     && normalized.includes('form')
     && normalized.includes('table')

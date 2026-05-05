@@ -16,7 +16,6 @@ vi.mock('fs', () => ({
 
 import * as fs from 'fs';
 import { ViewDiscovery } from './ViewDiscovery';
-import type { LensViewManifest } from '@chamber/shared/types';
 
 const mockExistsSync = vi.mocked(fs.existsSync);
 const mockReaddirSync = vi.mocked(fs.readdirSync);
@@ -188,66 +187,6 @@ describe('ViewDiscovery', () => {
       await discovery.scan('/tmp/mind-b');
 
       expect(discovery.getViews()).toHaveLength(2);
-    });
-  });
-
-  describe('lens_create tool', () => {
-    it('creates the Lens directory, manifest, and Canvas source file', async () => {
-      mockExistsSync.mockReturnValue(false);
-      const tool = discovery.getToolsForMind('mind-1', 'C:\\test\\mind')
-        .find((candidate) => candidate.name === 'lens_create');
-      if (!tool) throw new Error('Expected lens_create tool');
-
-      const result = await tool.handler({
-        viewId: 'cron-jobs',
-        name: 'Cron Jobs',
-        icon: 'clock',
-        view: 'canvas',
-        source: 'index.html',
-        content: '<!doctype html><html><body class="ch-page">Cron</body></html>',
-      }, {} as never) as { ok: boolean; view: LensViewManifest };
-
-      expect(result.ok).toBe(true);
-      expect(result.view).toEqual(expect.objectContaining({
-        id: 'cron-jobs',
-        name: 'Cron Jobs',
-        view: 'canvas',
-        source: 'index.html',
-      }));
-      expect(fs.mkdirSync).toHaveBeenCalledWith(
-        path.join('C:\\test\\mind', '.github', 'lens', 'cron-jobs'),
-        { recursive: true },
-      );
-      expect(fs.writeFileSync).toHaveBeenCalledWith(
-        path.join('C:\\test\\mind', '.github', 'lens', 'cron-jobs', 'view.json'),
-        expect.stringContaining('"view": "canvas"'),
-        'utf-8',
-      );
-      expect(fs.writeFileSync).toHaveBeenCalledWith(
-        path.join('C:\\test\\mind', '.github', 'lens', 'cron-jobs', 'index.html'),
-        expect.stringContaining('Cron'),
-        'utf-8',
-      );
-    });
-
-    it('rejects unsafe Lens ids and Canvas sources', async () => {
-      await expect(discovery.createView('/tmp/mind', {
-        viewId: '../bad',
-        name: 'Bad',
-        icon: 'clock',
-        view: 'canvas',
-        source: 'index.html',
-        content: '<html></html>',
-      })).rejects.toThrow('viewId');
-
-      await expect(discovery.createView('/tmp/mind', {
-        viewId: 'bad-source',
-        name: 'Bad',
-        icon: 'clock',
-        view: 'canvas',
-        source: 'data.json',
-        content: '<html></html>',
-      })).rejects.toThrow('Canvas Lens sources must be .html files');
     });
   });
 

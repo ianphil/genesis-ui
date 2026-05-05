@@ -186,7 +186,7 @@ const cronService = new CronService({
 });
 const a2aToolProvider = new A2aToolProvider(messageRouter, agentCardRegistry, taskManager);
 
-mindManager.setProviders([cronService, canvasService, viewDiscovery, a2aToolProvider]);
+mindManager.setProviders([cronService, canvasService, a2aToolProvider]);
 
 wireLifecycleEvents({ mindManager, agentCardRegistry, taskManager, a2aEventBus });
 

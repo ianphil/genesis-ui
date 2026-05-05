@@ -18,7 +18,7 @@ import { getCurrentDateTimeContext, injectCurrentDateTimeContext } from '../chat
 import type { ChamberToolProvider } from '../chamberTools';
 import type { ConfigService } from '../config/ConfigService';
 import type { ViewDiscovery } from '../lens/ViewDiscovery';
-import { installLensSkill } from '../lens/MindBootstrap';
+import { bootstrapMindCapabilities } from '../lens/MindBootstrap';
 
 export class MindManager extends EventEmitter {
   private minds = new Map<string, InternalMindContext>();
@@ -84,9 +84,9 @@ export class MindManager extends EventEmitter {
     }
 
     try {
-      installLensSkill(resolvedMindPath);
+      bootstrapMindCapabilities(resolvedMindPath);
     } catch (err) {
-      log.warn('Lens skill install/upgrade failed (non-fatal):', err);
+      log.warn('Mind capability bootstrap failed (non-fatal):', err);
     }
 
     // Create client

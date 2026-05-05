@@ -19,11 +19,11 @@ vi.mock('fs', () => ({
 }));
 
 vi.mock('../lens/MindBootstrap', () => ({
-  installLensSkill: vi.fn(),
+  bootstrapMindCapabilities: vi.fn(),
 }));
 
 import * as fs from 'fs';
-import { installLensSkill } from '../lens/MindBootstrap';
+import { bootstrapMindCapabilities } from '../lens/MindBootstrap';
 
 const mockStart = vi.fn();
 const mockStop = vi.fn();
@@ -244,17 +244,17 @@ describe('MindManager', () => {
       expect(firstModelSession.disconnect).toHaveBeenCalledTimes(1);
     });
 
-    it('installs or upgrades the managed Lens skill before creating the SDK session', async () => {
+    it('bootstraps managed mind capabilities before creating the SDK session', async () => {
       await manager.loadMind('/tmp/agents/q');
 
-      expect(installLensSkill).toHaveBeenCalledWith('/tmp/agents/q');
+      expect(bootstrapMindCapabilities).toHaveBeenCalledWith('/tmp/agents/q');
       expect(mockClientFactory.createClient).toHaveBeenCalledWith('/tmp/agents/q');
-      expect(vi.mocked(installLensSkill).mock.invocationCallOrder[0])
+      expect(vi.mocked(bootstrapMindCapabilities).mock.invocationCallOrder[0])
         .toBeLessThan(mockClientFactory.createClient.mock.invocationCallOrder[0]);
     });
 
-    it('continues loading when the managed Lens skill upgrade fails', async () => {
-      vi.mocked(installLensSkill).mockImplementationOnce(() => {
+    it('continues loading when managed mind capability bootstrap fails', async () => {
+      vi.mocked(bootstrapMindCapabilities).mockImplementationOnce(() => {
         throw new Error('skill asset missing');
       });
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(vi.fn());

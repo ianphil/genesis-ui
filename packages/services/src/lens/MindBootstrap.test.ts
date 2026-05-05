@@ -8,7 +8,7 @@ vi.mock('fs', () => ({
 }));
 
 import * as fs from 'fs';
-import { installLensSkill, seedLensDefaults } from './MindBootstrap';
+import { bootstrapMindCapabilities, installLensSkill, seedLensDefaults } from './MindBootstrap';
 
 describe('seedLensDefaults', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -23,6 +23,26 @@ describe('seedLensDefaults', () => {
     vi.mocked(fs.existsSync).mockReturnValue(true);
     seedLensDefaults('C:\\test\\mind');
     expect(vi.mocked(fs.writeFileSync)).not.toHaveBeenCalled();
+  });
+});
+
+describe('bootstrapMindCapabilities', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('seeds default lenses and installs the managed Lens skill', () => {
+    vi.mocked(fs.existsSync).mockImplementation((p) => String(p).includes('assets\\lens-skill\\SKILL.md'));
+    vi.mocked(fs.readFileSync).mockReturnValue('---\nname: lens\nversion: 2.0.0\n---\n# Lens');
+
+    bootstrapMindCapabilities('C:\\test\\mind');
+
+    expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
+      expect.stringContaining('hello-world'),
+      expect.any(String),
+    );
+    expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
+      expect.stringContaining('SKILL.md'),
+      expect.stringContaining('# Lens'),
+    );
   });
 });
 
@@ -92,7 +112,7 @@ describe('installLensSkill', () => {
     );
   });
 
-  it('preserves edited legacy-looking Lens skills without metadata', () => {
+  it('upgrades legacy-looking unversioned Lens skills with a backup', () => {
     const legacySkill = [
       '---',
       'name: lens',
@@ -104,17 +124,24 @@ describe('installLensSkill', () => {
       '',
       'Local instruction: do not overwrite this customization.',
     ].join('\n');
-    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.existsSync).mockImplementation((p) => !String(p).includes('legacy-backup'));
     vi.mocked(fs.readFileSync)
       .mockReturnValueOnce('new bundled content')
       .mockReturnValueOnce(legacySkill);
 
     installLensSkill('C:\\test\\mind');
 
-    expect(vi.mocked(fs.writeFileSync)).not.toHaveBeenCalled();
+    expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
+      expect.stringContaining('SKILL.legacy-backup.md'),
+      legacySkill,
+    );
+    expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
+      expect.stringContaining('SKILL.md'),
+      'new bundled content',
+    );
   });
 
-  it('preserves compact edited legacy-looking Lens skills', () => {
+  it('upgrades compact legacy-looking unversioned Lens skills', () => {
     const legacySkill = [
       '---',
       'name: lens',
@@ -125,14 +152,17 @@ describe('installLensSkill', () => {
       'The old contract supports form, table, and briefing panels.',
       'Local instruction: prefer concise panels.',
     ].join('\n');
-    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.existsSync).mockImplementation((p) => !String(p).includes('legacy-backup'));
     vi.mocked(fs.readFileSync)
       .mockReturnValueOnce('new bundled content')
       .mockReturnValueOnce(legacySkill);
 
     installLensSkill('C:\\test\\mind');
 
-    expect(vi.mocked(fs.writeFileSync)).not.toHaveBeenCalled();
+    expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
+      expect.stringContaining('SKILL.md'),
+      'new bundled content',
+    );
   });
 
   it('preserves locally edited managed Lens skills', () => {
@@ -147,6 +177,17 @@ describe('installLensSkill', () => {
         contentSha256: 'different',
         capabilities: ['lens-json'],
       }));
+
+    installLensSkill('C:\\test\\mind');
+
+    expect(vi.mocked(fs.writeFileSync)).not.toHaveBeenCalled();
+  });
+
+  it('preserves unmanaged non-Lens skills', () => {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.readFileSync)
+      .mockReturnValueOnce('new bundled content')
+      .mockReturnValueOnce('custom unrelated skill');
 
     installLensSkill('C:\\test\\mind');
 
