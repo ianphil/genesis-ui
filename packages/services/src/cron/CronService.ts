@@ -2,6 +2,9 @@ import { Cron } from 'croner';
 import type { ChamberToolProvider } from '../chamberTools';
 import type { Tool } from '../mind/types';
 import type { Notifier } from '../ports';
+import { Logger } from '../logger';
+
+const log = Logger.create('cron');
 import type { TaskManager } from '../a2a/TaskManager';
 import { JobStore } from './JobStore';
 import { JobRunner } from './JobRunner';
@@ -136,7 +139,7 @@ export class CronService implements ChamberToolProvider {
         try {
           await this.runJob(mindId, job.id, 'resume');
         } catch (err) {
-          console.error(`[cron] Resume catch-up failed for job ${job.id} in mind ${mindId}:`, err);
+          log.error(`Resume catch-up failed for job ${job.id} in mind ${mindId}:`, err);
         }
       }
     }

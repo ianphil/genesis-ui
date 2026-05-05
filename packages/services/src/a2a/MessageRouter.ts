@@ -3,6 +3,9 @@ import type { AgentCardRegistry } from './AgentCardRegistry';
 import type { ChatService } from '../chat/ChatService';
 import type { EventEmitter } from 'events';
 import { generateMessageId, generateContextId, serializeMessageToXml } from './helpers';
+import { Logger } from '../logger';
+
+const log = Logger.create('MessageRouter');
 
 const MAX_HOPS = 5;
 
@@ -74,7 +77,7 @@ export class MessageRouter {
       await deliveryPromise;
     } else {
       deliveryPromise.catch((err) => {
-        console.error(`[MessageRouter] Delivery failed for ${targetMindId}:`, err);
+        log.error(`Delivery failed for ${targetMindId}:`, err);
       });
     }
 

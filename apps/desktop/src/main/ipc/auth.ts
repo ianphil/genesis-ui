@@ -1,6 +1,8 @@
 // Auth IPC handlers
 import { ipcMain, BrowserWindow, shell } from 'electron';
-import { AuthService, type MindManager } from '@chamber/services';
+import { AuthService, Logger, type MindManager } from '@chamber/services';
+
+const log = Logger.create('Auth');
 
 function broadcast(
   channel: 'auth:loggedOut' | 'auth:accountSwitchStarted' | 'auth:accountSwitched',
@@ -49,7 +51,7 @@ export function setupAuthIPC(
       try {
         await mindManager.reloadAllMinds();
       } catch (err) {
-        console.error('[Auth] Failed to reload minds after login:', err);
+        log.error('Failed to reload minds after login:', err);
       }
       broadcast('auth:accountSwitched', { login: result.login });
     }
@@ -68,7 +70,7 @@ export function setupAuthIPC(
     try {
       await mindManager.reloadAllMinds();
     } catch (err) {
-      console.error('[Auth] Failed to reload minds after account switch:', err);
+      log.error('Failed to reload minds after account switch:', err);
     }
     broadcast('auth:accountSwitched', { login });
   });

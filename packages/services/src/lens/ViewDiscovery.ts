@@ -4,6 +4,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { LensViewManifest } from '@chamber/shared/types';
+import { Logger } from '../logger';
+
+const log = Logger.create('ViewDiscovery');
 
 export interface ViewRefreshHandler {
   sendBackgroundPrompt(mindPath: string, prompt: string): Promise<void>;
@@ -32,7 +35,7 @@ export class ViewDiscovery {
       try {
         entries = fs.readdirSync(lensDir, { withFileTypes: true });
       } catch (err) {
-        console.warn(`[ViewDiscovery] Failed to read ${lensDir}:`, err);
+        log.warn(`Failed to read ${lensDir}:`, err);
         this.viewsByMind.set(mindPath, views);
         return views;
       }
@@ -48,7 +51,7 @@ export class ViewDiscovery {
           manifest._basePath = path.join(lensDir, entry.name);
           views.push(manifest);
         } catch (err) {
-          console.error(`[ViewDiscovery] Failed to parse ${viewJsonPath}:`, err);
+          log.error(`Failed to parse ${viewJsonPath}:`, err);
         }
       }
     }
@@ -155,7 +158,7 @@ export class ViewDiscovery {
     const timer = setTimeout(() => {
       this.scanTimersByMind.delete(mindPath);
       void this.scan(mindPath).then(onChanged).catch((err: unknown) => {
-        console.warn(`[ViewDiscovery] Failed to rescan lens views for ${mindPath}:`, err);
+        log.warn(`Failed to rescan lens views for ${mindPath}:`, err);
       });
     }, 300);
     this.scanTimersByMind.set(mindPath, timer);

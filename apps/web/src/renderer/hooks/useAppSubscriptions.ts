@@ -1,5 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { useAppState, useAppDispatch } from '../lib/store';
+import { Logger } from '../lib/logger';
+
+const log = Logger.create('AppSubscriptions');
 
 /**
  * App-level subscriptions that must survive view switches.
@@ -48,7 +51,7 @@ export function useAppSubscriptions() {
           dispatch({ type: 'SET_SELECTED_MODEL', payload: models[0].id });
         }
       } catch (err) {
-        console.error('Failed to load models:', err);
+        log.error('Failed to load models:', err);
       }
     };
     loadModels();
@@ -70,7 +73,7 @@ export function useAppSubscriptions() {
           dispatch({ type: 'SET_DISCOVERED_VIEWS', payload: views });
           viewsLoaded.current = true;
         } catch (err) {
-          console.error('Failed to load views:', err);
+          log.error('Failed to load views:', err);
         }
       };
       loadViews();

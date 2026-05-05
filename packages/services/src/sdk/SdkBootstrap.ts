@@ -3,6 +3,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { SdkRuntimeLayout } from '../ports';
+import { Logger } from '../logger';
+
+const log = Logger.create('SdkLoader');
 
 type RuntimeVersions = {
   sdk: string;
@@ -220,8 +223,8 @@ export async function ensureSdkRuntime(): Promise<void> {
     return;
   }
 
-  console.log(
-    `[SdkLoader] Copilot runtime ready mode=${runtime.mode} `
+  log.info(
+    `Copilot runtime ready mode=${runtime.mode} `
     + `sdk=${runtime.sdkVersion} cli=${runtime.cliVersion} `
     + `platformPackage=${runtime.platformPackageName}@${runtime.platformPackageVersion} `
     + `sdkEntry=${runtime.sdkEntry} cliBinary=${runtime.cliBinaryPath}`

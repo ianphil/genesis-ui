@@ -1,4 +1,7 @@
 import { app, Menu, Tray, nativeImage, type NativeImage } from 'electron';
+import { Logger } from '@chamber/services';
+
+const log = Logger.create('tray');
 
 export interface AppTrayOptions {
   showMainWindow: () => void;
@@ -32,9 +35,9 @@ export async function loadAppIcon(): Promise<NativeImage> {
         return icon;
       }
 
-      console.warn(`[tray] Executable icon for ${process.execPath} was empty; using generated fallback.`);
+      log.warn(`Executable icon for ${process.execPath} was empty; using generated fallback.`);
     } catch (error) {
-      console.error('[tray] Failed to load executable icon:', error);
+      log.error('Failed to load executable icon:', error);
     }
   }
 

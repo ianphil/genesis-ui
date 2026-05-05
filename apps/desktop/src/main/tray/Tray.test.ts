@@ -75,7 +75,7 @@ describe('loadAppIcon', () => {
       const icon = await loadAppIcon();
 
       expect(createFromDataURL).toHaveBeenCalledTimes(1);
-      expect(consoleError).toHaveBeenCalledWith('[tray] Failed to load executable icon:', error);
+      expect(consoleError).toHaveBeenCalledWith('[tray]', 'Failed to load executable icon:', error);
       expect(icon).toBe(fallbackIcon);
       consoleError.mockRestore();
     }));

@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useRef } from 'react';
 import { useAppDispatch } from '../../lib/store';
+import { Logger } from '../../lib/logger';
 import { VoidScreen } from './VoidScreen';
 import { RoleScreen } from './RoleScreen';
 import { VoiceScreen } from './VoiceScreen';
@@ -9,6 +10,8 @@ import type { GenesisMindTemplate } from '../../../shared/types';
 
 type Stage = 'void' | 'role' | 'voice' | 'boot' | 'done';
 type GenesisCreateResult = Awaited<ReturnType<typeof window.electronAPI.genesis.create>>;
+
+const log = Logger.create('Genesis');
 
 interface Props {
   onComplete: () => void;
@@ -70,7 +73,7 @@ export function GenesisFlow({ onComplete }: Props) {
 
     if (!result.success) {
       setCreationError(result.error ?? 'Genesis failed.');
-      console.error('[Genesis] Failed:', result.error);
+      log.error('Failed:', result.error);
     }
   }, [name, voiceDesc]);
 
@@ -101,7 +104,7 @@ export function GenesisFlow({ onComplete }: Props) {
 
     if (!result.success) {
       setCreationError(result.error ?? 'Genesis template install failed.');
-      console.error('[Genesis] Template install failed:', result.error);
+      log.error('Template install failed:', result.error);
     }
   }, []);
 
@@ -109,7 +112,7 @@ export function GenesisFlow({ onComplete }: Props) {
     const result = await creationPromiseRef.current;
     if (!result?.success) {
       if (result?.error) setCreationError(result.error);
-      if (result?.error) console.error('[Genesis] Failed:', result.error);
+      if (result?.error) log.error('Failed:', result.error);
       return;
     }
 

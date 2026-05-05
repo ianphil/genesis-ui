@@ -3,6 +3,9 @@
 
 import * as https from 'https';
 import type { CredentialStore } from '../ports';
+import { Logger } from '../logger';
+
+const log = Logger.create('Auth');
 
 const CLIENT_ID = 'Ov23ctDVkRmgkPke0Mmm';
 const DEVICE_CODE_URL = 'https://github.com/login/device/code';
@@ -123,7 +126,7 @@ export class AuthService {
     try {
       return (await this.getStoredCredentials()).map(({ login }) => ({ login }));
     } catch (err) {
-      console.error('[Auth] Failed to list stored credentials:', err);
+      log.error('Failed to list stored credentials:', err);
       return [];
     }
   }
@@ -133,7 +136,7 @@ export class AuthService {
       const credential = await this.getStoredCredentialEntry();
       return credential ? { login: credential.login } : null;
     } catch (err) {
-      console.error('[Auth] Failed to read stored credential:', err);
+      log.error('Failed to read stored credential:', err);
     }
 
     return null;
@@ -147,9 +150,9 @@ export class AuthService {
       if (!credential) return;
       await this.credentials.deletePassword(KEYTAR_SERVICE, credential.account);
       this.setActiveLogin(null);
-      console.log(`[Auth] Deleted credential for ${credential.login}`);
+      log.info(`Deleted credential for ${credential.login}`);
     } catch (err) {
-      console.error('[Auth] Failed to delete credential:', err);
+      log.error('Failed to delete credential:', err);
     }
   }
 
@@ -174,7 +177,7 @@ export class AuthService {
     const activeLogin = this.getActiveLogin();
     if (activeLogin === null) {
       if (credentials.length > 1) {
-        console.warn(`[Auth] Multiple Copilot credentials found; using ${credentials[0].account}`);
+        log.warn(`Multiple Copilot credentials found; using ${credentials[0].account}`);
       }
       return credentials[0];
     }
@@ -184,7 +187,7 @@ export class AuthService {
 
   private async storeCredential(login: string, token: string): Promise<void> {
     await this.credentials.setPassword(KEYTAR_SERVICE, getCredentialAccount(login), token);
-    console.log(`[Auth] Stored credential for ${login} via keytar`);
+    log.info(`Stored credential for ${login} via keytar`);
   }
 
   async startLogin(): Promise<{ success: boolean; login?: string }> {
@@ -228,7 +231,7 @@ export class AuthService {
             const user = await getJson('https://api.github.com/user', token);
             login = String(user.login);
           } catch (err) {
-            console.warn('[Auth] Failed to fetch user login, using default account name:', err);
+            log.warn('Failed to fetch user login, using default account name:', err);
           }
 
           await this.storeCredential(login, token);

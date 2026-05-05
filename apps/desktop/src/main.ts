@@ -33,8 +33,11 @@ import {
   type GenesisMindTemplateMarketplaceSource,
   type Notifier,
 } from '@chamber/services';
+import { Logger } from '@chamber/services';
 import { createAppTray, loadAppIcon } from './main/tray/Tray';
 import { installContextMenu } from './main/contextMenu/ContextMenu';
+
+const log = Logger.create('main');
 import { enrollMarketplaceFromProtocolUrl, findMarketplaceInstallUrl, parseMarketplaceInstallUrl } from './main/protocol/marketplaceProtocol';
 
 // IPC adapters
@@ -229,7 +232,7 @@ async function startMvpServer(): Promise<string> {
         }
       }
     });
-    serverChild?.stderr.on('data', (chunk) => console.error(`[server] ${String(chunk)}`));
+    serverChild?.stderr.on('data', (chunk) => log.error(String(chunk)));
     serverChild?.on('exit', (code) => {
       if (!mvpServerUrl) {
         clearTimeout(timer);
@@ -322,7 +325,7 @@ const handleProtocolUrl = (rawUrl: string): void => {
         rawUrl,
         (registryUrl) => marketplaceRegistryService.addGenesisRegistry(registryUrl),
         (error) => {
-          console.warn('[marketplace] Protocol registry enrollment failed:', error);
+          log.warn('Protocol registry enrollment failed:', error);
           showMarketplaceProtocolMessage('error', 'Unable to add marketplace', error);
         },
       );
@@ -333,7 +336,7 @@ const handleProtocolUrl = (rawUrl: string): void => {
       }
     })
     .catch((error: unknown) => {
-      console.warn('[marketplace] Protocol registry enrollment failed:', error);
+      log.warn('Protocol registry enrollment failed:', error);
       showMarketplaceProtocolMessage('error', 'Unable to add marketplace', error instanceof Error ? error.message : String(error));
     });
 };
@@ -409,11 +412,11 @@ app.on('ready', async () => {
   cleanupLegacySquirrelInstall({ isPackaged: app.isPackaged })
     .then((result) => {
       if (result.status !== 'skipped') {
-        console.info(`[squirrel-migration] ${result.status}`, result);
+        log.info(`squirrel-migration: ${result.status}`, result);
       }
     })
     .catch((error: unknown) => {
-      console.warn('[squirrel-migration] Unexpected cleanup failure:', error);
+      log.warn('squirrel-migration: Unexpected cleanup failure:', error);
     });
 
   if (useMvpServer) {
@@ -432,7 +435,16 @@ app.on('ready', async () => {
   setupGenesisIPC(
     mindManager,
     scaffold,
-    { listTemplates: () => genesisTemplateCatalog.listTemplates().templates },
+    { listTemplates: () => {
+      const result = genesisTemplateCatalog.listTemplates();
+      if (result.templates.length === 0) {
+        const errors = result.sources.filter(s => s.status === 'error');
+        if (errors.length > 0) {
+          throw new Error(errors.map(s => s.message).join('; '));
+        }
+      }
+      return result.templates;
+    }},
     genesisTemplateInstaller,
   );
   setupMarketplaceIPC(marketplaceRegistryService);
@@ -478,7 +490,7 @@ app.on('ready', async () => {
 
   // Restore minds async — awaitRestore() lets IPC handlers wait for completion
   mindManager.restoreFromConfig().catch((err: unknown) => {
-    console.error('[main] Failed to restore minds:', err);
+    log.error('Failed to restore minds:', err);
   });
 });
 

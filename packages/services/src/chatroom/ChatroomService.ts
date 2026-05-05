@@ -2,6 +2,9 @@ import { EventEmitter } from 'events';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { Logger } from '../logger';
+
+const log = Logger.create('Chatroom');
 import type {
   ChatroomMessage,
   ChatroomTranscript,
@@ -116,7 +119,7 @@ export class ChatroomService extends EventEmitter {
 
     if (participants.length === 0) return;
 
-    console.log(`[Chatroom] broadcast mode="${this.orchestrationMode}" participants=${participants.length} handoffConfig=${JSON.stringify(this.handoffConfig)} magneticConfig=${JSON.stringify(this.magneticConfig)}`);
+    log.info(`broadcast mode="${this.orchestrationMode}" participants=${participants.length} handoffConfig=${JSON.stringify(this.handoffConfig)} magneticConfig=${JSON.stringify(this.magneticConfig)}`);
 
     // Warm session pool — pre-create sessions for all participants in parallel
     // to eliminate cold-start delays when workers begin their turns.
@@ -134,7 +137,7 @@ export class ChatroomService extends EventEmitter {
         this.magneticConfig ?? undefined,
       );
     } catch (err) {
-      console.error(`[Chatroom] Failed to create strategy for mode "${this.orchestrationMode}":`, err);
+      log.error(`Failed to create strategy for mode "${this.orchestrationMode}":`, err);
       this.emit('chatroom:event', {
         mindId: 'system',
         mindName: 'System',
@@ -164,7 +167,7 @@ export class ChatroomService extends EventEmitter {
     try {
       await strategy.execute(userMessage, participants, roundId, contextAdapter);
     } catch (err) {
-      console.error(`[Chatroom] Strategy "${this.orchestrationMode}" execution failed:`, err);
+      log.error(`Strategy "${this.orchestrationMode}" execution failed:`, err);
       this.emit('chatroom:event', {
         mindId: 'system',
         mindName: 'System',

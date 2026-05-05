@@ -1,6 +1,9 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { Logger } from '../logger';
 import type { ChamberToolProvider } from '../chamberTools';
+
+const log = Logger.create('canvas');
 import type { Tool } from '../mind/types';
 import type { ExternalOpener } from '../ports';
 import { CanvasServer } from './CanvasServer';
@@ -65,7 +68,7 @@ export class CanvasService implements ChamberToolProvider {
 
   constructor(options: CanvasServiceOptions = {}) {
     const onAction = options.onAction ?? ((action: CanvasAction) => {
-      console.log('[canvas] Action received:', action);
+      log.info('Action received:', action);
     });
 
     this.server = options.server ?? new CanvasServer({
