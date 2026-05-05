@@ -1,7 +1,8 @@
 import { chromium, type Browser, type Page } from '@playwright/test';
-import { execFileSync, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
+import keytar from 'keytar';
 
 export const repoRoot = path.resolve(__dirname, '..', '..', '..');
 
@@ -97,14 +98,29 @@ function logsPreview(logs: string[]): string {
 }
 
 /**
- * Returns true when the active `gh` account can access the given repo.
+ * Returns true when Chamber's public GitHub API access or stored credentials can access the given repo.
  * Use with `test.skip()` to skip marketplace tests that need a private repo.
  */
-export function canAccessRepo(nwo: string): boolean {
-  try {
-    execFileSync('gh', ['api', `repos/${nwo}`, '--silent'], { stdio: 'ignore', timeout: 15_000 });
-    return true;
-  } catch {
-    return false;
+export async function canAccessRepo(nwo: string): Promise<boolean> {
+  if (await canFetchRepo(nwo, null)) return true;
+
+  const credentials = await keytar.findCredentials('copilot-cli');
+  for (const credential of credentials) {
+    if (credential.password && await canFetchRepo(nwo, credential.password)) {
+      return true;
+    }
   }
+
+  return false;
+}
+
+async function canFetchRepo(nwo: string, token: string | null): Promise<boolean> {
+  const response = await fetch(`https://api.github.com/repos/${nwo}`, {
+    headers: {
+      'Accept': 'application/vnd.github+json',
+      'User-Agent': 'Chamber/e2e',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+    },
+  });
+  return response.ok;
 }

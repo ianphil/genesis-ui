@@ -13,10 +13,10 @@ const ACCESS_TOKEN_URL = 'https://github.com/login/oauth/access_token';
 const AUTH_SCOPE = 'read:user,read:org,repo,gist';
 // The previous CredWrite-based implementation used the same service/account shape,
 // so existing Windows credentials remain readable after the switch to keytar.
-const KEYTAR_SERVICE = 'copilot-cli';
-const GITHUB_ACCOUNT_PREFIX = 'https://github.com:';
+export const GITHUB_CREDENTIAL_SERVICE = 'copilot-cli';
+export const GITHUB_ACCOUNT_PREFIX = 'https://github.com:';
 
-interface StoredCredential {
+export interface StoredGitHubCredential {
   login: string;
   account: string;
   password: string;
@@ -30,6 +30,17 @@ export function getLoginFromAccount(account: string): string | null {
   if (!account.startsWith(GITHUB_ACCOUNT_PREFIX)) return null;
   const login = account.slice(GITHUB_ACCOUNT_PREFIX.length).trim();
   return login || null;
+}
+
+export async function listStoredGitHubCredentials(credentials: CredentialStore): Promise<StoredGitHubCredential[]> {
+  return (await credentials.findCredentials(GITHUB_CREDENTIAL_SERVICE))
+    .map((credential) => {
+      const login = getLoginFromAccount(credential.account);
+      if (!login || !credential.password) return null;
+      return { login, account: credential.account, password: credential.password };
+    })
+    .filter((credential): credential is StoredGitHubCredential => credential !== null)
+    .sort((a, b) => a.login.localeCompare(b.login));
 }
 
 export interface AuthProgress {
@@ -148,7 +159,7 @@ export class AuthService {
     try {
       const credential = await this.getStoredCredentialEntry();
       if (!credential) return;
-      await this.credentials.deletePassword(KEYTAR_SERVICE, credential.account);
+      await this.credentials.deletePassword(GITHUB_CREDENTIAL_SERVICE, credential.account);
       this.setActiveLogin(null);
       log.info(`Deleted credential for ${credential.login}`);
     } catch (err) {
@@ -156,21 +167,11 @@ export class AuthService {
     }
   }
 
-  private async getStoredCredentials(): Promise<StoredCredential[]> {
-    const credentials = await this.credentials.findCredentials(KEYTAR_SERVICE);
-    const storedCredentials = credentials
-      .map((credential) => {
-        const login = getLoginFromAccount(credential.account);
-        if (!login || !credential.password) return null;
-        return { login, account: credential.account, password: credential.password };
-      })
-      .filter((credential): credential is StoredCredential => credential !== null)
-      .sort((a, b) => a.login.localeCompare(b.login));
-
-    return storedCredentials;
+  private async getStoredCredentials(): Promise<StoredGitHubCredential[]> {
+    return listStoredGitHubCredentials(this.credentials);
   }
 
-  private async getStoredCredentialEntry(): Promise<StoredCredential | null> {
+  private async getStoredCredentialEntry(): Promise<StoredGitHubCredential | null> {
     const credentials = await this.getStoredCredentials();
     if (credentials.length === 0) return null;
 
@@ -186,7 +187,7 @@ export class AuthService {
   }
 
   private async storeCredential(login: string, token: string): Promise<void> {
-    await this.credentials.setPassword(KEYTAR_SERVICE, getCredentialAccount(login), token);
+    await this.credentials.setPassword(GITHUB_CREDENTIAL_SERVICE, getCredentialAccount(login), token);
     log.info(`Stored credential for ${login} via keytar`);
   }
 

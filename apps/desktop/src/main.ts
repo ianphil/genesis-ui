@@ -18,6 +18,7 @@ import {
   DEFAULT_GENESIS_MIND_TEMPLATE_SOURCE,
   GenesisMindTemplateInstaller,
   GenesisMindTemplateMarketplaceCatalog,
+  GitHubRegistryClient,
   CronService,
   IdentityLoader,
   MessageRouter,
@@ -119,16 +120,18 @@ const saveActiveLogin = (login: string | null) => {
   const config = configService.load();
   configService.save({ ...config, activeLogin: login });
 };
+const credentialStore = loadKeytar();
+const githubRegistryClient = GitHubRegistryClient.withCredentialStore(credentialStore);
 const authService = new AuthService(
-  loadKeytar(),
+  credentialStore,
   () => configService.load().activeLogin,
   saveActiveLogin,
   `Chamber/${app.getVersion()}`,
 );
 const scaffold = new MindScaffold();
-const genesisTemplateCatalog = new GenesisMindTemplateMarketplaceCatalog(undefined, getGenesisMarketplaceSources);
-const genesisTemplateInstaller = new GenesisMindTemplateInstaller(undefined, clientFactory, getGenesisMarketplaceSources);
-const marketplaceRegistryService = new MarketplaceRegistryService(configService);
+const genesisTemplateCatalog = new GenesisMindTemplateMarketplaceCatalog(githubRegistryClient, getGenesisMarketplaceSources);
+const genesisTemplateInstaller = new GenesisMindTemplateInstaller(githubRegistryClient, clientFactory, getGenesisMarketplaceSources);
+const marketplaceRegistryService = new MarketplaceRegistryService(configService, githubRegistryClient);
 const viewDiscovery = new ViewDiscovery();
 
 // --- Services (business rules, all dependencies injected) ---
@@ -435,8 +438,8 @@ app.on('ready', async () => {
   setupGenesisIPC(
     mindManager,
     scaffold,
-    { listTemplates: () => {
-      const result = genesisTemplateCatalog.listTemplates();
+    { listTemplates: async () => {
+      const result = await genesisTemplateCatalog.listTemplates();
       if (result.templates.length === 0) {
         const errors = result.sources.filter(s => s.status === 'error');
         if (errors.length > 0) {

@@ -100,7 +100,7 @@ export class MindScaffold {
     // 5. Bootstrap capabilities (best-effort — mind works without them)
     this.emit('capabilities', 'Installing capabilities...');
     try {
-      this.bootstrapCapabilities(mindPath);
+      await this.bootstrapCapabilities(mindPath);
     } catch (err) {
       log.warn('Capability bootstrap failed (non-fatal):', err);
       this.emit('capabilities', 'Capabilities install failed — run "upgrade from genesis" later.');
@@ -195,7 +195,7 @@ export class MindScaffold {
     }
   }
 
-  private bootstrapCapabilities(mindPath: string): void {
+  private async bootstrapCapabilities(mindPath: string): Promise<void> {
     // 1. Seed registry.json
     this.emit('capabilities', 'Seeding registry...');
     const registryPath = path.join(mindPath, '.github', 'registry.json');
@@ -212,7 +212,7 @@ export class MindScaffold {
 
     // 2. Pull upgrade skill (the bootloader)
     this.emit('capabilities', 'Pulling upgrade skill...');
-    const remoteRegistry = this.pullUpgradeSkill(mindPath);
+    const remoteRegistry = await this.pullUpgradeSkill(mindPath);
 
     // 3. Install only skills — Chamber internalizes extensions.
     const skillNames = Object.keys(remoteRegistry.skills ?? {});
@@ -256,12 +256,12 @@ export class MindScaffold {
     }
   }
 
-  private pullUpgradeSkill(mindPath: string): RemoteRegistry {
+  private async pullUpgradeSkill(mindPath: string): Promise<RemoteRegistry> {
     const [owner, repo] = GENESIS_SOURCE.split('/');
     const upgradePrefix = '.github/skills/upgrade/';
 
     // Fetch the genesis tree
-    const treeEntries = this.registryClient.fetchTree(owner, repo, GENESIS_CHANNEL);
+    const treeEntries = await this.registryClient.fetchTree(owner, repo, GENESIS_CHANNEL);
 
     // Find upgrade skill files
     const upgradeFiles: { path: string; sha: string }[] = [];
@@ -277,14 +277,14 @@ export class MindScaffold {
 
     // Download and write each file
     for (const file of upgradeFiles) {
-      const content = this.registryClient.fetchBlob(owner, repo, file.sha);
+      const content = await this.registryClient.fetchBlob(owner, repo, file.sha);
       const localPath = path.join(mindPath, file.path);
       fs.mkdirSync(path.dirname(localPath), { recursive: true });
       fs.writeFileSync(localPath, content);
     }
 
     // Fetch remote registry to get upgrade version info
-    const remoteRegistry = this.registryClient.fetchJsonContent(owner, repo, '.github/registry.json', GENESIS_CHANNEL) as RemoteRegistry;
+    const remoteRegistry = await this.registryClient.fetchJsonContent(owner, repo, '.github/registry.json', GENESIS_CHANNEL) as RemoteRegistry;
     const upgradeInfo = remoteRegistry.skills?.upgrade;
 
     // Update local registry with upgrade skill

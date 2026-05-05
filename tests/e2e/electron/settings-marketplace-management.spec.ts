@@ -12,10 +12,7 @@ const internalMarketplaceUrl = 'https://github.com/agency-microsoft/genesis-mind
 const publicMarketplaceId = 'github:ianphil/genesis-minds';
 const internalMarketplaceId = 'github:agency-microsoft/genesis-minds';
 
-const hasAccess = canAccessRepo('agency-microsoft/genesis-minds');
-
 test.describe('electron Settings marketplace management smoke', () => {
-  test.skip(!hasAccess, 'Active gh account cannot access agency-microsoft/genesis-minds — run "gh auth switch" to an account with access.');
   test.setTimeout(240_000);
 
   let app: LaunchedElectronApp | undefined;
@@ -24,6 +21,11 @@ test.describe('electron Settings marketplace management smoke', () => {
   const tempRoots: string[] = [];
 
   test.beforeAll(async () => {
+    test.skip(
+      !(await canAccessRepo('agency-microsoft/genesis-minds')),
+      'Stored Chamber GitHub credentials cannot access agency-microsoft/genesis-minds.'
+    );
+
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'chamber-settings-marketplace-smoke-'));
     mindPath = path.join(root, 'monica');
     userDataPath = path.join(root, 'user-data');

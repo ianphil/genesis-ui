@@ -7,8 +7,8 @@ import type {
 } from './templateTypes';
 
 interface RegistryClient {
-  fetchTree(owner: string, repo: string, branch: string): TreeEntry[];
-  fetchJsonContent(owner: string, repo: string, filePath: string, ref: string): unknown;
+  fetchTree(owner: string, repo: string, branch: string): Promise<TreeEntry[]>;
+  fetchJsonContent(owner: string, repo: string, filePath: string, ref: string): Promise<unknown>;
 }
 
 type SourceProvider =
@@ -21,7 +21,7 @@ export class GenesisMindTemplateMarketplaceCatalog {
     private readonly sourceProvider: SourceProvider = [DEFAULT_GENESIS_MIND_TEMPLATE_SOURCE],
   ) {}
 
-  listTemplates(): GenesisMindTemplateMarketplaceResult {
+  async listTemplates(): Promise<GenesisMindTemplateMarketplaceResult> {
     const templates: GenesisMindTemplateMarketplaceResult['templates'] = [];
     const sources: GenesisMindTemplateMarketplaceStatus[] = [];
 
@@ -33,7 +33,7 @@ export class GenesisMindTemplateMarketplaceCatalog {
       }
 
       try {
-        const sourceTemplates = new GenesisMindTemplateCatalog(this.registryClient, source).listTemplates();
+        const sourceTemplates = await new GenesisMindTemplateCatalog(this.registryClient, source).listTemplates();
         templates.push(...sourceTemplates);
         sources.push({ ...metadata, status: 'ok', templateCount: sourceTemplates.length });
       } catch {

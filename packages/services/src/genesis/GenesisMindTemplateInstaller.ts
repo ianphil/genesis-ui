@@ -10,11 +10,12 @@ import type { GenesisMindTemplate, GenesisMindTemplateMarketplaceSource } from '
 
 const IDEA_FOLDERS = ['inbox', 'domains', 'expertise', 'initiatives', 'Archive'];
 const WORKING_MEMORY_FILES = ['memory.md', 'rules.md', 'log.md'];
+const MAX_TEMPLATE_INSTALL_BYTES = 50 * 1024 * 1024;
 
 interface RegistryClient {
-  fetchTree(owner: string, repo: string, branch: string): TreeEntry[];
-  fetchJsonContent(owner: string, repo: string, filePath: string, ref: string): unknown;
-  fetchBlob(owner: string, repo: string, sha: string): Buffer;
+  fetchTree(owner: string, repo: string, branch: string): Promise<TreeEntry[]>;
+  fetchJsonContent(owner: string, repo: string, filePath: string, ref: string): Promise<unknown>;
+  fetchBlob(owner: string, repo: string, sha: string): Promise<Buffer>;
 }
 
 type ClientFactory = Pick<CopilotClientFactory, 'createClient' | 'destroyClient'>;
@@ -37,7 +38,7 @@ export class GenesisMindTemplateInstaller {
   ) {}
 
   async install(request: GenesisMindTemplateInstallRequest): Promise<string> {
-    const template = this.listTemplates().find((item) =>
+    const template = (await this.listTemplates()).find((item) =>
       item.id === request.templateId
       && (!request.marketplaceId || item.source.marketplaceId === request.marketplaceId)
     );
@@ -47,7 +48,7 @@ export class GenesisMindTemplateInstaller {
 
     const mindPath = path.join(request.basePath, MindScaffold.slugify(template.displayName));
     this.createStructure(mindPath);
-    this.copyTemplateFiles(template, mindPath);
+    await this.copyTemplateFiles(template, mindPath);
 
     const validation = new MindScaffold().validate(mindPath);
     if (!validation.ok) {
@@ -74,10 +75,11 @@ export class GenesisMindTemplateInstaller {
     }
   }
 
-  private copyTemplateFiles(template: GenesisMindTemplate, mindPath: string): void {
-    const tree = this.registryClient.fetchTree(template.source.owner, template.source.repo, template.source.ref);
+  private async copyTemplateFiles(template: GenesisMindTemplate, mindPath: string): Promise<void> {
+    const tree = await this.registryClient.fetchTree(template.source.owner, template.source.repo, template.source.ref);
     const templatePrefix = `${template.source.rootPath}/`;
     const entries = tree.filter((entry) => entry.type === 'blob' && entry.path.startsWith(templatePrefix));
+    let totalBytes = 0;
 
     for (const entry of entries) {
       const relativePath = path.posix.relative(template.source.rootPath, entry.path);
@@ -85,7 +87,11 @@ export class GenesisMindTemplateInstaller {
         throw new Error(`Template ${template.id} has unsafe repository file path: ${entry.path}`);
       }
 
-      const content = this.registryClient.fetchBlob(template.source.owner, template.source.repo, entry.sha);
+      const content = await this.registryClient.fetchBlob(template.source.owner, template.source.repo, entry.sha);
+      totalBytes += content.length;
+      if (totalBytes > MAX_TEMPLATE_INSTALL_BYTES) {
+        throw new Error(`Template ${template.id} exceeds the ${MAX_TEMPLATE_INSTALL_BYTES} byte install limit`);
+      }
       const localPath = path.join(mindPath, ...relativePath.split('/'));
       fs.mkdirSync(path.dirname(localPath), { recursive: true });
       fs.writeFileSync(localPath, content);
@@ -98,9 +104,9 @@ export class GenesisMindTemplateInstaller {
     execSync('git commit -m "Genesis template install"', { cwd: mindPath, stdio: 'ignore' });
   }
 
-  private listTemplates(): GenesisMindTemplate[] {
+  private async listTemplates(): Promise<GenesisMindTemplate[]> {
     if (typeof this.sourceProvider === 'function' || Array.isArray(this.sourceProvider)) {
-      return new GenesisMindTemplateMarketplaceCatalog(this.registryClient, this.sourceProvider).listTemplates().templates;
+      return (await new GenesisMindTemplateMarketplaceCatalog(this.registryClient, this.sourceProvider).listTemplates()).templates;
     }
     return new GenesisMindTemplateCatalog(this.registryClient, this.sourceProvider).listTemplates();
   }

@@ -14,17 +14,17 @@ class FakeRegistryClient {
   json = new Map<string, unknown>();
   blobs = new Map<string, Buffer>();
 
-  fetchTree(owner = 'ianphil', repo = 'genesis-minds'): TreeEntry[] {
+  async fetchTree(owner = 'ianphil', repo = 'genesis-minds'): Promise<TreeEntry[]> {
     return this.treeByRepo.get(repoKey(owner, repo)) ?? this.tree;
   }
 
-  fetchJsonContent(owner: string, repo: string, filePath: string): unknown {
+  async fetchJsonContent(owner: string, repo: string, filePath: string): Promise<unknown> {
     const content = this.json.get(`${repoKey(owner, repo)}:${filePath}`) ?? this.json.get(filePath);
     if (!content) throw new Error(`Missing JSON fixture for ${filePath}`);
     return content;
   }
 
-  fetchBlob(_owner: string, _repo: string, sha: string): Buffer {
+  async fetchBlob(_owner: string, _repo: string, sha: string): Promise<Buffer> {
     const content = this.blobs.get(sha);
     if (!content) throw new Error(`Missing blob fixture for ${sha}`);
     return content;
@@ -144,6 +144,14 @@ describe('GenesisMindTemplateInstaller', () => {
 
     expect(mindPath).toBe(path.join(basePath, 'internal-lucy'));
     expect(readFileSync(path.join(mindPath, 'SOUL.md'), 'utf8')).toBe('# Internal Lucy\n');
+  });
+
+  it('rejects templates that exceed the total install size limit', async () => {
+    registryClient.blobs.set('soul', Buffer.alloc(51 * 1024 * 1024));
+    const installer = new GenesisMindTemplateInstaller(registryClient);
+
+    await expect(installer.install({ templateId: 'lucy', basePath }))
+      .rejects.toThrow('Template lucy exceeds the 52428800 byte install limit');
   });
 });
 

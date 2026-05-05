@@ -57,14 +57,6 @@ class FakeRegistryClient {
   }
 }
 
-class FakeGitHubAuthInspector {
-  activeLogin: string | null = 'ianphil';
-
-  async getActiveLogin(): Promise<string | null> {
-    return this.activeLogin;
-  }
-}
-
 const defaultConfig: AppConfig = {
   version: 2,
   minds: [],
@@ -89,14 +81,12 @@ const defaultConfig: AppConfig = {
 describe('MarketplaceRegistryService', () => {
   let config: AppConfig;
   let registryClient: FakeRegistryClient;
-  let authInspector: FakeGitHubAuthInspector;
   let savedConfigs: AppConfig[];
   let save: (next: AppConfig) => void;
 
   beforeEach(() => {
     config = structuredClone(defaultConfig);
     registryClient = new FakeRegistryClient();
-    authInspector = new FakeGitHubAuthInspector();
     savedConfigs = [];
     save = (next: AppConfig) => {
       savedConfigs.push(next);
@@ -105,7 +95,7 @@ describe('MarketplaceRegistryService', () => {
   });
 
   it('adds a GitHub Genesis marketplace registry after validating its manifest', async () => {
-    const service = new MarketplaceRegistryService({ load: () => config, save }, registryClient, authInspector);
+    const service = new MarketplaceRegistryService({ load: () => config, save }, registryClient);
 
     await expect(service.addGenesisRegistry('https://github.com/agency-microsoft/genesis-minds')).resolves.toEqual({
       success: true,
@@ -126,29 +116,18 @@ describe('MarketplaceRegistryService', () => {
 
   it('returns a friendly access error without saving inaccessible marketplaces', async () => {
     registryClient.fail = true;
-    const service = new MarketplaceRegistryService({ load: () => config, save }, registryClient, authInspector);
+    const service = new MarketplaceRegistryService({ load: () => config, save }, registryClient);
 
     await expect(service.addGenesisRegistry('https://github.com/agency-microsoft/genesis-minds')).resolves.toEqual({
       success: false,
-      error: 'Unable to access marketplace agency-microsoft/genesis-minds with the active GitHub CLI account "ianphil". Chamber uses the GitHub CLI to read marketplace repositories. Run "gh auth status --hostname github.com" to confirm the active account, then run "gh auth switch --user <account-with-access>" or "gh auth login" before trying again.',
+      error: 'Unable to access marketplace agency-microsoft/genesis-minds. Chamber tried the public GitHub API and any stored Chamber GitHub credentials. Sign in to Chamber with an account that can access this repository, or confirm the marketplace URL and repository permissions.',
     });
     expect(savedConfigs).toHaveLength(0);
   });
 
-  it('returns GitHub CLI setup guidance when no active account can be detected', async () => {
-    registryClient.fail = true;
-    authInspector.activeLogin = null;
-    const service = new MarketplaceRegistryService({ load: () => config, save }, registryClient, authInspector);
-
-    await expect(service.addGenesisRegistry('https://github.com/agency-microsoft/genesis-minds')).resolves.toEqual({
-      success: false,
-      error: 'Unable to access marketplace agency-microsoft/genesis-minds. Chamber uses the GitHub CLI to read marketplace repositories. Run "gh auth status --hostname github.com" to confirm the active account, then run "gh auth switch --user <account-with-access>" or "gh auth login" before trying again.',
-    });
-  });
-
   it('returns a manifest validation error without saving malformed marketplaces', async () => {
     registryClient.malformedManifest = true;
-    const service = new MarketplaceRegistryService({ load: () => config, save }, registryClient, authInspector);
+    const service = new MarketplaceRegistryService({ load: () => config, save }, registryClient);
 
     await expect(service.addGenesisRegistry('https://github.com/agency-microsoft/genesis-minds')).resolves.toEqual({
       success: false,
@@ -159,7 +138,7 @@ describe('MarketplaceRegistryService', () => {
 
   it('returns a manifest validation error when required template files are missing', async () => {
     registryClient.missingRequiredFile = true;
-    const service = new MarketplaceRegistryService({ load: () => config, save }, registryClient, authInspector);
+    const service = new MarketplaceRegistryService({ load: () => config, save }, registryClient);
 
     await expect(service.refreshGenesisRegistry('github:ianphil/genesis-minds')).resolves.toEqual({
       success: false,
@@ -168,7 +147,7 @@ describe('MarketplaceRegistryService', () => {
   });
 
   it('rejects non-GitHub URLs', async () => {
-    const service = new MarketplaceRegistryService({ load: () => config, save }, registryClient, authInspector);
+    const service = new MarketplaceRegistryService({ load: () => config, save }, registryClient);
 
     await expect(service.addGenesisRegistry('https://example.com/agency-microsoft/genesis-minds')).resolves.toEqual({
       success: false,
@@ -177,7 +156,7 @@ describe('MarketplaceRegistryService', () => {
   });
 
   it('rejects owner and repo path segments with shell metacharacters before validation', async () => {
-    const service = new MarketplaceRegistryService({ load: () => config, save }, registryClient, authInspector);
+    const service = new MarketplaceRegistryService({ load: () => config, save }, registryClient);
 
     await expect(service.addGenesisRegistry('https://github.com/agency-microsoft/genesis-minds&calc')).resolves.toEqual({
       success: false,
@@ -187,7 +166,7 @@ describe('MarketplaceRegistryService', () => {
   });
 
   it('disables, enables, and removes followed marketplaces', async () => {
-    const service = new MarketplaceRegistryService({ load: () => config, save }, registryClient, authInspector);
+    const service = new MarketplaceRegistryService({ load: () => config, save }, registryClient);
     await service.addGenesisRegistry('https://github.com/agency-microsoft/genesis-minds');
 
     expect(service.setGenesisRegistryEnabled('github:agency-microsoft/genesis-minds', false)).toEqual({
@@ -206,7 +185,7 @@ describe('MarketplaceRegistryService', () => {
   });
 
   it('rejects invalid enabled state without mutating config', () => {
-    const service = new MarketplaceRegistryService({ load: () => config, save }, registryClient, authInspector);
+    const service = new MarketplaceRegistryService({ load: () => config, save }, registryClient);
 
     expect(service.setGenesisRegistryEnabled('github:ianphil/genesis-minds', 'false')).toEqual({
       success: false,
@@ -216,7 +195,7 @@ describe('MarketplaceRegistryService', () => {
   });
 
   it('does not remove the default marketplace', () => {
-    const service = new MarketplaceRegistryService({ load: () => config, save }, registryClient, authInspector);
+    const service = new MarketplaceRegistryService({ load: () => config, save }, registryClient);
 
     expect(service.removeGenesisRegistry('github:ianphil/genesis-minds')).toEqual({
       success: false,
@@ -225,7 +204,7 @@ describe('MarketplaceRegistryService', () => {
   });
 
   it('refreshes a followed marketplace by validating access', async () => {
-    const service = new MarketplaceRegistryService({ load: () => config, save }, registryClient, authInspector);
+    const service = new MarketplaceRegistryService({ load: () => config, save }, registryClient);
 
     await expect(service.refreshGenesisRegistry('github:ianphil/genesis-minds')).resolves.toEqual({
       success: true,
