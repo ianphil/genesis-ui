@@ -8,14 +8,13 @@ description: Create, inspect, fix, and manage Chamber Lens views. Use this skill
 
 Create views in `.github/lens/<view-name>/` to add panels to the Chamber activity bar. Lens is the navigation and discovery model.
 
-- Use classic JSON Lens views for simple structured data.
-- Use Canvas Lens views for rich dashboards, workflows, reports, forms, and app-like UI.
+Create new Lens views as Canvas Lens views. Classic JSON Lens views are legacy: inspect, refresh, and maintain existing ones, but do not create new classic JSON Lens views unless the user explicitly asks to modify an existing legacy Lens.
 
 ## Non-Negotiable Discovery Contract
 
 Chamber discovers only folders under `.github/lens/` that contain a valid `view.json`.
 
-For a Canvas Lens, `view.json` must use this exact shape:
+For every new Lens, `view.json` must use this Canvas shape:
 
 ```json
 {
@@ -28,32 +27,20 @@ For a Canvas Lens, `view.json` must use this exact shape:
 }
 ```
 
-For a classic JSON Lens, `view.json` must use this exact shape:
+Never create new `form`, `table`, `briefing`, `detail`, `status-board`, `timeline`, or `editor` Lens views. Those are legacy view types for existing views only.
 
-```json
-{
-  "name": "Cron Jobs",
-  "icon": "clock",
-  "view": "table",
-  "source": "data.json",
-  "prompt": "Optional refresh prompt.",
-  "refreshOn": "click"
-}
-```
-
-Never use `title`, `renderer`, `type`, `component`, `template`, or `file` in `view.json`. Chamber ignores those fields. The required fields are `name`, `icon`, `view`, and `source`.
+Never use `title`, `renderer`, `type`, `component`, `template`, or `file` in `view.json`. Chamber ignores those fields. The required fields for new views are `name`, `icon`, `view: "canvas"`, and `source: "index.html"`.
 
 Before finishing any Lens task, inspect the files and verify:
 
 - `.github/lens/<view-name>/view.json` exists.
 - `view.json` has `name`, `icon`, `view`, and `source`.
 - Canvas Lens uses `"view": "canvas"` and `"source": "index.html"`.
-- Classic JSON Lens uses a supported JSON view and a `.json` source file.
-- The source file named by `source` exists in the same folder.
+- `.github/lens/<view-name>/index.html` exists.
 
 ## Creating Views
 
-Create each Lens as a folder with exactly the files Chamber expects:
+Create each new Lens as a Canvas Lens folder with exactly the files Chamber expects:
 
 ```text
 .github/lens/<view-name>/
@@ -61,31 +48,18 @@ Create each Lens as a folder with exactly the files Chamber expects:
   index.html     # Canvas Lens
 ```
 
-or:
-
-```text
-.github/lens/<view-name>/
-  view.json
-  data.json      # classic JSON Lens
-```
-
 Use a short, stable, lowercase folder name like `cron-jobs`, `daily-briefing`, or `release-command-center`. Keep all Lens files inside that folder. If the folder does not exist, create it before writing files. Do not place Lens files at the root of `.github/lens/`; Chamber discovers only folders that contain a `view.json`.
 
-For rich UI, write both:
+Write both:
 
 1. `.github/lens/<view-name>/view.json`
 2. `.github/lens/<view-name>/index.html`
-
-For simple structured UI, write both:
-
-1. `.github/lens/<view-name>/view.json`
-2. `.github/lens/<view-name>/data.json`
 
 Before you finish, re-open or inspect the files you wrote and make sure `view.json` points to the source file you actually created.
 
 ## Canvas Lens Views
 
-Canvas Lens is the preferred renderer for expressive UI. Create an HTML file and a `view.json` manifest:
+Canvas Lens is the required renderer for new Lens views. Create an HTML file and a `view.json` manifest:
 
 ```json
 {
@@ -160,9 +134,9 @@ Canvas HTML does not get direct SDK access. Send user intent back to Chamber:
 
 Chamber routes actions to the active mind. Use your normal tools and context to satisfy the action, then update the HTML source file if the UI should change.
 
-## Classic JSON Lens Views
+## Legacy JSON Lens Views
 
-Classic views still work well for simple structured data.
+Classic JSON Lens views still render for backwards compatibility. Maintain or refresh them when they already exist, but do not create new ones.
 
 ```json
 {
@@ -208,7 +182,7 @@ Canvas dashboard:
 </html>
 ```
 
-Classic briefing:
+Legacy briefing shape:
 
 ```json
 {
@@ -226,5 +200,6 @@ Classic briefing:
 - Keep all Lens files inside `.github/lens/<view-name>/`.
 - Never write credentials into Lens files.
 - Canvas UI sends intent; the mind uses SDK tools through Chamber.
-- Prefer Canvas Lens for rich UI, but keep simple data views as classic JSON Lens.
+- Create new Lens views as Canvas Lens views only.
+- Use classic JSON Lens types only when maintaining an existing legacy Lens.
 - Delete the view folder to remove a view from Chamber.
