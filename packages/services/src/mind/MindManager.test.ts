@@ -285,6 +285,27 @@ describe('MindManager', () => {
       expect(manager.listConversationHistory(mind.mindId)).toHaveLength(1);
     });
 
+    it('falls back to creating the same real conversation session when model-switch resume is stale', async () => {
+      const fallbackSession = createSessionStub();
+      const mind = await manager.loadMind('/tmp/agents/q');
+      manager.markActiveConversationHasMessages(mind.mindId, 'Existing context');
+      mockCreateSession.mockClear();
+      mockResumeSession.mockRejectedValueOnce(new Error('Session not found: stale-session'));
+      mockCreateSession.mockResolvedValueOnce(fallbackSession);
+
+      const updated = await manager.setMindModel(mind.mindId, 'claude-opus');
+
+      expect(updated?.selectedModel).toBe('claude-opus');
+      expect(mockResumeSession).toHaveBeenCalledWith(mind.activeSessionId, expect.objectContaining({ model: 'claude-opus' }));
+      expect(mockCreateSession).toHaveBeenCalledWith(expect.objectContaining({
+        model: 'claude-opus',
+        sessionId: mind.activeSessionId,
+      }));
+      expect(manager.getMind(mind.mindId)?.activeSessionId).toBe(mind.activeSessionId);
+      expect(manager.getMind(mind.mindId)?.session).toBe(fallbackSession);
+      expect(manager.listConversationHistory(mind.mindId)).toHaveLength(1);
+    });
+
     it('serializes concurrent per-mind model changes', async () => {
       const originalSession = createSessionStub();
       const firstModelSession = createSessionStub();
@@ -579,6 +600,57 @@ describe('MindManager', () => {
       expect(history[0].active).toBe(true);
     });
 
+    it('falls back to creating the same real conversation session when recovery resume is stale', async () => {
+      const fallbackSession = createSessionStub();
+      const mind = await manager.loadMind('/tmp/agents/q');
+      manager.markActiveConversationHasMessages(mind.mindId, 'Hello Q');
+      mockCreateSession.mockClear();
+      mockResumeSession.mockRejectedValueOnce(new Error('failed to resume session: Session not found: stale-session'));
+      mockCreateSession.mockResolvedValueOnce(fallbackSession);
+
+      const recovered = await manager.recoverActiveConversationSession(mind.mindId);
+
+      expect(recovered).toBe(fallbackSession);
+      expect(mockResumeSession).toHaveBeenCalledWith(
+        mind.activeSessionId,
+        expect.objectContaining({ workingDirectory: '/tmp/agents/q' }),
+      );
+      expect(mockCreateSession).toHaveBeenCalledWith(expect.objectContaining({
+        sessionId: mind.activeSessionId,
+      }));
+      expect(manager.getMind(mind.mindId)?.activeSessionId).toBe(mind.activeSessionId);
+      const history = manager.listConversationHistory(mind.mindId);
+      expect(history).toHaveLength(1);
+      expect(history[0]).toMatchObject({
+        sessionId: mind.activeSessionId,
+        title: 'Hello Q',
+        active: true,
+      });
+    });
+
+    it('replaces only the runtime session for a real active conversation', async () => {
+      const replacementSession = createSessionStub();
+      const mind = await manager.loadMind('/tmp/agents/q');
+      manager.markActiveConversationHasMessages(mind.mindId, 'Hello Q');
+      mockCreateSession.mockClear();
+      mockCreateSession.mockResolvedValueOnce(replacementSession);
+
+      const result = await manager.replaceActiveConversationRuntimeSession(mind.mindId);
+
+      expect(result).toBe(replacementSession);
+      expect(mockCreateSession).toHaveBeenCalledWith(expect.objectContaining({
+        sessionId: mind.activeSessionId,
+      }));
+      expect(manager.getMind(mind.mindId)?.activeSessionId).toBe(mind.activeSessionId);
+      const history = manager.listConversationHistory(mind.mindId);
+      expect(history).toHaveLength(1);
+      expect(history[0]).toMatchObject({
+        sessionId: mind.activeSessionId,
+        title: 'Hello Q',
+        active: true,
+      });
+    });
+
     it('recovers an empty active draft by replacing it with a new session id', async () => {
       const mind = await manager.loadMind('/tmp/agents/q');
       const originalSessionId = mind.activeSessionId;
@@ -669,6 +741,38 @@ describe('MindManager', () => {
       expect(result.conversations.map((conversation) => conversation.sessionId)).toEqual(
         historyBeforeResume.map((conversation) => conversation.sessionId),
       );
+    });
+
+    it('hydrates the already-active conversation without resuming the SDK session again', async () => {
+      const activeSession = createSessionStub();
+      activeSession.getMessages.mockResolvedValue([
+        {
+          type: 'user.message',
+          timestamp: '2026-05-05T22:00:00.000Z',
+          data: { messageId: 'u1', content: 'already active' },
+        },
+      ]);
+      mockCreateSession.mockResolvedValueOnce(activeSession);
+      const mind = await manager.loadMind('/tmp/agents/q');
+      expect(mind.activeSessionId).toBeDefined();
+      const activeSessionId = mind.activeSessionId!;
+      manager.markActiveConversationHasMessages(mind.mindId, 'Already active');
+      mockResumeSession.mockClear();
+
+      const result = await manager.resumeConversation(mind.mindId, activeSessionId);
+
+      expect(mockResumeSession).not.toHaveBeenCalled();
+      expect(activeSession.disconnect).not.toHaveBeenCalled();
+      expect(result.sessionId).toBe(activeSessionId);
+      expect(result.messages).toEqual([
+        {
+          id: 'u1',
+          role: 'user',
+          blocks: [{ type: 'text', content: 'already active' }],
+          timestamp: Date.parse('2026-05-05T22:00:00.000Z'),
+        },
+      ]);
+      expect(result.conversations.find((conversation) => conversation.sessionId === activeSessionId)?.active).toBe(true);
     });
 
     it('strips Chamber-injected datetime context from hydrated user messages', async () => {

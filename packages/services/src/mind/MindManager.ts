@@ -6,10 +6,9 @@ import { randomUUID } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import type { PermissionHandler, ResumeSessionConfig, SessionConfig } from '@github/copilot-sdk';
-import { Logger } from '../logger';
-
-const log = Logger.create('MindManager');
+import { isStaleSessionError } from '@chamber/shared/sessionErrors';
 import type { AppConfig, ChamberConversationRecord, ChatMessage, ConversationResumeResult, ConversationSummary, MindContext, MindRecord } from '@chamber/shared/types';
+import { Logger } from '../logger';
 import type { InternalMindContext, CopilotClient, CopilotSession, Tool, UserInputHandler } from './types';
 import { generateMindId } from './generateMindId';
 import type { CopilotClientFactory } from '../sdk/CopilotClientFactory';
@@ -20,6 +19,8 @@ import type { ChamberToolProvider } from '../chamberTools';
 import type { ConfigService } from '../config/ConfigService';
 import type { ViewDiscovery } from '../lens/ViewDiscovery';
 import { bootstrapMindCapabilities } from '../lens/MindBootstrap';
+
+const log = Logger.create('MindManager');
 
 export class MindManager extends EventEmitter {
   private minds = new Map<string, InternalMindContext>();
@@ -267,9 +268,28 @@ export class MindManager extends EventEmitter {
 
     const previousSession = context.session;
     const sessionTools = this.getSessionTools(mindId, context.mindPath);
-    const recoveredSession = await this.resumeSessionForMind(
-      context.client,
+    const recoveredSession = await this.resumeOrCreateSessionForMind(
+      context,
       context.activeSessionId,
+      sessionTools,
+      context.selectedModel,
+    );
+    context.session = recoveredSession;
+    await previousSession?.disconnect().catch(() => { /* session already disconnected */ });
+    return recoveredSession;
+  }
+
+  async replaceActiveConversationRuntimeSession(mindId: string): Promise<CopilotSession> {
+    const context = this.minds.get(mindId);
+    if (!context) throw new Error(`Mind ${mindId} not found`);
+    if (!context.activeSessionId) {
+      return this.createNewConversationSession(mindId, context);
+    }
+
+    const previousSession = context.session;
+    const sessionTools = this.getSessionTools(mindId, context.mindPath);
+    const replacementSession = await this.createSessionForMind(
+      context.client,
       context.mindPath,
       context.identity.systemMessage,
       sessionTools,
@@ -277,10 +297,11 @@ export class MindManager extends EventEmitter {
       approveAllCompat,
       true,
       context.selectedModel,
+      context.activeSessionId,
     );
-    context.session = recoveredSession;
+    context.session = replacementSession;
     await previousSession?.disconnect().catch(() => { /* session already disconnected */ });
-    return recoveredSession;
+    return replacementSession;
   }
 
   async startNewConversation(mindId: string): Promise<CopilotSession> {
@@ -351,6 +372,16 @@ export class MindManager extends EventEmitter {
     const record = this.knownMindRecords.get(mindId);
     if (!record?.conversations?.some((conversation) => conversation.sessionId === sessionId)) {
       throw new Error(`Conversation ${sessionId} not found for mind ${mindId}`);
+    }
+
+    if (context.activeSessionId === sessionId && context.session) {
+      this.touchConversationRecord(mindId, sessionId);
+      this.persistConfig();
+      return {
+        sessionId,
+        messages: await this.getMessagesForSession(context.session),
+        conversations: this.listConversationHistory(mindId),
+      };
     }
 
     const previousSession = context.session;
@@ -466,15 +497,10 @@ export class MindManager extends EventEmitter {
     }
     const shouldResumeActiveSession = Boolean(existingActiveSessionId) && activeConversation?.hasMessages !== false;
     const nextSession = shouldResumeActiveSession
-      ? await this.resumeSessionForMind(
-        context.client,
+      ? await this.resumeOrCreateSessionForMind(
+        context,
         activeSessionId,
-        context.mindPath,
-        context.identity.systemMessage,
         sessionTools,
-        undefined,
-        approveAllCompat,
-        true,
         selectedModel,
       )
       : await this.createSessionForMind(
@@ -737,6 +763,41 @@ export class MindManager extends EventEmitter {
       await session.rpc.permissions.setApproveAll({ enabled: true });
     }
     return session;
+  }
+
+  private async resumeOrCreateSessionForMind(
+    context: InternalMindContext,
+    sessionId: string,
+    tools: Tool[],
+    model?: string,
+  ): Promise<CopilotSession> {
+    try {
+      return await this.resumeSessionForMind(
+        context.client,
+        sessionId,
+        context.mindPath,
+        context.identity.systemMessage,
+        tools,
+        undefined,
+        approveAllCompat,
+        true,
+        model,
+      );
+    } catch (error) {
+      if (!isStaleSessionError(error)) throw error;
+      log.warn(`Session ${sessionId} was not found during resume; recreating it with the same Chamber session id.`);
+      return this.createSessionForMind(
+        context.client,
+        context.mindPath,
+        context.identity.systemMessage,
+        tools,
+        undefined,
+        approveAllCompat,
+        true,
+        model,
+        sessionId,
+      );
+    }
   }
 
   private async getMessagesForSession(session: CopilotSession): Promise<ChatMessage[]> {

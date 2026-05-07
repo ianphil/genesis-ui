@@ -64,9 +64,20 @@ export class ChatService {
           // Stale session — recreate and retry once
           emit({ type: 'reconnecting' });
           const recoveredSession = await this.mindManager.recoverActiveConversationSession(mindId);
-          await this.streamTurn(recoveredSession, prompt, abortController, emit, attachments, () => {
-            this.mindManager.markActiveConversationHasMessages(mindId, prompt);
-          });
+          try {
+            await this.streamTurn(recoveredSession, prompt, abortController, emit, attachments, () => {
+              this.mindManager.markActiveConversationHasMessages(mindId, prompt);
+            });
+          } catch (retryError) {
+            if (abortController.signal.aborted) return;
+            if (!isStaleSessionError(retryError)) throw retryError;
+
+            log.warn('Recovered session was still stale; replacing runtime session while preserving Chamber conversation id.');
+            const replacementSession = await this.mindManager.replaceActiveConversationRuntimeSession(mindId);
+            await this.streamTurn(replacementSession, prompt, abortController, emit, attachments, () => {
+              this.mindManager.markActiveConversationHasMessages(mindId, prompt);
+            });
+          }
         }
       } catch (err) {
         if (abortController.signal.aborted) return;
