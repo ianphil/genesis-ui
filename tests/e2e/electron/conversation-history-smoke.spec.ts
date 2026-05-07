@@ -76,6 +76,43 @@ test.describe('electron conversation history smoke', () => {
     await expect(restartedPage.getByLabel('Conversation history').getByText('Lucy restart thread')).toBeVisible();
   });
 
+  test('first prompt titles the active draft and survives restart resume', async () => {
+    const paths = await launchWithMinds(9354, ['Monica']);
+    const page = await findRendererPage(app?.browser, app?.logs ?? []);
+    const mind = await addMind(page, paths.Monica);
+    await installChatSendProbe(page);
+
+    const prompt = 'History smoke first prompt title';
+    const input = page.getByPlaceholder('Message your agent… (paste an image to attach)');
+    await input.fill(prompt);
+    await input.press('Enter');
+    await page.evaluate(() => (window as typeof window & { __chamberLastChatSend?: Promise<void> }).__chamberLastChatSend);
+
+    await expect.poll(
+      () => page.evaluate(
+        async ({ mindId }) => {
+          const conversations = await window.electronAPI.conversationHistory.list(mindId);
+          return conversations.find((conversation) => conversation.active)?.title;
+        },
+        { mindId: mind.mindId },
+      ),
+      { timeout: 60_000 },
+    ).toBe(prompt);
+    await expect(page.getByLabel('Conversation history').getByText(prompt)).toBeVisible();
+
+    await app?.close();
+    app = await launchElectronApp({
+      cdpPort: 9355,
+      env: { CHAMBER_E2E_USER_DATA: userDataPath },
+    });
+    const restartedPage = await findRendererPage(app.browser, app.logs);
+    const history = restartedPage.getByLabel('Conversation history');
+    await expect(restartedPage.getByRole('button', { name: 'Monica' }).first()).toBeVisible();
+    await expect(history.getByText(prompt)).toBeVisible();
+    await history.getByRole('button', { name: `Resume ${prompt}` }).click();
+    await expect(restartedPage.getByText(prompt).first()).toBeVisible();
+  });
+
   async function launchWithMinds(cdpPort: number, names: string[]): Promise<Record<string, string>> {
     root = fs.mkdtempSync(path.join(os.tmpdir(), 'chamber-history-smoke-'));
     userDataPath = path.join(root, 'user-data');
@@ -113,6 +150,18 @@ async function renameFirstHistoryItem(page: Page, title: string): Promise<void> 
   await input.fill(title);
   await input.press('Enter');
   await expect(history.getByText(title)).toBeVisible();
+}
+
+async function installChatSendProbe(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const runtimeWindow = window as typeof window & { __chamberLastChatSend?: Promise<void> };
+    const originalSend = window.electronAPI.chat.send.bind(window.electronAPI.chat);
+    window.electronAPI.chat.send = (...args: Parameters<typeof window.electronAPI.chat.send>) => {
+      const send = originalSend(...args);
+      runtimeWindow.__chamberLastChatSend = send.then(() => undefined);
+      return send;
+    };
+  });
 }
 
 function seedMind(targetMindPath: string, name: string): void {

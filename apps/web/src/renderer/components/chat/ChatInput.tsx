@@ -420,7 +420,7 @@ export function ChatInput({ onSend, onStop, isStreaming, disabled, availableMode
             onCompositionEnd={() => {
               isComposingRef.current = false;
             }}
-            placeholder={disabled ? 'Select a mind directory to start…' : (placeholder ?? 'Message your agent… (paste an image to attach)')}
+            placeholder={placeholder ?? (disabled ? 'Select a mind directory to start…' : 'Message your agent… (paste an image to attach)')}
             disabled={disabled}
             rows={1}
             className="w-full bg-transparent text-sm resize-none outline-none placeholder:text-muted-foreground disabled:opacity-50 overflow-y-auto"

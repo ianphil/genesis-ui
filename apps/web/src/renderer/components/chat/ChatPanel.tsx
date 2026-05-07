@@ -40,6 +40,7 @@ export function ChatPanel() {
         <WelcomeScreen
           onSendMessage={sendMessage}
           connected={connected}
+          disabled={isModelSwitching}
         />
       ) : (
         <MessageList />

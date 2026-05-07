@@ -63,6 +63,7 @@ export class ChatService {
           // Stale session — recreate and retry once
           emit({ type: 'reconnecting' });
           const freshSession = await this.mindManager.recreateSession(mindId);
+          this.mindManager.markActiveConversationHasMessages(mindId, prompt);
           await this.streamTurn(freshSession, prompt, abortController, emit, attachments);
         }
       } catch (err) {

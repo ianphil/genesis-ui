@@ -84,6 +84,25 @@ test.describe('electron per-agent model persistence smoke', () => {
     await selectMind(page, 'Beta Mind');
     await expectSelectedModel(page, betaModel.name);
   });
+
+  test('disables empty-chat starter prompts while a model switch is pending', async () => {
+    const page = await findRendererPage(app?.browser, app?.logs ?? []);
+    await waitForMindApi(page);
+
+    const beta = await loadMind(page, betaMindPath, 'Beta Mind');
+    const models = await loadModels(page, beta.mindId);
+    test.skip(models.length < 2, 'Model-switch disabled-state smoke requires at least two SDK models.');
+    const currentModelName = (await page.getByRole('combobox').first().innerText()).trim();
+    const nextModel = models.find((model) => model.name !== currentModelName) ?? models[1];
+
+    await selectModel(page, nextModel.name);
+
+    await expect(page.getByPlaceholder('Switching model…')).toBeDisabled();
+    await expect(page.getByRole('combobox').first()).toHaveAttribute('data-disabled', '');
+    await expect(page.getByRole('button', { name: 'Daily briefing' })).toBeDisabled();
+
+    await expectMindModel(page, beta.mindId, nextModel.id);
+  });
 });
 
 async function waitForMindApi(page: Page): Promise<void> {
@@ -103,6 +122,7 @@ async function startApp(userDataPath: string): Promise<LaunchedElectronApp> {
     cdpPort,
     env: {
       CHAMBER_E2E_USER_DATA: userDataPath,
+      CHAMBER_E2E_MODEL_SWITCH_DELAY_MS: '2000',
     },
   });
 }

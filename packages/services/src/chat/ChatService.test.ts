@@ -198,6 +198,8 @@ describe('ChatService', () => {
 
       expect(emit).toHaveBeenCalledWith({ type: 'reconnecting' });
       expect(mockMindManager.recreateSession).toHaveBeenCalledWith('valid-mind');
+      expect(mockMindManager.markActiveConversationHasMessages).toHaveBeenCalledTimes(2);
+      expect(mockMindManager.markActiveConversationHasMessages).toHaveBeenLastCalledWith('valid-mind', 'hello');
       expect(freshSession.send).toHaveBeenCalledWith({
         prompt: '<current_datetime>\n2026-05-05T15:37:12.065Z\n</current_datetime>\n<timezone>\nAmerica/New_York\n</timezone>\n\nhello',
       });
