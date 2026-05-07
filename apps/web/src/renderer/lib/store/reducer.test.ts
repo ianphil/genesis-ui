@@ -269,6 +269,95 @@ describe('appReducer', () => {
     expect(state.isStreaming).toBe(true);
   });
 
+  it('SET_CONVERSATION_HISTORY enters idle for the active conversation until it hydrates', () => {
+    const state = appReducer(withActiveMind, {
+      type: 'SET_CONVERSATION_HISTORY',
+      payload: {
+        mindId,
+        conversations: [
+          { sessionId: 'session-1', title: 'Last chat', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z', kind: 'chat', active: true },
+        ],
+      },
+    });
+
+    expect(state.activeConversationByMind[mindId]).toBe('session-1');
+    expect(state.conversationViewByMind[mindId]).toMatchObject({
+      status: 'idle',
+      sessionId: 'session-1',
+    });
+  });
+
+  it('CONVERSATION_HYDRATING records the selected session before messages arrive', () => {
+    const state = appReducer(withActiveMind, {
+      type: 'CONVERSATION_HYDRATING',
+      payload: { mindId, sessionId: 'session-1' },
+    });
+
+    expect(state.activeConversationByMind[mindId]).toBe('session-1');
+    expect(state.conversationViewByMind[mindId]).toMatchObject({
+      status: 'hydrating',
+      sessionId: 'session-1',
+      pendingSessionId: 'session-1',
+    });
+  });
+
+  it('RESUME_CONVERSATION applies the matching hydration result atomically', () => {
+    const messages = [makeMessage([makeTextBlock('restored')], { id: 'msg-1' })];
+    const hydrating = appReducer(withActiveMind, {
+      type: 'CONVERSATION_HYDRATING',
+      payload: { mindId, sessionId: 'session-1' },
+    });
+    const state = appReducer(hydrating, {
+      type: 'RESUME_CONVERSATION',
+      payload: {
+        mindId,
+        sessionId: 'session-1',
+        messages,
+        conversations: [
+          { sessionId: 'session-1', title: 'Last chat', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z', kind: 'chat', active: true },
+        ],
+      },
+    });
+
+    expect(state.messagesByMind[mindId]).toEqual(messages);
+    expect(state.activeConversationByMind[mindId]).toBe('session-1');
+    expect(state.conversationViewByMind[mindId]).toMatchObject({
+      status: 'ready',
+      sessionId: 'session-1',
+      pendingSessionId: undefined,
+      streaming: false,
+    });
+  });
+
+  it('RESUME_CONVERSATION ignores stale hydration results for another session', () => {
+    const hydrating = appReducer({
+      ...withActiveMind,
+      messagesByMind: { [mindId]: [makeMessage([makeTextBlock('current')], { id: 'current' })] },
+    }, {
+      type: 'CONVERSATION_HYDRATING',
+      payload: { mindId, sessionId: 'session-2' },
+    });
+    const state = appReducer(hydrating, {
+      type: 'RESUME_CONVERSATION',
+      payload: {
+        mindId,
+        sessionId: 'session-1',
+        messages: [makeMessage([makeTextBlock('stale')], { id: 'stale' })],
+        conversations: [
+          { sessionId: 'session-1', title: 'Old chat', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z', kind: 'chat', active: false },
+          { sessionId: 'session-2', title: 'New chat', createdAt: '2026-01-02T00:00:00.000Z', updatedAt: '2026-01-02T00:00:00.000Z', kind: 'chat', active: true },
+        ],
+      },
+    });
+
+    expect(state.messagesByMind[mindId]).toHaveLength(1);
+    expect(state.messagesByMind[mindId]?.[0].id).toBe('current');
+    expect(state.conversationViewByMind[mindId]).toMatchObject({
+      status: 'hydrating',
+      pendingSessionId: 'session-2',
+    });
+  });
+
   it('SET_MINDS updates minds array', () => {
     const minds = [{ mindId: 'a', mindPath: '/a', identity: { name: 'A', systemMessage: '' }, status: 'ready' as const }];
     const state = appReducer(initialState, { type: 'SET_MINDS', payload: minds });

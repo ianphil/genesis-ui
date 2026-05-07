@@ -1,10 +1,12 @@
 import type { ChatMessage, ContentBlock } from '@chamber/shared/types';
+import type { ConversationViewState } from './state';
 
 export const CHAT_STATE_CHANNEL = 'chamber:chatState:v1';
 
 export interface SyncedChatState {
   messagesByMind: Record<string, ChatMessage[]>;
   streamingByMind: Record<string, boolean>;
+  conversationViewByMind?: Record<string, ConversationViewState>;
 }
 
 export type ChatStateSyncMessage =
@@ -54,10 +56,26 @@ function isStreamingByMind(value: unknown): value is Record<string, boolean> {
     && Object.values(value).every((streaming) => typeof streaming === 'boolean');
 }
 
+function isConversationViewState(value: unknown): value is ConversationViewState {
+  if (!isRecord(value)) return false;
+  return (value.status === 'idle' || value.status === 'hydrating' || value.status === 'ready')
+    && (value.sessionId === undefined || typeof value.sessionId === 'string')
+    && (value.pendingSessionId === undefined || typeof value.pendingSessionId === 'string')
+    && typeof value.streaming === 'boolean'
+    && typeof value.modelSwitching === 'boolean'
+    && (value.error === undefined || typeof value.error === 'string');
+}
+
+function isConversationViewByMind(value: unknown): value is Record<string, ConversationViewState> {
+  return isRecord(value)
+    && Object.values(value).every(isConversationViewState);
+}
+
 function isSyncedChatState(value: unknown): value is SyncedChatState {
   return isRecord(value)
     && isMessagesByMind(value.messagesByMind)
-    && isStreamingByMind(value.streamingByMind);
+    && isStreamingByMind(value.streamingByMind)
+    && (value.conversationViewByMind === undefined || isConversationViewByMind(value.conversationViewByMind));
 }
 
 export function parseChatStateSyncMessage(value: unknown): ChatStateSyncMessage | null {
@@ -72,12 +90,16 @@ export function parseChatStateSyncMessage(value: unknown): ChatStateSyncMessage 
 }
 
 export function createChatStateSyncMessage(state: SyncedChatState): ChatStateSyncMessage {
+  const payload: SyncedChatState = {
+    messagesByMind: state.messagesByMind,
+    streamingByMind: state.streamingByMind,
+  };
+  if (state.conversationViewByMind) {
+    payload.conversationViewByMind = state.conversationViewByMind;
+  }
+
   return {
     type: 'state',
-    payload: {
-      messagesByMind: state.messagesByMind,
-      streamingByMind: state.streamingByMind,
-    },
+    payload,
   };
 }
-

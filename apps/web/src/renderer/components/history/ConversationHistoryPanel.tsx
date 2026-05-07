@@ -8,7 +8,7 @@ import { cn } from '../../lib/utils';
 const log = Logger.create('ConversationHistoryPanel');
 
 export function ConversationHistoryPanel() {
-  const { activeMindId, conversationHistoryByMind, activeConversationByMind, messagesByMind, streamingByMind } = useAppState();
+  const { activeMindId, conversationHistoryByMind, activeConversationByMind, conversationViewByMind, streamingByMind } = useAppState();
   const dispatch = useAppDispatch();
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
@@ -21,8 +21,10 @@ export function ConversationHistoryPanel() {
     return conversationHistoryByMind[activeMindId] ?? [];
   }, [activeMindId, conversationHistoryByMind]);
   const selectedConversationId = activeMindId ? activeConversationByMind[activeMindId] : undefined;
-  const activeMessageCount = activeMindId ? (messagesByMind[activeMindId]?.length ?? 0) : 0;
-  const isActiveMindStreaming = activeMindId ? Boolean(streamingByMind[activeMindId]) : false;
+  const activeConversationView = activeMindId ? conversationViewByMind[activeMindId] : undefined;
+  const isActiveMindStreaming = activeMindId
+    ? Boolean(streamingByMind[activeMindId] || activeConversationView?.streaming)
+    : false;
 
   const applyResumeResult = useCallback((mindId: string, result: Awaited<ReturnType<typeof window.electronAPI.conversationHistory.resume>>) => {
     dispatch({
@@ -36,29 +38,51 @@ export function ConversationHistoryPanel() {
     });
   }, [dispatch]);
 
+  const hydrateConversation = useCallback(async (mindId: string, sessionId: string) => {
+    dispatch({ type: 'CONVERSATION_HYDRATING', payload: { mindId, sessionId } });
+    try {
+      const result = await window.electronAPI.conversationHistory.resume(mindId, sessionId);
+      applyResumeResult(mindId, result);
+      return result;
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      dispatch({ type: 'CONVERSATION_HYDRATE_FAILED', payload: { mindId, sessionId, error: message } });
+      log.warn('Failed to hydrate conversation:', error);
+      throw error;
+    }
+  }, [applyResumeResult, dispatch]);
+
   useEffect(() => {
     if (!activeMindId) return;
-    if (creatingConversationRef.current) return;
     let cancelled = false;
     window.electronAPI.conversationHistory.list(activeMindId).then((history) => {
       if (cancelled) return;
       dispatch({ type: 'SET_CONVERSATION_HISTORY', payload: { mindId: activeMindId, conversations: history } });
-      const activeConversation = history.find((conversation) => conversation.active);
-      if (activeConversation && activeMessageCount === 0 && !isActiveMindStreaming) {
-        window.electronAPI.conversationHistory.resume(activeMindId, activeConversation.sessionId).then((result) => {
-          if (cancelled) return;
-          applyResumeResult(activeMindId, result);
-        }).catch((error: unknown) => {
-          log.warn('Failed to hydrate active conversation:', error);
-        });
-      }
     }).catch((error: unknown) => {
       log.warn('Failed to load conversation history:', error);
     });
     return () => {
       cancelled = true;
     };
-  }, [activeMessageCount, activeMindId, applyResumeResult, dispatch, isActiveMindStreaming]);
+  }, [activeMindId, dispatch]);
+
+  useEffect(() => {
+    if (!activeMindId || !selectedConversationId || isActiveMindStreaming || creatingConversationRef.current) return;
+    if (activeConversationView?.status === 'hydrating' && activeConversationView.pendingSessionId === selectedConversationId) return;
+    if (activeConversationView?.status === 'ready' && activeConversationView.sessionId === selectedConversationId) return;
+
+    void hydrateConversation(activeMindId, selectedConversationId).catch(() => {
+      // The reducer records the failure; the warning above preserves diagnostics.
+    });
+  }, [
+    activeConversationView?.pendingSessionId,
+    activeConversationView?.sessionId,
+    activeConversationView?.status,
+    activeMindId,
+    hydrateConversation,
+    isActiveMindStreaming,
+    selectedConversationId,
+  ]);
 
   useEffect(() => {
     if (renamingId) {
@@ -89,9 +113,17 @@ export function ConversationHistoryPanel() {
   };
 
   const resumeConversation = async (sessionId: string) => {
-    if (!activeMindId || isActiveMindStreaming || (sessionId === selectedConversationId && activeMessageCount > 0)) return;
-    const result = await window.electronAPI.conversationHistory.resume(activeMindId, sessionId);
-    applyResumeResult(activeMindId, result);
+    if (!activeMindId || isActiveMindStreaming) return;
+    if (
+      sessionId === selectedConversationId
+      && activeConversationView?.status === 'ready'
+      && activeConversationView.sessionId === sessionId
+    ) return;
+    try {
+      await hydrateConversation(activeMindId, sessionId);
+    } catch {
+      return;
+    }
     dispatch({ type: 'SET_ACTIVE_VIEW', payload: 'chat' });
   };
 
@@ -102,7 +134,6 @@ export function ConversationHistoryPanel() {
     try {
       const result = await window.electronAPI.chat.newConversation(activeMindId);
       await window.electronAPI.chatroom.clear();
-      dispatch({ type: 'NEW_CONVERSATION', payload: { mindId: activeMindId } });
       applyResumeResult(activeMindId, result);
       dispatch({ type: 'SET_ACTIVE_VIEW', payload: 'chat' });
     } catch (error) {

@@ -2,7 +2,7 @@ import type { ChatMessage, ChatEvent, ContentBlock } from '@chamber/shared/types
 import type { Task, TaskState } from '@chamber/shared/a2a-types';
 import type { ChatroomMessage, TaskLedgerItem } from '@chamber/shared/chatroom-types';
 import { isOrchestrationEvent } from '@chamber/shared/chatroom-types';
-import type { AppState, AppAction } from './state';
+import type { AppState, AppAction, ConversationViewState } from './state';
 
 /** Extract plain text from content blocks (for search, accessibility, etc.) */
 export function getPlainContent(message: ChatMessage): string {
@@ -29,7 +29,30 @@ function selectedModelForActiveMind(state: AppState, activeMindId: string | null
   if (selectedModel && (state.availableModels.length === 0 || state.availableModels.some((model) => model.id === selectedModel))) {
     return selectedModel;
   }
+
   return state.availableModels[0]?.id ?? null;
+}
+
+function defaultConversationView(): ConversationViewState {
+  return { status: 'idle', streaming: false, modelSwitching: false };
+}
+
+function conversationViewFor(state: AppState, mindId: string): ConversationViewState {
+  return state.conversationViewByMind[mindId] ?? defaultConversationView();
+}
+
+function setConversationView(
+  state: AppState,
+  mindId: string,
+  patch: Partial<ConversationViewState>,
+): Record<string, ConversationViewState> {
+  return {
+    ...state.conversationViewByMind,
+    [mindId]: {
+      ...conversationViewFor(state, mindId),
+      ...patch,
+    },
+  };
 }
 
 export function handleChatEvent<T extends ChatMessage>(messages: T[], messageId: string, event: ChatEvent): T[] {
@@ -164,12 +187,30 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     }
 
     case 'ADD_ASSISTANT_MESSAGE':
+      if (!state.activeMindId) {
+        return {
+          ...state,
+          isStreaming: true,
+          messagesByMind: setActiveMsgs([...activeMsgs(), {
+            id: action.payload.id,
+            role: 'assistant',
+            blocks: [],
+            timestamp: action.payload.timestamp,
+            isStreaming: true,
+          }]),
+        };
+      }
       return {
         ...state,
         isStreaming: true,
-        streamingByMind: state.activeMindId
-          ? { ...state.streamingByMind, [state.activeMindId]: true }
-          : state.streamingByMind,
+        streamingByMind: { ...state.streamingByMind, [state.activeMindId]: true },
+        conversationViewByMind: setConversationView(state, state.activeMindId, {
+          status: 'ready',
+          sessionId: state.activeConversationByMind[state.activeMindId] ?? conversationViewFor(state, state.activeMindId).sessionId,
+          pendingSessionId: undefined,
+          streaming: true,
+          error: undefined,
+        }),
         messagesByMind: setActiveMsgs([...activeMsgs(), {
           id: action.payload.id,
           role: 'assistant',
@@ -192,22 +233,38 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         messagesByMind: { ...state.messagesByMind, [mindId]: newMessages },
         isStreaming: isDone ? false : state.isStreaming,
         streamingByMind: newStreamingByMind,
+        conversationViewByMind: isDone
+          ? setConversationView(state, mindId, {
+            status: 'ready',
+            sessionId: state.activeConversationByMind[mindId] ?? conversationViewFor(state, mindId).sessionId,
+            pendingSessionId: undefined,
+            streaming: false,
+          })
+          : state.conversationViewByMind,
       };
     }
 
     case 'HYDRATE_CHAT_STATE': {
+      const nextConversationViewByMind = action.payload.conversationViewByMind ?? state.conversationViewByMind;
       const isActiveMindStreaming = state.activeMindId
-        ? Boolean(action.payload.streamingByMind[state.activeMindId])
+        ? Boolean(action.payload.streamingByMind[state.activeMindId] || nextConversationViewByMind[state.activeMindId]?.streaming)
         : Object.values(action.payload.streamingByMind).some(Boolean);
       return {
         ...state,
         messagesByMind: action.payload.messagesByMind,
         streamingByMind: action.payload.streamingByMind,
+        conversationViewByMind: nextConversationViewByMind,
         isStreaming: isActiveMindStreaming,
       };
     }
 
-    case 'SET_CONVERSATION_HISTORY':
+    case 'SET_CONVERSATION_HISTORY': {
+      const activeSessionId = action.payload.conversations.find((conversation) => conversation.active)?.sessionId;
+      const currentView = conversationViewFor(state, action.payload.mindId);
+      const hasLocalMessages = (state.messagesByMind[action.payload.mindId]?.length ?? 0) > 0;
+      const shouldBindLocalReadyView = currentView.status === 'ready' && currentView.sessionId === undefined && hasLocalMessages;
+      const shouldPreserveView = (currentView.status === 'ready' && currentView.sessionId === activeSessionId)
+        || (currentView.status === 'hydrating' && currentView.pendingSessionId === activeSessionId);
       return {
         ...state,
         conversationHistoryByMind: {
@@ -216,11 +273,65 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         },
         activeConversationByMind: {
           ...state.activeConversationByMind,
-          [action.payload.mindId]: action.payload.conversations.find((conversation) => conversation.active)?.sessionId,
+          [action.payload.mindId]: activeSessionId,
         },
+        conversationViewByMind: !activeSessionId
+          ? setConversationView(state, action.payload.mindId, {
+            status: 'idle',
+            sessionId: undefined,
+            pendingSessionId: undefined,
+            error: undefined,
+          })
+          : shouldBindLocalReadyView
+            ? setConversationView(state, action.payload.mindId, {
+              status: 'ready',
+              sessionId: activeSessionId,
+              pendingSessionId: undefined,
+              error: undefined,
+            })
+          : !shouldPreserveView
+            ? setConversationView(state, action.payload.mindId, {
+            status: 'idle',
+            sessionId: activeSessionId,
+            pendingSessionId: undefined,
+            error: undefined,
+            })
+            : state.conversationViewByMind,
+      };
+    }
+
+    case 'CONVERSATION_HYDRATING':
+      return {
+        ...state,
+        activeConversationByMind: {
+          ...state.activeConversationByMind,
+          [action.payload.mindId]: action.payload.sessionId,
+        },
+        conversationViewByMind: setConversationView(state, action.payload.mindId, {
+          status: 'hydrating',
+          sessionId: action.payload.sessionId,
+          pendingSessionId: action.payload.sessionId,
+          error: undefined,
+        }),
       };
 
-    case 'RESUME_CONVERSATION':
+    case 'CONVERSATION_HYDRATE_FAILED': {
+      const currentView = conversationViewFor(state, action.payload.mindId);
+      if (currentView.pendingSessionId && currentView.pendingSessionId !== action.payload.sessionId) return state;
+      return {
+        ...state,
+        conversationViewByMind: setConversationView(state, action.payload.mindId, {
+          status: 'idle',
+          sessionId: action.payload.sessionId,
+          pendingSessionId: undefined,
+          error: action.payload.error,
+        }),
+      };
+    }
+
+    case 'RESUME_CONVERSATION': {
+      const currentView = conversationViewFor(state, action.payload.mindId);
+      if (currentView.pendingSessionId && currentView.pendingSessionId !== action.payload.sessionId) return state;
       return {
         ...state,
         messagesByMind: {
@@ -239,8 +350,16 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           ...state.streamingByMind,
           [action.payload.mindId]: false,
         },
+        conversationViewByMind: setConversationView(state, action.payload.mindId, {
+          status: 'ready',
+          sessionId: action.payload.sessionId,
+          pendingSessionId: undefined,
+          streaming: false,
+          error: undefined,
+        }),
         isStreaming: state.activeMindId === action.payload.mindId ? false : state.isStreaming,
       };
+    }
 
     case 'SET_MINDS':
       return {
@@ -254,7 +373,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         ...state,
         activeMindId: action.payload,
         selectedModel: selectedModelForActiveMind(state, action.payload),
-        isStreaming: action.payload ? Boolean(state.streamingByMind[action.payload]) : false,
+        isStreaming: action.payload ? Boolean(state.streamingByMind[action.payload] || state.conversationViewByMind[action.payload]?.streaming) : false,
         streamingByMind: state.streamingByMind,
       };
 
@@ -273,9 +392,11 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       const newMsgsByMind = { ...state.messagesByMind };
       const newConversationHistoryByMind = { ...state.conversationHistoryByMind };
       const newActiveConversationByMind = { ...state.activeConversationByMind };
+      const newConversationViewByMind = { ...state.conversationViewByMind };
       delete newMsgsByMind[action.payload];
       delete newConversationHistoryByMind[action.payload];
       delete newActiveConversationByMind[action.payload];
+      delete newConversationViewByMind[action.payload];
       const newActive = state.activeMindId === action.payload
         ? (newMinds.length > 0 ? newMinds[0].mindId : null)
         : state.activeMindId;
@@ -286,6 +407,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         messagesByMind: newMsgsByMind,
         conversationHistoryByMind: newConversationHistoryByMind,
         activeConversationByMind: newActiveConversationByMind,
+        conversationViewByMind: newConversationViewByMind,
         showLanding: newMinds.length === 0,
       };
     }
@@ -313,6 +435,14 @@ export function appReducer(state: AppState, action: AppAction): AppState {
             ? { ...mind, selectedModel: action.payload ?? undefined }
             : mind)
           : state.minds,
+      };
+
+    case 'SET_MODEL_SWITCHING':
+      return {
+        ...state,
+        conversationViewByMind: setConversationView(state, action.payload.mindId, {
+          modelSwitching: action.payload.switching,
+        }),
       };
 
     case 'SET_ACTIVE_VIEW':
@@ -371,6 +501,14 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         streamingByMind: conversationMindId
           ? { ...state.streamingByMind, [conversationMindId]: false }
           : state.streamingByMind,
+        conversationViewByMind: conversationMindId
+          ? setConversationView(state, conversationMindId, {
+            status: 'idle',
+            sessionId: undefined,
+            pendingSessionId: undefined,
+            streaming: false,
+          })
+          : state.conversationViewByMind,
         chatroomMessages: [],
         chatroomStreamingByMind: {},
         chatroomActiveSpeaker: null,

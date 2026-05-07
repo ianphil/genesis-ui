@@ -76,7 +76,7 @@ test.describe('electron conversation history smoke', () => {
     await expect(restartedPage.getByLabel('Conversation history').getByText('Lucy restart thread')).toBeVisible();
   });
 
-  test('first prompt titles the active draft and survives restart resume', async () => {
+  test('first prompt titles the active draft and hydrates automatically after restart', async () => {
     const paths = await launchWithMinds(9354, ['Monica']);
     const page = await findRendererPage(app?.browser, app?.logs ?? []);
     const mind = await addMind(page, paths.Monica);
@@ -114,7 +114,6 @@ test.describe('electron conversation history smoke', () => {
     await expect(restartedHistory.getByText(prompt)).toBeVisible();
     await expect(restartedHistory.getByText(/^New chat ·/)).toHaveCount(0);
     await expect(restartedHistory.getByLabel(/Rename /)).toHaveCount(1);
-    await restartedHistory.getByRole('button', { name: `Resume ${prompt}` }).click();
     await expect(restartedPage.getByText(prompt).first()).toBeVisible();
   });
 
