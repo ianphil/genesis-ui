@@ -878,13 +878,9 @@ export class MindManager extends EventEmitter {
   private touchConversationRecord(mindId: string, sessionId: string): void {
     const record = this.knownMindRecords.get(mindId);
     if (!record) return;
-    const updatedAt = new Date().toISOString();
     this.knownMindRecords.set(mindId, {
       ...record,
       activeSessionId: sessionId,
-      conversations: (record.conversations ?? []).map((conversation) => conversation.sessionId === sessionId
-        ? { ...conversation, updatedAt }
-        : conversation),
     });
   }
 

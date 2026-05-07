@@ -641,7 +641,8 @@ describe('MindManager', () => {
       const mind = await manager.loadMind('/tmp/agents/q');
       manager.markActiveConversationHasMessages(mind.mindId, 'Existing chat');
       await manager.recreateSession(mind.mindId);
-      const target = manager.listConversationHistory(mind.mindId)[1];
+      const historyBeforeResume = manager.listConversationHistory(mind.mindId);
+      const target = historyBeforeResume[1];
 
       const result = await manager.resumeConversation(mind.mindId, target.sessionId);
 
@@ -665,6 +666,9 @@ describe('MindManager', () => {
         },
       ]);
       expect(result.conversations.find((conversation) => conversation.sessionId === target.sessionId)?.active).toBe(true);
+      expect(result.conversations.map((conversation) => conversation.sessionId)).toEqual(
+        historyBeforeResume.map((conversation) => conversation.sessionId),
+      );
     });
 
     it('strips Chamber-injected datetime context from hydrated user messages', async () => {
