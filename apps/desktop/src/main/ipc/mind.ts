@@ -2,7 +2,8 @@
 import { ipcMain, dialog, BrowserWindow, type NativeImage } from 'electron';
 import * as path from 'path';
 import * as os from 'os';
-import type { MindManager } from '@chamber/services';
+import { setTimeout as delay } from 'node:timers/promises';
+import type { ChatService, MindManager } from '@chamber/services';
 import type { MindContext } from '@chamber/shared/types';
 import { installExternalNavigationGuard } from '../navigationGuard';
 
@@ -13,7 +14,7 @@ export interface MindIPCConfig {
   windowIcon?: NativeImage;
 }
 
-export function setupMindIPC(mindManager: MindManager, config: MindIPCConfig): void {
+export function setupMindIPC(mindManager: MindManager, chatService: ChatService, config: MindIPCConfig): void {
   const windowByMind = new Map<string, BrowserWindow>();
   const listMinds = (): MindContext[] =>
     mindManager.listMinds().map((mind) => ({
@@ -40,7 +41,9 @@ export function setupMindIPC(mindManager: MindManager, config: MindIPCConfig): v
   });
 
   ipcMain.handle('mind:setModel', async (_event, mindId: string, model: string | null) => {
-    return mindManager.setMindModel(mindId, model);
+    const e2eDelayMs = Number(process.env.CHAMBER_E2E_MODEL_SWITCH_DELAY_MS ?? 0);
+    if (e2eDelayMs > 0) await delay(e2eDelayMs);
+    return chatService.setMindModel(mindId, model);
   });
 
   ipcMain.handle('mind:selectDirectory', async (event) => {

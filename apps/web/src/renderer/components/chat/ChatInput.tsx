@@ -420,7 +420,7 @@ export function ChatInput({ onSend, onStop, isStreaming, disabled, availableMode
             onCompositionEnd={() => {
               isComposingRef.current = false;
             }}
-            placeholder={disabled ? 'Select a mind directory to start…' : (placeholder ?? 'Message your agent… (paste an image to attach)')}
+            placeholder={placeholder ?? (disabled ? 'Select a mind directory to start…' : 'Message your agent… (paste an image to attach)')}
             disabled={disabled}
             rows={1}
             className="w-full bg-transparent text-sm resize-none outline-none placeholder:text-muted-foreground disabled:opacity-50 overflow-y-auto"
@@ -466,7 +466,7 @@ export function ChatInput({ onSend, onStop, isStreaming, disabled, availableMode
                 <Select
                   value={selectedModel ?? undefined}
                   onValueChange={onModelChange}
-                  disabled={isStreaming}
+                  disabled={isStreaming || disabled}
                 >
                   <SelectTrigger className="h-6 w-auto gap-1.5 border-none bg-transparent px-0 text-xs text-muted-foreground shadow-none hover:text-foreground focus:ring-0">
                     <SelectValue placeholder="Select model" />

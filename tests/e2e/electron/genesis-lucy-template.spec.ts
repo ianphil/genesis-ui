@@ -55,9 +55,9 @@ test.describe('electron Genesis Lucy template smoke', () => {
     await expect(page.getByPlaceholder('Message your agent… (paste an image to attach)')).toBeEnabled();
 
     expect(fs.existsSync(path.join(lucyPath, 'SOUL.md'))).toBe(true);
-    expect(fs.readFileSync(path.join(lucyPath, 'SOUL.md'), 'utf-8')).toContain('I am Lucy, a calm and practical Chief of Staff.');
+    expect(fs.readFileSync(path.join(lucyPath, 'SOUL.md'), 'utf-8')).toContain('Strategic Clarity');
     expect(fs.readFileSync(path.join(lucyPath, '.github', 'agents', 'lucy.agent.md'), 'utf-8')).toContain('name: lucy');
-    expect(fs.readFileSync(path.join(lucyPath, '.working-memory', 'memory.md'), 'utf-8')).toContain('Lucy is a Genesis-created mind template');
+    expect(fs.readFileSync(path.join(lucyPath, '.working-memory', 'memory.md'), 'utf-8')).toContain('Agent name: Lucy');
 
     const result = await page.evaluate(async (name) => {
       const minds = await window.electronAPI.mind.list();

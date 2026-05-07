@@ -2,6 +2,9 @@ import { useCallback, useRef } from 'react';
 import { useAppState, useAppDispatch } from '../lib/store';
 import { generateId } from '../lib/utils';
 import type { ChatImageAttachment, ImageBlock } from '@chamber/shared/types';
+import { Logger } from '../lib/logger';
+
+const log = Logger.create('useChatStreaming');
 
 export function useChatStreaming() {
   const { activeMindId, isStreaming, selectedModel } = useAppState();
@@ -35,7 +38,14 @@ export function useChatStreaming() {
       payload: { id: assistantId, timestamp: Date.now() },
     });
 
-    await window.electronAPI.chat.send(activeMindId, content.trim(), assistantId, selectedModel ?? undefined, attachments);
+    const mindId = activeMindId;
+    await window.electronAPI.chat.send(mindId, content.trim(), assistantId, selectedModel ?? undefined, attachments);
+    try {
+      const conversations = await window.electronAPI.conversationHistory.list(mindId);
+      dispatch({ type: 'SET_CONVERSATION_HISTORY', payload: { mindId, conversations } });
+    } catch (error) {
+      log.warn('Failed to refresh conversation history after send:', error);
+    }
   }, [activeMindId, isStreaming, selectedModel, dispatch]);
 
   const stopStreaming = useCallback(async () => {

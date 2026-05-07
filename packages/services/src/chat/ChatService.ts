@@ -54,15 +54,20 @@ export class ChatService {
           const session = model ? await this.mindManager.setMindModel(mindId, model) : null;
           const currentSession = session ? this.mindManager.getMind(mindId)?.session : context.session;
           if (!currentSession) throw new Error(`Mind ${mindId} not found or has no session`);
-          await this.streamTurn(currentSession, prompt, abortController, emit, attachments);
+          await this.streamTurn(currentSession, prompt, abortController, emit, attachments, () => {
+            this.mindManager.markActiveConversationHasMessages(mindId, prompt);
+          });
         } catch (err) {
           if (abortController.signal.aborted) return;
           if (!isStaleSessionError(err)) throw err;
 
-          // Stale session — recreate and retry once
+          // SDK forgot the session — recover once by reattaching, then retry.
+          // If reattach also fails stale, surface the error so the user can start a new chat.
           emit({ type: 'reconnecting' });
-          const freshSession = await this.mindManager.recreateSession(mindId);
-          await this.streamTurn(freshSession, prompt, abortController, emit, attachments);
+          const recoveredSession = await this.mindManager.recoverActiveConversationSession(mindId);
+          await this.streamTurn(recoveredSession, prompt, abortController, emit, attachments, () => {
+            this.mindManager.markActiveConversationHasMessages(mindId, prompt);
+          });
         }
       } catch (err) {
         if (abortController.signal.aborted) return;
@@ -80,6 +85,7 @@ export class ChatService {
     abortController: AbortController,
     emit: (event: ChatEvent) => void,
     attachments?: ChatImageAttachment[],
+    onSendAccepted?: () => void,
   ): Promise<void>{
     const unsubs: (() => void)[] = [];
     const guard = (fn: () => void) => { if (!abortController.signal.aborted) fn(); };
@@ -183,6 +189,7 @@ export class ChatService {
         }));
         const promptWithDateTime = injectCurrentDateTimeContext(prompt, this.dateTimeContextProvider());
         await Promise.race([session.send(sdkAttachments ? { prompt: promptWithDateTime, attachments: sdkAttachments } : { prompt: promptWithDateTime }), sendTimeout]);
+        guard(() => onSendAccepted?.());
       } finally {
         if (sendTimerId) clearTimeout(sendTimerId);
       }
@@ -210,9 +217,13 @@ export class ChatService {
     }
   }
 
+  async setMindModel(mindId: string, model: string | null): Promise<Awaited<ReturnType<MindManager['setMindModel']>>> {
+    return this.turnQueue.enqueue(mindId, () => this.mindManager.setMindModel(mindId, model));
+  }
+
   async newConversation(mindId: string): Promise<ConversationResumeResult> {
     this.assertCanSwitchConversation(mindId);
-    await this.mindManager.recreateSession(mindId);
+    await this.mindManager.startNewConversation(mindId);
     return {
       sessionId: this.mindManager.getMind(mindId)?.activeSessionId ?? '',
       messages: [],
@@ -227,6 +238,11 @@ export class ChatService {
   async resumeConversation(mindId: string, sessionId: string): Promise<ConversationResumeResult> {
     this.assertCanSwitchConversation(mindId);
     return this.mindManager.resumeConversation(mindId, sessionId);
+  }
+
+  async deleteConversation(mindId: string, sessionId: string): Promise<ConversationResumeResult> {
+    this.assertCanSwitchConversation(mindId);
+    return this.mindManager.deleteConversation(mindId, sessionId);
   }
 
   renameConversation(mindId: string, sessionId: string, title: string): ConversationSummary[] {

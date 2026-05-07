@@ -149,6 +149,7 @@ function normalizeConversationRecord(value: unknown): ChamberConversationRecord 
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
     kind,
+    ...(typeof record.hasMessages === 'boolean' ? { hasMessages: record.hasMessages } : {}),
   };
 }
 

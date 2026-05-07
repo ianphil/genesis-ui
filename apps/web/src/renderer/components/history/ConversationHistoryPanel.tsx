@@ -1,4 +1,4 @@
-import { MoreHorizontal, Pencil, Plus } from 'lucide-react';
+import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ConversationSummary } from '@chamber/shared/types';
 import { useAppDispatch, useAppState } from '../../lib/store';
@@ -8,19 +8,25 @@ import { cn } from '../../lib/utils';
 const log = Logger.create('ConversationHistoryPanel');
 
 export function ConversationHistoryPanel() {
-  const { activeMindId, conversationHistoryByMind, activeConversationByMind, messagesByMind, streamingByMind } = useAppState();
+  const { activeMindId, conversationHistoryByMind, activeConversationByMind, conversationViewByMind, streamingByMind } = useAppState();
   const dispatch = useAppDispatch();
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  const [isCreatingConversation, setIsCreatingConversation] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
+  const creatingConversationRef = useRef(false);
 
   const conversations = useMemo(() => {
     if (!activeMindId) return [];
     return conversationHistoryByMind[activeMindId] ?? [];
   }, [activeMindId, conversationHistoryByMind]);
   const selectedConversationId = activeMindId ? activeConversationByMind[activeMindId] : undefined;
-  const activeMessageCount = activeMindId ? (messagesByMind[activeMindId]?.length ?? 0) : 0;
-  const isActiveMindStreaming = activeMindId ? Boolean(streamingByMind[activeMindId]) : false;
+  const activeConversationView = activeMindId ? conversationViewByMind[activeMindId] : undefined;
+  const isActiveMindStreaming = activeMindId
+    ? Boolean(streamingByMind[activeMindId] || activeConversationView?.streaming)
+    : false;
+  const isActiveMindBusy = isActiveMindStreaming || Boolean(activeConversationView?.modelSwitching);
 
   const applyResumeResult = useCallback((mindId: string, result: Awaited<ReturnType<typeof window.electronAPI.conversationHistory.resume>>) => {
     dispatch({
@@ -34,28 +40,51 @@ export function ConversationHistoryPanel() {
     });
   }, [dispatch]);
 
+  const hydrateConversation = useCallback(async (mindId: string, sessionId: string) => {
+    dispatch({ type: 'CONVERSATION_HYDRATING', payload: { mindId, sessionId } });
+    try {
+      const result = await window.electronAPI.conversationHistory.resume(mindId, sessionId);
+      applyResumeResult(mindId, result);
+      return result;
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      dispatch({ type: 'CONVERSATION_HYDRATE_FAILED', payload: { mindId, sessionId, error: message } });
+      log.warn('Failed to hydrate conversation:', error);
+      throw error;
+    }
+  }, [applyResumeResult, dispatch]);
+
   useEffect(() => {
     if (!activeMindId) return;
     let cancelled = false;
     window.electronAPI.conversationHistory.list(activeMindId).then((history) => {
       if (cancelled) return;
       dispatch({ type: 'SET_CONVERSATION_HISTORY', payload: { mindId: activeMindId, conversations: history } });
-      const activeConversation = history.find((conversation) => conversation.active);
-      if (activeConversation && activeMessageCount === 0 && !isActiveMindStreaming) {
-        window.electronAPI.conversationHistory.resume(activeMindId, activeConversation.sessionId).then((result) => {
-          if (cancelled) return;
-          applyResumeResult(activeMindId, result);
-        }).catch((error: unknown) => {
-          log.warn('Failed to hydrate active conversation:', error);
-        });
-      }
     }).catch((error: unknown) => {
       log.warn('Failed to load conversation history:', error);
     });
     return () => {
       cancelled = true;
     };
-  }, [activeMessageCount, activeMindId, applyResumeResult, dispatch, isActiveMindStreaming]);
+  }, [activeMindId, dispatch]);
+
+  useEffect(() => {
+    if (!activeMindId || !selectedConversationId || isActiveMindBusy || creatingConversationRef.current) return;
+    if (activeConversationView?.status === 'hydrating' && activeConversationView.pendingSessionId === selectedConversationId) return;
+    if (activeConversationView?.status === 'ready' && activeConversationView.sessionId === selectedConversationId) return;
+
+    void hydrateConversation(activeMindId, selectedConversationId).catch(() => {
+      // The reducer records the failure; the warning above preserves diagnostics.
+    });
+  }, [
+    activeConversationView?.pendingSessionId,
+    activeConversationView?.sessionId,
+    activeConversationView?.status,
+    activeMindId,
+    hydrateConversation,
+    isActiveMindBusy,
+    selectedConversationId,
+  ]);
 
   useEffect(() => {
     if (renamingId) {
@@ -86,19 +115,64 @@ export function ConversationHistoryPanel() {
   };
 
   const resumeConversation = async (sessionId: string) => {
-    if (!activeMindId || isActiveMindStreaming || (sessionId === selectedConversationId && activeMessageCount > 0)) return;
-    const result = await window.electronAPI.conversationHistory.resume(activeMindId, sessionId);
-    applyResumeResult(activeMindId, result);
+    if (!activeMindId || isActiveMindBusy) return;
+    if (
+      sessionId === selectedConversationId
+      && activeConversationView?.status === 'ready'
+      && activeConversationView.sessionId === sessionId
+    ) return;
+    try {
+      await hydrateConversation(activeMindId, sessionId);
+    } catch {
+      return;
+    }
     dispatch({ type: 'SET_ACTIVE_VIEW', payload: 'chat' });
   };
 
   const startNewConversation = async () => {
-    if (!activeMindId || isActiveMindStreaming) return;
-    const result = await window.electronAPI.chat.newConversation(activeMindId);
-    await window.electronAPI.chatroom.clear();
-    dispatch({ type: 'NEW_CONVERSATION' });
-    applyResumeResult(activeMindId, result);
-    dispatch({ type: 'SET_ACTIVE_VIEW', payload: 'chat' });
+    if (!activeMindId || isActiveMindBusy || isCreatingConversation) return;
+    creatingConversationRef.current = true;
+    setIsCreatingConversation(true);
+    try {
+      const result = await window.electronAPI.chat.newConversation(activeMindId);
+      await window.electronAPI.chatroom.clear();
+      applyResumeResult(activeMindId, result);
+      dispatch({ type: 'SET_ACTIVE_VIEW', payload: 'chat' });
+    } catch (error) {
+      log.error('Failed to start new conversation:', error);
+    } finally {
+      creatingConversationRef.current = false;
+      setIsCreatingConversation(false);
+    }
+  };
+
+  const deleteConversation = async (conversation: ConversationSummary) => {
+    if (!activeMindId || isActiveMindBusy || deletingId) return;
+    if (conversation.hasMessages) {
+      const confirmed = window.confirm(`Delete "${conversation.title}"? This cannot be undone.`);
+      if (!confirmed) return;
+    }
+
+    setDeletingId(conversation.sessionId);
+    setRenamingId(null);
+    try {
+      const result = await window.electronAPI.conversationHistory.delete(activeMindId, conversation.sessionId);
+      if (conversation.active) {
+        applyResumeResult(activeMindId, result);
+        dispatch({ type: 'SET_ACTIVE_VIEW', payload: 'chat' });
+      } else {
+        // Inactive delete: don't replace the active conversation's messages — the SDK→ChatMessage
+        // mapping is text-only and would drop tool-calls/reasoning/images from the live chat UI.
+        dispatch({
+          type: 'SET_CONVERSATION_HISTORY',
+          payload: { mindId: activeMindId, conversations: result.conversations },
+        });
+      }
+    } catch (error) {
+      log.error('Failed to delete conversation:', error);
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   return (
@@ -109,7 +183,7 @@ export function ConversationHistoryPanel() {
         </span>
         <button
           type="button"
-          disabled={!activeMindId || isActiveMindStreaming}
+          disabled={!activeMindId || isActiveMindBusy || isCreatingConversation}
           onClick={() => { void startNewConversation(); }}
           className="h-7 w-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent/50 flex items-center justify-center disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
           aria-label="New conversation"
@@ -138,7 +212,7 @@ export function ConversationHistoryPanel() {
               <button
                 type="button"
                 aria-label={`Resume ${conversation.title}`}
-                disabled={isActiveMindStreaming}
+                disabled={isActiveMindBusy}
                 onClick={() => { void resumeConversation(conversation.sessionId); }}
                 className="min-w-0 flex-1 text-left disabled:cursor-not-allowed"
               >
@@ -166,17 +240,20 @@ export function ConversationHistoryPanel() {
                 <button
                   type="button"
                   onClick={() => startRename(conversation)}
-                  className="h-7 w-7 rounded-md text-muted-foreground opacity-0 hover:text-foreground hover:bg-accent group-hover:opacity-100 flex items-center justify-center"
+                  disabled={isActiveMindBusy || deletingId === conversation.sessionId}
+                  className="h-7 w-7 rounded-md text-muted-foreground opacity-0 hover:text-foreground hover:bg-accent group-hover:opacity-100 flex items-center justify-center disabled:cursor-not-allowed disabled:opacity-40"
                   aria-label={`Rename ${conversation.title}`}
                 >
                   <Pencil size={13} />
                 </button>
                 <button
                   type="button"
-                  className="h-7 w-7 rounded-md text-muted-foreground opacity-0 hover:text-foreground hover:bg-accent group-hover:opacity-100 flex items-center justify-center"
-                  aria-label={`${conversation.title} options`}
+                  onClick={() => { void deleteConversation(conversation); }}
+                  disabled={isActiveMindBusy || deletingId !== null}
+                  className="h-7 w-7 rounded-md text-muted-foreground opacity-0 hover:text-destructive hover:bg-destructive/10 group-hover:opacity-100 flex items-center justify-center disabled:cursor-not-allowed disabled:opacity-40"
+                  aria-label={`Delete ${conversation.title}`}
                 >
-                  <MoreHorizontal size={14} />
+                  <Trash2 size={13} />
                 </button>
               </div>
             </div>

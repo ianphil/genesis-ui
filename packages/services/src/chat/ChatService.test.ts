@@ -27,8 +27,12 @@ const mockMindManager = {
     return undefined;
   }),
   recreateSession: vi.fn(),
+  recoverActiveConversationSession: vi.fn(),
+  startNewConversation: vi.fn(),
+  markActiveConversationHasMessages: vi.fn(),
   listConversationHistory: vi.fn(() => []),
   resumeConversation: vi.fn(async () => ({ sessionId: 'session-1', messages: [], conversations: [] })),
+  deleteConversation: vi.fn(async () => ({ sessionId: 'session-1', messages: [], conversations: [] })),
   renameConversation: vi.fn(() => []),
   setMindModel: vi.fn(async () => null),
 };
@@ -64,6 +68,7 @@ describe('ChatService', () => {
       expect(mockSession.send).toHaveBeenCalledWith({
         prompt: '<current_datetime>\n2026-05-05T15:37:12.065Z\n</current_datetime>\n<timezone>\nAmerica/New_York\n</timezone>\n\nhello',
       });
+      expect(mockMindManager.markActiveConversationHasMessages).toHaveBeenCalledWith('valid-mind', 'hello');
       expect(emit).toHaveBeenCalledWith({ type: 'done' });
     });
 
@@ -130,9 +135,9 @@ describe('ChatService', () => {
   });
 
   describe('newConversation', () => {
-    it('delegates to mindManager.recreateSession', async () => {
+    it('delegates to mindManager.startNewConversation', async () => {
       await svc.newConversation('valid-mind');
-      expect(mockMindManager.recreateSession).toHaveBeenCalledWith('valid-mind');
+      expect(mockMindManager.startNewConversation).toHaveBeenCalledWith('valid-mind');
     });
 
     it('rejects conversation switches while a message is streaming', async () => {
@@ -145,6 +150,30 @@ describe('ChatService', () => {
       await Promise.resolve();
 
       await expect(svc.newConversation('valid-mind')).rejects.toThrow('Cannot switch conversations');
+
+      await svc.cancelMessage('valid-mind', 'msg-1');
+      await send;
+    });
+  });
+
+  describe('deleteConversation', () => {
+    it('delegates to mindManager.deleteConversation', async () => {
+      const result = await svc.deleteConversation('valid-mind', 'session-1');
+
+      expect(mockMindManager.deleteConversation).toHaveBeenCalledWith('valid-mind', 'session-1');
+      expect(result).toEqual({ sessionId: 'session-1', messages: [], conversations: [] });
+    });
+
+    it('rejects deletes while a message is streaming', async () => {
+      mockSession.on.mockImplementation((eventOrCb: string | ((...args: unknown[]) => void), cb?: (...args: unknown[]) => void) => {
+        void eventOrCb;
+        void cb;
+        return vi.fn();
+      });
+      const send = svc.sendMessage('valid-mind', 'hello', 'msg-1', vi.fn());
+      await Promise.resolve();
+
+      await expect(svc.deleteConversation('valid-mind', 'session-1')).rejects.toThrow('Cannot switch conversations');
 
       await svc.cancelMessage('valid-mind', 'msg-1');
       await send;
@@ -178,7 +207,7 @@ describe('ChatService', () => {
       mockSession.send.mockRejectedValueOnce(new Error('Session not found: abc-123'));
       mockSession.on.mockReturnValue(vi.fn());
 
-      // Fresh session returned by recreateSession
+      // Fresh session returned by stale-session recovery
       const freshSession = {
         send: vi.fn().mockResolvedValue(undefined),
         abort: vi.fn().mockResolvedValue(undefined),
@@ -188,20 +217,22 @@ describe('ChatService', () => {
           return vi.fn();
         }),
       };
-      mockMindManager.recreateSession.mockResolvedValueOnce(freshSession);
+      mockMindManager.recoverActiveConversationSession.mockResolvedValueOnce(freshSession);
 
       const emit = vi.fn();
       await svc.sendMessage('valid-mind', 'hello', 'msg-1', emit);
 
       expect(emit).toHaveBeenCalledWith({ type: 'reconnecting' });
-      expect(mockMindManager.recreateSession).toHaveBeenCalledWith('valid-mind');
+      expect(mockMindManager.recoverActiveConversationSession).toHaveBeenCalledWith('valid-mind');
+      expect(mockMindManager.markActiveConversationHasMessages).toHaveBeenCalledTimes(1);
+      expect(mockMindManager.markActiveConversationHasMessages).toHaveBeenCalledWith('valid-mind', 'hello');
       expect(freshSession.send).toHaveBeenCalledWith({
         prompt: '<current_datetime>\n2026-05-05T15:37:12.065Z\n</current_datetime>\n<timezone>\nAmerica/New_York\n</timezone>\n\nhello',
       });
       expect(emit).toHaveBeenCalledWith({ type: 'done' });
     });
 
-    it('does not loop — surfaces error when retry also fails with stale error', async () => {
+    it('does not loop — surfaces error when reattach also fails with stale error', async () => {
       mockSession.send.mockRejectedValueOnce(new Error('Session not found: abc-123'));
       mockSession.on.mockReturnValue(vi.fn());
 
@@ -211,7 +242,7 @@ describe('ChatService', () => {
         destroy: vi.fn().mockResolvedValue(undefined),
         on: vi.fn(() => vi.fn()),
       };
-      mockMindManager.recreateSession.mockResolvedValueOnce(freshSession);
+      mockMindManager.recoverActiveConversationSession.mockResolvedValueOnce(freshSession);
 
       const emit = vi.fn();
       await svc.sendMessage('valid-mind', 'hello', 'msg-1', emit);
@@ -220,8 +251,9 @@ describe('ChatService', () => {
       expect(emit).toHaveBeenCalledWith(
         expect.objectContaining({ type: 'error' }),
       );
-      // recreateSession called only once — no second retry
-      expect(mockMindManager.recreateSession).toHaveBeenCalledTimes(1);
+      // Recovery is attempted exactly once; we surface the error rather than chain endless retries.
+      expect(mockMindManager.recoverActiveConversationSession).toHaveBeenCalledTimes(1);
+      expect(freshSession.send).toHaveBeenCalledTimes(1);
     });
 
     it('does not retry on non-stale errors', async () => {
@@ -231,7 +263,7 @@ describe('ChatService', () => {
       const emit = vi.fn();
       await svc.sendMessage('valid-mind', 'hello', 'msg-1', emit);
 
-      expect(mockMindManager.recreateSession).not.toHaveBeenCalled();
+      expect(mockMindManager.recoverActiveConversationSession).not.toHaveBeenCalled();
       expect(emit).not.toHaveBeenCalledWith({ type: 'reconnecting' });
       expect(emit).toHaveBeenCalledWith(
         expect.objectContaining({ type: 'error', message: 'Network error' }),
@@ -289,7 +321,7 @@ describe('ChatService', () => {
             return vi.fn();
           }),
         };
-        mockMindManager.recreateSession.mockResolvedValueOnce(freshSession);
+        mockMindManager.recoverActiveConversationSession.mockResolvedValueOnce(freshSession);
 
         const emit = vi.fn();
         const promise = svc.sendMessage('valid-mind', 'hello', 'msg-1', emit);
@@ -299,7 +331,7 @@ describe('ChatService', () => {
         await promise;
 
         expect(emit).toHaveBeenCalledWith({ type: 'reconnecting' });
-        expect(mockMindManager.recreateSession).toHaveBeenCalledWith('valid-mind');
+        expect(mockMindManager.recoverActiveConversationSession).toHaveBeenCalledWith('valid-mind');
         expect(freshSession.send).toHaveBeenCalledWith({
           prompt: '<current_datetime>\n2026-05-05T15:37:12.065Z\n</current_datetime>\n<timezone>\nAmerica/New_York\n</timezone>\n\nhello',
         });

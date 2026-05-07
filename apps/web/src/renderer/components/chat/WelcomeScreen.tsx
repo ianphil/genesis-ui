@@ -12,9 +12,10 @@ const STARTER_PROMPTS = [
 interface Props {
   onSendMessage: (message: string) => void;
   connected: boolean;
+  disabled?: boolean;
 }
 
-export function WelcomeScreen({ onSendMessage, connected }: Props) {
+export function WelcomeScreen({ onSendMessage, connected, disabled = false }: Props) {
   return (
     <div className="flex-1 flex flex-col items-center justify-center px-4">
       <div className="max-w-lg text-center">
@@ -35,8 +36,10 @@ export function WelcomeScreen({ onSendMessage, connected }: Props) {
             {STARTER_PROMPTS.map((item) => (
               <button
                 key={item.label}
+                type="button"
+                disabled={disabled}
                 onClick={() => onSendMessage(item.prompt)}
-                className="text-left p-3 rounded-xl border border-border hover:bg-accent transition-colors group"
+                className="text-left p-3 rounded-xl border border-border hover:bg-accent transition-colors group disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
               >
                 <span className="text-lg mb-1 block">{item.emoji}</span>
                 <span className="text-sm font-medium group-hover:text-foreground">

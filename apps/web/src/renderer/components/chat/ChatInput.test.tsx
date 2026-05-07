@@ -96,6 +96,17 @@ describe('ChatInput', () => {
     expect(screen.getByText('Loading models…')).toBeTruthy();
   });
 
+  it('disables the model selector when the input is disabled', () => {
+    render(<ChatInput
+      {...defaultProps}
+      disabled={true}
+      availableModels={[{ id: 'model-1', name: 'Model 1' }]}
+      selectedModel="model-1"
+    />);
+
+    expect(screen.getByRole('combobox').hasAttribute('data-disabled')).toBe(true);
+  });
+
   describe('emoji picker', () => {
     it('renders an emoji trigger button with aria-label', () => {
       render(<ChatInput {...defaultProps} />);

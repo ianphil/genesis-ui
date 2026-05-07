@@ -19,7 +19,7 @@ test.describe('electron conversation history smoke', () => {
     if (root) await removeTempRoot(root);
   });
 
-  test('Monica can create, resume, and rename history entries from the right pane', async () => {
+  test('Monica can reuse an empty draft, resume, and rename history from the right pane', async () => {
     const paths = await launchWithMinds(9350, ['Monica']);
     const page = await findRendererPage(app?.browser, app?.logs ?? []);
     await addMind(page, paths.Monica);
@@ -32,13 +32,12 @@ test.describe('electron conversation history smoke', () => {
     await expect.poll(
       () => history.getByLabel(/Rename /).count(),
       { timeout: 60_000 },
-    ).toBeGreaterThanOrEqual(2);
+    ).toBe(1);
 
     await renameFirstHistoryItem(page, 'Monica planning thread');
 
-    await history.getByRole('button', { name: /Resume / }).last().click();
-    await expect(history.getByText('Active')).toBeVisible();
     await history.getByRole('button', { name: 'Resume Monica planning thread' }).click();
+    await expect(history.getByText('Active')).toBeVisible();
     await expect(history.getByText('Monica planning thread')).toBeVisible();
   });
 
@@ -75,6 +74,84 @@ test.describe('electron conversation history smoke', () => {
     const restartedPage = await findRendererPage(app.browser, app.logs);
     await expect(restartedPage.getByRole('button', { name: 'Lucy' }).first()).toBeVisible();
     await expect(restartedPage.getByLabel('Conversation history').getByText('Lucy restart thread')).toBeVisible();
+  });
+
+  test('first prompt titles the active draft and hydrates automatically after restart', async () => {
+    const paths = await launchWithMinds(9354, ['Monica']);
+    const page = await findRendererPage(app?.browser, app?.logs ?? []);
+    const mind = await addMind(page, paths.Monica);
+    await installChatSendProbe(page);
+
+    const prompt = 'History smoke first prompt title';
+    const input = page.getByPlaceholder('Message your agent… (paste an image to attach)');
+    await input.fill(prompt);
+    await input.press('Enter');
+    await page.evaluate(() => (window as typeof window & { __chamberLastChatSend?: Promise<void> }).__chamberLastChatSend);
+
+    await expect.poll(
+      () => page.evaluate(
+        async ({ mindId }) => {
+          const conversations = await window.electronAPI.conversationHistory.list(mindId);
+          return conversations.find((conversation) => conversation.active)?.title;
+        },
+        { mindId: mind.mindId },
+      ),
+      { timeout: 60_000 },
+    ).toBe(prompt);
+    const history = page.getByLabel('Conversation history');
+    await expect(history.getByText(prompt)).toBeVisible();
+    await expect(history.getByText(/^New chat ·/)).toHaveCount(0);
+    await expect(history.getByLabel(/Rename /)).toHaveCount(1);
+
+    await app?.close();
+    app = await launchElectronApp({
+      cdpPort: 9355,
+      env: { CHAMBER_E2E_USER_DATA: userDataPath },
+    });
+    const restartedPage = await findRendererPage(app.browser, app.logs);
+    const restartedHistory = restartedPage.getByLabel('Conversation history');
+    await expect(restartedPage.getByRole('button', { name: 'Monica' }).first()).toBeVisible();
+    await expect(restartedHistory.getByText(prompt)).toBeVisible();
+    await expect(restartedHistory.getByText(/^New chat ·/)).toHaveCount(0);
+    await expect(restartedHistory.getByLabel(/Rename /)).toHaveCount(1);
+    await expect(restartedPage.getByText(prompt).first()).toBeVisible();
+  });
+
+  test('trash deletes the active empty draft and returns to the previous conversation', async () => {
+    const paths = await launchWithMinds(9356, ['Monica']);
+    const page = await findRendererPage(app?.browser, app?.logs ?? []);
+    const mind = await addMind(page, paths.Monica);
+    await installChatSendProbe(page);
+
+    const prompt = 'History smoke keep this chat';
+    const input = page.getByPlaceholder('Message your agent… (paste an image to attach)');
+    await input.fill(prompt);
+    await input.press('Enter');
+    await page.evaluate(() => (window as typeof window & { __chamberLastChatSend?: Promise<void> }).__chamberLastChatSend);
+    await expect.poll(
+      () => page.evaluate(
+        async ({ mindId }) => {
+          const conversations = await window.electronAPI.conversationHistory.list(mindId);
+          return conversations.find((conversation) => conversation.active)?.title;
+        },
+        { mindId: mind.mindId },
+      ),
+      { timeout: 60_000 },
+    ).toBe(prompt);
+
+    const history = page.getByLabel('Conversation history');
+    await expect(history.getByRole('button', { name: 'New conversation' })).toBeEnabled({ timeout: 60_000 });
+    await history.getByRole('button', { name: 'New conversation' }).click();
+    await expect.poll(() => history.getByLabel(/Rename /).count(), { timeout: 60_000 }).toBe(2);
+    await expect(history.getByText(prompt)).toBeVisible();
+    await expect(history.getByText(/^New chat ·/)).toBeVisible();
+
+    await history.getByRole('button', { name: /^Delete New chat ·/ }).click();
+
+    await expect.poll(() => history.getByLabel(/Rename /).count(), { timeout: 60_000 }).toBe(1);
+    await expect(history.getByText(/^New chat ·/)).toHaveCount(0);
+    await expect(history.getByText(prompt)).toBeVisible();
+    await expect(page.getByText(prompt).first()).toBeVisible();
   });
 
   async function launchWithMinds(cdpPort: number, names: string[]): Promise<Record<string, string>> {
@@ -114,6 +191,18 @@ async function renameFirstHistoryItem(page: Page, title: string): Promise<void> 
   await input.fill(title);
   await input.press('Enter');
   await expect(history.getByText(title)).toBeVisible();
+}
+
+async function installChatSendProbe(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const runtimeWindow = window as typeof window & { __chamberLastChatSend?: Promise<void> };
+    const originalSend = window.electronAPI.chat.send.bind(window.electronAPI.chat);
+    window.electronAPI.chat.send = (...args: Parameters<typeof window.electronAPI.chat.send>) => {
+      const send = originalSend(...args);
+      runtimeWindow.__chamberLastChatSend = send.then(() => undefined);
+      return send;
+    };
+  });
 }
 
 function seedMind(targetMindPath: string, name: string): void {

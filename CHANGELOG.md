@@ -1,14 +1,19 @@
 # Changelog
 
-## v0.43.5 (2026-05-07)
+## v0.44.0 (2026-05-07)
 
-### Fixes
+### Chat
 
-- **Display device code when adding an account from Settings** - The Settings "+ Add Account" flow now opens a modal that subscribes to `auth:progress` before invoking `auth:startLogin`, so the GitHub device code is rendered alongside the static `github.com/login/device` instruction (mirrors the first-run `AuthScreen` UX). The modal auto-dismisses on `step:'authenticated'`, surfaces actionable errors with a Try Again affordance, and the Cancel button calls a new `auth:cancelLogin` IPC that aborts the in-flight polling loop via `AuthService.abort()`. Users can complete the second-account flow without logging out and restarting Chamber. (#214)
+- **Harden conversation history lifecycle** - Resumed chats strip Chamber-injected datetime metadata, empty drafts are reused instead of duplicated, first prompts title persisted conversations, and model switching is serialized through the backend-confirmed session path. (#216)
+- **Switch models in place via the SDK** - Model changes now call `session.setModel()` on the live SDK session, preserving conversation history. Removes the resume/recreate cycle that produced silent context loss after a mid-conversation model switch. (#216)
+- **Bound stale-session recovery** - `ChatService` reattaches once via `recoverActiveConversationSession` and surfaces the error if the SDK still cannot find the session, instead of silently minting an empty replacement runtime. `MindManager.recoverActiveConversationSession` resumes by Chamber sessionId and falls back to `createSession({ sessionId })` under the same id. (#216)
+- **Delete conversations from history** - History rows now expose a trash icon next to the rename pencil. Deleting an inactive conversation leaves the active chat untouched; deleting the active conversation hydrates the next most recent; deleting the last creates one empty draft. Confirmation only triggers for conversations with messages. (#216)
+- **Expand lifecycle smoke coverage** - SDK smoke verifies repeated named-session resume and cross-model context preservation; Electron smokes cover empty-draft reuse, first-prompt title persistence, pending model-switch disabled states, model-switch context recall via a sentinel token, and the trash-delete flow. (#216)
+- **Align packaged Copilot runtime** - Chamber now pins the packaged Copilot CLI runtime to `1.0.44-0`, matching the binary version validated by the packaging sandbox. (#216)
 
-### Testing
+### Tooling
 
-- **E2E hooks for the device-code modal** - `apps/desktop/src/main/ipc/auth.ts` registers `e2e:auth:emit-progress` and `e2e:auth:complete-login` handlers when `CHAMBER_E2E=1`, and the auth:startLogin path short-circuits to a deterministic stub in that mode. The new Playwright spec `tests/e2e/electron/settings-add-account.spec.ts` drives the full Settings → Add Account → injected device-code → completion / cancel lifecycle without touching real GitHub network or external browser launch. Triple-gated (env var + preload sync IPC + optional chaining) so the hooks remain absent in production builds. (#214)
+- **Add canvas extension scaffolding** - New `.github/extensions/canvas/` extension exposes a local canvas server and tools for rich visual output during agent sessions. (#216)
 
 ## v0.43.4 (2026-05-07)
 

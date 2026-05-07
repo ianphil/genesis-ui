@@ -100,6 +100,7 @@ describe('ConfigService', () => {
             createdAt: '2026-05-05T22:00:00.000Z',
             updatedAt: '2026-05-05T22:15:00.000Z',
             kind: 'chat',
+            hasMessages: true,
             messages: [{ role: 'user', content: 'do not persist me here' }],
           }],
         }],
@@ -119,6 +120,7 @@ describe('ConfigService', () => {
           createdAt: '2026-05-05T22:00:00.000Z',
           updatedAt: '2026-05-05T22:15:00.000Z',
           kind: 'chat',
+          hasMessages: true,
         }],
       });
     });

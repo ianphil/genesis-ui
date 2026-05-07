@@ -27,8 +27,9 @@ export function AppStateProvider({ children, testInitialState }: { children: Rea
     channelRef.current.postMessage(createChatStateSyncMessage({
       messagesByMind: state.messagesByMind,
       streamingByMind: state.streamingByMind,
+      conversationViewByMind: state.conversationViewByMind,
     }));
-  }, [state.messagesByMind, state.streamingByMind, testInitialState]);
+  }, [state.conversationViewByMind, state.messagesByMind, state.streamingByMind, testInitialState]);
 
   useEffect(() => {
     if (testInitialState || typeof BroadcastChannel === 'undefined') return;
@@ -43,6 +44,7 @@ export function AppStateProvider({ children, testInitialState }: { children: Rea
         channel.postMessage(createChatStateSyncMessage({
           messagesByMind: stateRef.current.messagesByMind,
           streamingByMind: stateRef.current.streamingByMind,
+          conversationViewByMind: stateRef.current.conversationViewByMind,
         }));
         return;
       }

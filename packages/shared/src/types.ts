@@ -111,6 +111,7 @@ export interface ChamberConversationRecord {
   createdAt: string;
   updatedAt: string;
   kind: ChamberConversationKind;
+  hasMessages?: boolean;
 }
 
 export interface ConversationSummary {
@@ -120,6 +121,7 @@ export interface ConversationSummary {
   updatedAt: string;
   kind: ChamberConversationKind;
   active: boolean;
+  hasMessages?: boolean;
 }
 
 export interface ConversationResumeResult {
@@ -237,6 +239,7 @@ export interface ElectronAPI {
     list: (mindId: string) => Promise<ConversationSummary[]>;
     resume: (mindId: string, sessionId: string) => Promise<ConversationResumeResult>;
     rename: (mindId: string, sessionId: string, title: string) => Promise<ConversationSummary[]>;
+    delete: (mindId: string, sessionId: string) => Promise<ConversationResumeResult>;
   };
   mind: {
     add: (mindPath: string) => Promise<MindContext>;

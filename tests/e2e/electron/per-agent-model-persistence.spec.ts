@@ -39,7 +39,7 @@ test.describe('electron per-agent model persistence smoke', () => {
 
   test('restores each mind-specific model selection after restart', async () => {
     let page = await findRendererPage(app?.browser, app?.logs ?? []);
-    await page.waitForLoadState('domcontentloaded');
+    await waitForMindApi(page);
 
     const alpha = await loadMind(page, alphaMindPath, 'Alpha Mind');
     const beta = await loadMind(page, betaMindPath, 'Beta Mind');
@@ -67,9 +67,15 @@ test.describe('electron per-agent model persistence smoke', () => {
     app = await startApp(userDataPath);
 
     page = await findRendererPage(app.browser, app.logs);
-    await page.waitForLoadState('domcontentloaded');
+    await waitForMindApi(page);
     await expect.poll(
-      () => page.evaluate(() => window.electronAPI.mind.list().then((minds) => minds.map((mind) => mind.identity.name).sort())),
+      async () => {
+        try {
+          return await page.evaluate(() => window.electronAPI.mind.list().then((minds) => minds.map((mind) => mind.identity.name).sort()));
+        } catch {
+          return [];
+        }
+      },
       { timeout: 30_000 },
     ).toEqual(['Alpha Mind', 'Beta Mind']);
 
@@ -78,13 +84,46 @@ test.describe('electron per-agent model persistence smoke', () => {
     await selectMind(page, 'Beta Mind');
     await expectSelectedModel(page, betaModel.name);
   });
+
+  test('disables empty-chat starter prompts while a model switch is pending', async () => {
+    const page = await findRendererPage(app?.browser, app?.logs ?? []);
+    await waitForMindApi(page);
+
+    const beta = await loadMind(page, betaMindPath, 'Beta Mind');
+    const models = await loadModels(page, beta.mindId);
+    test.skip(models.length < 2, 'Model-switch disabled-state smoke requires at least two SDK models.');
+    const currentModelName = (await page.getByRole('combobox').first().innerText()).trim();
+    const nextModel = models.find((model) => model.name !== currentModelName) ?? models[1];
+
+    await selectModel(page, nextModel.name);
+
+    await expect(page.getByPlaceholder('Switching model…')).toBeDisabled();
+    await expect(page.getByRole('combobox').first()).toHaveAttribute('data-disabled', '');
+    await expect(page.getByRole('button', { name: 'Daily briefing' })).toBeDisabled();
+
+    await expectMindModel(page, beta.mindId, nextModel.id);
+    await expect(page.getByLabel('Conversation history').getByLabel(/Rename /)).toHaveCount(1);
+  });
 });
+
+async function waitForMindApi(page: Page): Promise<void> {
+  await page.waitForLoadState('domcontentloaded');
+  await expect(page.locator('#root')).not.toBeEmpty();
+  await expect.poll(async () => {
+    try {
+      return await page.evaluate(() => typeof window.electronAPI?.mind?.list);
+    } catch {
+      return 'unavailable';
+    }
+  }, { timeout: 30_000 }).toBe('function');
+}
 
 async function startApp(userDataPath: string): Promise<LaunchedElectronApp> {
   return launchElectronApp({
     cdpPort,
     env: {
       CHAMBER_E2E_USER_DATA: userDataPath,
+      CHAMBER_E2E_MODEL_SWITCH_DELAY_MS: '2000',
     },
   });
 }
@@ -104,7 +143,9 @@ async function loadModels(page: Page, mindId: string): Promise<ModelInfo[]> {
 }
 
 async function selectMind(page: Page, name: string): Promise<void> {
-  await page.getByRole('button', { name }).first().click();
+  const mindButton = page.getByRole('button', { name }).first();
+  await mindButton.click();
+  await expect(mindButton).toHaveClass(/bg-accent/);
   await expect(page.getByPlaceholder('Message your agent… (paste an image to attach)')).toBeEnabled();
 }
 
@@ -113,7 +154,6 @@ async function selectModel(page: Page, name: string): Promise<void> {
   await expect(picker).toBeVisible();
   await picker.click();
   await page.getByRole('option', { name }).click();
-  await expect(picker).toContainText(name);
 }
 
 async function expectSelectedModel(page: Page, name: string): Promise<void> {
@@ -126,7 +166,7 @@ async function expectMindModel(page: Page, mindId: string, selectedModel: string
       ({ mindId }) => window.electronAPI.mind.list().then((minds) => minds.find((mind) => mind.mindId === mindId)?.selectedModel),
       { mindId },
     ),
-    { timeout: 10_000 },
+    { timeout: 60_000 },
   ).toBe(selectedModel);
 }
 

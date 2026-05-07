@@ -4,6 +4,19 @@ import type { ChatroomMessage, ChatroomStreamEvent, OrchestrationMode, GroupChat
 
 export type LensView = 'chat' | string;
 
+// Per-mind conversation view state machine:
+// idle -> hydrating -> ready. Streaming and model switching are orthogonal
+// flags scoped to the same mind/session so history selection and chat content
+// cannot drift apart.
+export interface ConversationViewState {
+  status: 'idle' | 'hydrating' | 'ready';
+  sessionId?: string;
+  pendingSessionId?: string;
+  streaming: boolean;
+  modelSwitching: boolean;
+  error?: string;
+}
+
 export interface AppState {
   minds: MindContext[];
   activeMindId: string | null;
@@ -12,6 +25,7 @@ export interface AppState {
   messagesByMind: Record<string, ChatMessage[]>;
   conversationHistoryByMind: Record<string, ConversationSummary[]>;
   activeConversationByMind: Record<string, string | undefined>;
+  conversationViewByMind: Record<string, ConversationViewState>;
   isStreaming: boolean;
   streamingByMind: Record<string, boolean>;
   availableModels: ModelInfo[];
@@ -39,9 +53,12 @@ export type AppAction =
   | { type: 'ADD_USER_MESSAGE'; payload: { id: string; content: string; timestamp: number; images?: ImageBlock[] } }
   | { type: 'ADD_ASSISTANT_MESSAGE'; payload: { id: string; timestamp: number } }
   | { type: 'CHAT_EVENT'; payload: { mindId: string; messageId: string; event: ChatEvent } }
-  | { type: 'HYDRATE_CHAT_STATE'; payload: { messagesByMind: Record<string, ChatMessage[]>; streamingByMind: Record<string, boolean> } }
+  | { type: 'HYDRATE_CHAT_STATE'; payload: { messagesByMind: Record<string, ChatMessage[]>; streamingByMind: Record<string, boolean>; conversationViewByMind?: Record<string, ConversationViewState> } }
   | { type: 'SET_CONVERSATION_HISTORY'; payload: { mindId: string; conversations: ConversationSummary[] } }
+  | { type: 'CONVERSATION_HYDRATING'; payload: { mindId: string; sessionId: string } }
+  | { type: 'CONVERSATION_HYDRATE_FAILED'; payload: { mindId: string; sessionId: string; error: string } }
   | { type: 'RESUME_CONVERSATION'; payload: { mindId: string; sessionId: string; messages: ChatMessage[]; conversations: ConversationSummary[] } }
+  | { type: 'SET_MODEL_SWITCHING'; payload: { mindId: string; switching: boolean } }
   | { type: 'SET_MINDS'; payload: MindContext[] }
   | { type: 'SET_ACTIVE_MIND'; payload: string | null }
   | { type: 'ADD_MIND'; payload: MindContext }
@@ -57,7 +74,7 @@ export type AppAction =
   | { type: 'LOGGED_OUT' }
   | { type: 'MINDS_CHECKED' }
   | { type: 'CLEAR_MESSAGES' }
-  | { type: 'NEW_CONVERSATION' }
+  | { type: 'NEW_CONVERSATION'; payload?: { mindId: string } }
   | { type: 'A2A_INCOMING'; payload: { targetMindId: string; message: Message; replyMessageId: string } }
   | { type: 'TASK_STATUS_UPDATE'; payload: TaskStatusUpdateEvent & { targetMindId: string } }
   | { type: 'TASK_ARTIFACT_UPDATE'; payload: TaskArtifactUpdateEvent & { targetMindId: string } }
@@ -81,6 +98,7 @@ export const initialState: AppState = {
   messagesByMind: {},
   conversationHistoryByMind: {},
   activeConversationByMind: {},
+  conversationViewByMind: {},
   isStreaming: false,
   streamingByMind: {},
   availableModels: [],
