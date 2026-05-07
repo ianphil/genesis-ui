@@ -18,14 +18,16 @@ export function ChatPanel() {
 
   const handleModelChange = (model: string) => {
     if (!activeMindId || isModelSwitching) return;
+    const previousModel = selectedModel;
+    dispatch({ type: 'SET_SELECTED_MODEL', payload: model });
     setIsModelSwitching(true);
     window.electronAPI.mind.setModel(activeMindId, model)
       .then((updatedMind) => {
         if (updatedMind) dispatch({ type: 'SET_MINDS', payload: minds.map((mind) => mind.mindId === updatedMind.mindId ? updatedMind : mind) });
-        dispatch({ type: 'SET_SELECTED_MODEL', payload: model });
       })
       .catch((error: unknown) => {
         log.error('Failed to switch model:', error);
+        dispatch({ type: 'SET_SELECTED_MODEL', payload: previousModel });
       })
       .finally(() => {
         setIsModelSwitching(false);

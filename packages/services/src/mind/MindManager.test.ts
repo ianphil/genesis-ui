@@ -251,6 +251,7 @@ describe('MindManager', () => {
 
     it('persists a per-mind model and resumes the active session with it', async () => {
       const mind = await manager.loadMind('/tmp/agents/q');
+      manager.markActiveConversationHasMessages(mind.mindId, 'Existing context');
       mockCreateSession.mockClear();
       mockResumeSession.mockClear();
 
@@ -263,6 +264,22 @@ describe('MindManager', () => {
         mind.activeSessionId,
         expect.objectContaining({ model: 'claude-opus' }),
       );
+    });
+
+    it('persists a per-mind model by recreating the same empty draft session instead of resuming it', async () => {
+      const mind = await manager.loadMind('/tmp/agents/q');
+      mockCreateSession.mockClear();
+      mockResumeSession.mockClear();
+
+      const updated = await manager.setMindModel(mind.mindId, 'claude-opus');
+
+      expect(updated?.selectedModel).toBe('claude-opus');
+      expect(mockResumeSession).not.toHaveBeenCalled();
+      expect(mockCreateSession).toHaveBeenCalledWith(expect.objectContaining({
+        model: 'claude-opus',
+        sessionId: mind.activeSessionId,
+      }));
+      expect(manager.getMind(mind.mindId)?.activeSessionId).toBe(mind.activeSessionId);
     });
 
     it('serializes concurrent per-mind model changes', async () => {
@@ -292,6 +309,7 @@ describe('MindManager', () => {
       );
 
       const mind = await localManager.loadMind('/tmp/agents/q');
+      localManager.markActiveConversationHasMessages(mind.mindId, 'Existing context');
       createSession.mockClear();
       resumeSession.mockClear();
 

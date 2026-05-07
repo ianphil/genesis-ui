@@ -418,10 +418,20 @@ export class MindManager extends EventEmitter {
 
     const previousSession = context.session;
     const sessionTools = this.getSessionTools(mindId, context.mindPath);
-    const nextSession = context.activeSessionId
+    const activeConversation = this.getActiveConversationRecord(mindId);
+    const existingActiveSessionId = context.activeSessionId;
+    let activeSessionId = existingActiveSessionId;
+    if (!activeSessionId) {
+      const conversation = this.createConversationRecord(mindId);
+      activeSessionId = conversation.sessionId;
+      context.activeSessionId = activeSessionId;
+      this.upsertConversationRecord(mindId, conversation);
+    }
+    const shouldResumeActiveSession = Boolean(existingActiveSessionId) && activeConversation?.hasMessages !== false;
+    const nextSession = shouldResumeActiveSession
       ? await this.resumeSessionForMind(
         context.client,
-        context.activeSessionId,
+        activeSessionId,
         context.mindPath,
         context.identity.systemMessage,
         sessionTools,
@@ -439,6 +449,7 @@ export class MindManager extends EventEmitter {
         approveAllCompat,
         true,
         selectedModel,
+        activeSessionId,
       );
 
     context.selectedModel = selectedModel;

@@ -65,7 +65,7 @@ test.describe('electron Genesis Lucy Chief of Staff chat smoke', () => {
     await expect(page.getByPlaceholder('Message your agent… (paste an image to attach)')).toBeEnabled();
 
     expect(fs.existsSync(path.join(lucyPath, 'SOUL.md'))).toBe(true);
-    expect(fs.readFileSync(path.join(lucyPath, 'SOUL.md'), 'utf-8')).toContain('I am Lucy, a calm and practical Chief of Staff.');
+    expect(fs.readFileSync(path.join(lucyPath, 'SOUL.md'), 'utf-8')).toContain('Strategic Clarity');
     expect(fs.readFileSync(path.join(lucyPath, '.working-memory', 'memory.md'), 'utf-8')).toContain(memoryInstruction);
 
     const result = await page.evaluate(async ({ expected, name }) => {

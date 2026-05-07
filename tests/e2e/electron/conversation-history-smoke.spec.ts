@@ -19,7 +19,7 @@ test.describe('electron conversation history smoke', () => {
     if (root) await removeTempRoot(root);
   });
 
-  test('Monica can create, resume, and rename history entries from the right pane', async () => {
+  test('Monica can reuse an empty draft, resume, and rename history from the right pane', async () => {
     const paths = await launchWithMinds(9350, ['Monica']);
     const page = await findRendererPage(app?.browser, app?.logs ?? []);
     await addMind(page, paths.Monica);
@@ -32,13 +32,12 @@ test.describe('electron conversation history smoke', () => {
     await expect.poll(
       () => history.getByLabel(/Rename /).count(),
       { timeout: 60_000 },
-    ).toBeGreaterThanOrEqual(2);
+    ).toBe(1);
 
     await renameFirstHistoryItem(page, 'Monica planning thread');
 
-    await history.getByRole('button', { name: /Resume / }).last().click();
-    await expect(history.getByText('Active')).toBeVisible();
     await history.getByRole('button', { name: 'Resume Monica planning thread' }).click();
+    await expect(history.getByText('Active')).toBeVisible();
     await expect(history.getByText('Monica planning thread')).toBeVisible();
   });
 
