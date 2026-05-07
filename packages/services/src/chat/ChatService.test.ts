@@ -28,11 +28,11 @@ const mockMindManager = {
   }),
   recreateSession: vi.fn(),
   recoverActiveConversationSession: vi.fn(),
-  replaceActiveConversationRuntimeSession: vi.fn(),
   startNewConversation: vi.fn(),
   markActiveConversationHasMessages: vi.fn(),
   listConversationHistory: vi.fn(() => []),
   resumeConversation: vi.fn(async () => ({ sessionId: 'session-1', messages: [], conversations: [] })),
+  deleteConversation: vi.fn(async () => ({ sessionId: 'session-1', messages: [], conversations: [] })),
   renameConversation: vi.fn(() => []),
   setMindModel: vi.fn(async () => null),
 };
@@ -156,6 +156,30 @@ describe('ChatService', () => {
     });
   });
 
+  describe('deleteConversation', () => {
+    it('delegates to mindManager.deleteConversation', async () => {
+      const result = await svc.deleteConversation('valid-mind', 'session-1');
+
+      expect(mockMindManager.deleteConversation).toHaveBeenCalledWith('valid-mind', 'session-1');
+      expect(result).toEqual({ sessionId: 'session-1', messages: [], conversations: [] });
+    });
+
+    it('rejects deletes while a message is streaming', async () => {
+      mockSession.on.mockImplementation((eventOrCb: string | ((...args: unknown[]) => void), cb?: (...args: unknown[]) => void) => {
+        void eventOrCb;
+        void cb;
+        return vi.fn();
+      });
+      const send = svc.sendMessage('valid-mind', 'hello', 'msg-1', vi.fn());
+      await Promise.resolve();
+
+      await expect(svc.deleteConversation('valid-mind', 'session-1')).rejects.toThrow('Cannot switch conversations');
+
+      await svc.cancelMessage('valid-mind', 'msg-1');
+      await send;
+    });
+  });
+
   describe('listModels', () => {
     it('returns models from the minds client', async () => {
       const models = await svc.listModels('valid-mind');
@@ -208,7 +232,7 @@ describe('ChatService', () => {
       expect(emit).toHaveBeenCalledWith({ type: 'done' });
     });
 
-    it('does not loop — surfaces error when retry also fails with stale error', async () => {
+    it('does not loop — surfaces error when reattach also fails with stale error', async () => {
       mockSession.send.mockRejectedValueOnce(new Error('Session not found: abc-123'));
       mockSession.on.mockReturnValue(vi.fn());
 
@@ -219,13 +243,6 @@ describe('ChatService', () => {
         on: vi.fn(() => vi.fn()),
       };
       mockMindManager.recoverActiveConversationSession.mockResolvedValueOnce(freshSession);
-      const replacementSession = {
-        send: vi.fn().mockRejectedValueOnce(new Error('Session not found: ghi-789')),
-        abort: vi.fn().mockResolvedValue(undefined),
-        destroy: vi.fn().mockResolvedValue(undefined),
-        on: vi.fn(() => vi.fn()),
-      };
-      mockMindManager.replaceActiveConversationRuntimeSession.mockResolvedValueOnce(replacementSession);
 
       const emit = vi.fn();
       await svc.sendMessage('valid-mind', 'hello', 'msg-1', emit);
@@ -234,45 +251,9 @@ describe('ChatService', () => {
       expect(emit).toHaveBeenCalledWith(
         expect.objectContaining({ type: 'error' }),
       );
-      // Each recovery strategy is attempted once — no unbounded retry loop.
+      // Recovery is attempted exactly once; we surface the error rather than chain endless retries.
       expect(mockMindManager.recoverActiveConversationSession).toHaveBeenCalledTimes(1);
-      expect(mockMindManager.replaceActiveConversationRuntimeSession).toHaveBeenCalledTimes(1);
-      expect(replacementSession.send).toHaveBeenCalledTimes(1);
-    });
-
-    it('replaces the runtime session with the same conversation id when resume recovery still sends stale', async () => {
-      mockSession.send.mockRejectedValueOnce(new Error('Session not found: abc-123'));
-      mockSession.on.mockReturnValue(vi.fn());
-
-      const resumedSession = {
-        send: vi.fn().mockRejectedValueOnce(new Error('Session not found: def-456')),
-        abort: vi.fn().mockResolvedValue(undefined),
-        destroy: vi.fn().mockResolvedValue(undefined),
-        on: vi.fn(() => vi.fn()),
-      };
-      mockMindManager.recoverActiveConversationSession.mockResolvedValueOnce(resumedSession);
-      const replacementSession = {
-        send: vi.fn().mockResolvedValue(undefined),
-        abort: vi.fn().mockResolvedValue(undefined),
-        destroy: vi.fn().mockResolvedValue(undefined),
-        on: vi.fn((event: string, cb?: (...args: unknown[]) => void) => {
-          if (event === 'session.idle' && cb) setTimeout(() => cb(), 0);
-          return vi.fn();
-        }),
-      };
-      mockMindManager.replaceActiveConversationRuntimeSession.mockResolvedValueOnce(replacementSession);
-
-      const emit = vi.fn();
-      await svc.sendMessage('valid-mind', 'hello', 'msg-1', emit);
-
-      expect(emit).toHaveBeenCalledWith({ type: 'reconnecting' });
-      expect(mockMindManager.recoverActiveConversationSession).toHaveBeenCalledWith('valid-mind');
-      expect(mockMindManager.replaceActiveConversationRuntimeSession).toHaveBeenCalledWith('valid-mind');
-      expect(mockMindManager.markActiveConversationHasMessages).toHaveBeenCalledTimes(1);
-      expect(replacementSession.send).toHaveBeenCalledWith({
-        prompt: '<current_datetime>\n2026-05-05T15:37:12.065Z\n</current_datetime>\n<timezone>\nAmerica/New_York\n</timezone>\n\nhello',
-      });
-      expect(emit).toHaveBeenCalledWith({ type: 'done' });
+      expect(freshSession.send).toHaveBeenCalledTimes(1);
     });
 
     it('does not retry on non-stale errors', async () => {

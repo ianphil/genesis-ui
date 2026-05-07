@@ -61,23 +61,13 @@ export class ChatService {
           if (abortController.signal.aborted) return;
           if (!isStaleSessionError(err)) throw err;
 
-          // Stale session — recreate and retry once
+          // SDK forgot the session — recover once by reattaching, then retry.
+          // If reattach also fails stale, surface the error so the user can start a new chat.
           emit({ type: 'reconnecting' });
           const recoveredSession = await this.mindManager.recoverActiveConversationSession(mindId);
-          try {
-            await this.streamTurn(recoveredSession, prompt, abortController, emit, attachments, () => {
-              this.mindManager.markActiveConversationHasMessages(mindId, prompt);
-            });
-          } catch (retryError) {
-            if (abortController.signal.aborted) return;
-            if (!isStaleSessionError(retryError)) throw retryError;
-
-            log.warn('Recovered session was still stale; replacing runtime session while preserving Chamber conversation id.');
-            const replacementSession = await this.mindManager.replaceActiveConversationRuntimeSession(mindId);
-            await this.streamTurn(replacementSession, prompt, abortController, emit, attachments, () => {
-              this.mindManager.markActiveConversationHasMessages(mindId, prompt);
-            });
-          }
+          await this.streamTurn(recoveredSession, prompt, abortController, emit, attachments, () => {
+            this.mindManager.markActiveConversationHasMessages(mindId, prompt);
+          });
         }
       } catch (err) {
         if (abortController.signal.aborted) return;
@@ -248,6 +238,11 @@ export class ChatService {
   async resumeConversation(mindId: string, sessionId: string): Promise<ConversationResumeResult> {
     this.assertCanSwitchConversation(mindId);
     return this.mindManager.resumeConversation(mindId, sessionId);
+  }
+
+  async deleteConversation(mindId: string, sessionId: string): Promise<ConversationResumeResult> {
+    this.assertCanSwitchConversation(mindId);
+    return this.mindManager.deleteConversation(mindId, sessionId);
   }
 
   renameConversation(mindId: string, sessionId: string, title: string): ConversationSummary[] {

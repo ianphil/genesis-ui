@@ -1,4 +1,4 @@
-import { MoreHorizontal, Pencil, Plus } from 'lucide-react';
+import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ConversationSummary } from '@chamber/shared/types';
 import { useAppDispatch, useAppState } from '../../lib/store';
@@ -13,6 +13,7 @@ export function ConversationHistoryPanel() {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [isCreatingConversation, setIsCreatingConversation] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const creatingConversationRef = useRef(false);
 
@@ -25,6 +26,7 @@ export function ConversationHistoryPanel() {
   const isActiveMindStreaming = activeMindId
     ? Boolean(streamingByMind[activeMindId] || activeConversationView?.streaming)
     : false;
+  const isActiveMindBusy = isActiveMindStreaming || Boolean(activeConversationView?.modelSwitching);
 
   const applyResumeResult = useCallback((mindId: string, result: Awaited<ReturnType<typeof window.electronAPI.conversationHistory.resume>>) => {
     dispatch({
@@ -67,7 +69,7 @@ export function ConversationHistoryPanel() {
   }, [activeMindId, dispatch]);
 
   useEffect(() => {
-    if (!activeMindId || !selectedConversationId || isActiveMindStreaming || creatingConversationRef.current) return;
+    if (!activeMindId || !selectedConversationId || isActiveMindBusy || creatingConversationRef.current) return;
     if (activeConversationView?.status === 'hydrating' && activeConversationView.pendingSessionId === selectedConversationId) return;
     if (activeConversationView?.status === 'ready' && activeConversationView.sessionId === selectedConversationId) return;
 
@@ -80,7 +82,7 @@ export function ConversationHistoryPanel() {
     activeConversationView?.status,
     activeMindId,
     hydrateConversation,
-    isActiveMindStreaming,
+    isActiveMindBusy,
     selectedConversationId,
   ]);
 
@@ -113,7 +115,7 @@ export function ConversationHistoryPanel() {
   };
 
   const resumeConversation = async (sessionId: string) => {
-    if (!activeMindId || isActiveMindStreaming) return;
+    if (!activeMindId || isActiveMindBusy) return;
     if (
       sessionId === selectedConversationId
       && activeConversationView?.status === 'ready'
@@ -128,7 +130,7 @@ export function ConversationHistoryPanel() {
   };
 
   const startNewConversation = async () => {
-    if (!activeMindId || isActiveMindStreaming || isCreatingConversation) return;
+    if (!activeMindId || isActiveMindBusy || isCreatingConversation) return;
     creatingConversationRef.current = true;
     setIsCreatingConversation(true);
     try {
@@ -144,6 +146,26 @@ export function ConversationHistoryPanel() {
     }
   };
 
+  const deleteConversation = async (conversation: ConversationSummary) => {
+    if (!activeMindId || isActiveMindBusy || deletingId) return;
+    if (conversation.hasMessages) {
+      const confirmed = window.confirm(`Delete "${conversation.title}"? This cannot be undone.`);
+      if (!confirmed) return;
+    }
+
+    setDeletingId(conversation.sessionId);
+    setRenamingId(null);
+    try {
+      const result = await window.electronAPI.conversationHistory.delete(activeMindId, conversation.sessionId);
+      applyResumeResult(activeMindId, result);
+      dispatch({ type: 'SET_ACTIVE_VIEW', payload: 'chat' });
+    } catch (error) {
+      log.error('Failed to delete conversation:', error);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   return (
     <aside aria-label="Conversation history" className="w-80 shrink-0 bg-card border border-border rounded-xl overflow-hidden flex flex-col">
       <div className="h-10 border-b border-border px-3 flex items-center justify-between">
@@ -152,7 +174,7 @@ export function ConversationHistoryPanel() {
         </span>
         <button
           type="button"
-          disabled={!activeMindId || isActiveMindStreaming || isCreatingConversation}
+          disabled={!activeMindId || isActiveMindBusy || isCreatingConversation}
           onClick={() => { void startNewConversation(); }}
           className="h-7 w-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent/50 flex items-center justify-center disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
           aria-label="New conversation"
@@ -181,7 +203,7 @@ export function ConversationHistoryPanel() {
               <button
                 type="button"
                 aria-label={`Resume ${conversation.title}`}
-                disabled={isActiveMindStreaming}
+                disabled={isActiveMindBusy}
                 onClick={() => { void resumeConversation(conversation.sessionId); }}
                 className="min-w-0 flex-1 text-left disabled:cursor-not-allowed"
               >
@@ -209,17 +231,20 @@ export function ConversationHistoryPanel() {
                 <button
                   type="button"
                   onClick={() => startRename(conversation)}
-                  className="h-7 w-7 rounded-md text-muted-foreground opacity-0 hover:text-foreground hover:bg-accent group-hover:opacity-100 flex items-center justify-center"
+                  disabled={isActiveMindBusy || deletingId === conversation.sessionId}
+                  className="h-7 w-7 rounded-md text-muted-foreground opacity-0 hover:text-foreground hover:bg-accent group-hover:opacity-100 flex items-center justify-center disabled:cursor-not-allowed disabled:opacity-40"
                   aria-label={`Rename ${conversation.title}`}
                 >
                   <Pencil size={13} />
                 </button>
                 <button
                   type="button"
-                  className="h-7 w-7 rounded-md text-muted-foreground opacity-0 hover:text-foreground hover:bg-accent group-hover:opacity-100 flex items-center justify-center"
-                  aria-label={`${conversation.title} options`}
+                  onClick={() => { void deleteConversation(conversation); }}
+                  disabled={isActiveMindBusy || deletingId !== null}
+                  className="h-7 w-7 rounded-md text-muted-foreground opacity-0 hover:text-destructive hover:bg-destructive/10 group-hover:opacity-100 flex items-center justify-center disabled:cursor-not-allowed disabled:opacity-40"
+                  aria-label={`Delete ${conversation.title}`}
                 >
-                  <MoreHorizontal size={14} />
+                  <Trash2 size={13} />
                 </button>
               </div>
             </div>

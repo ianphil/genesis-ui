@@ -36,7 +36,8 @@ test.describe('electron model switch conversation context smoke', () => {
     test.skip(models.length < 2, 'Model-switch context smoke requires at least two SDK models.');
     await installChatSendProbe(page);
 
-    const firstPrompt = 'tell me another haiku';
+    const sentinelToken = `purplezebra${Date.now().toString(36)}`;
+    const firstPrompt = `Remember the secret token "${sentinelToken}". Reply with just the word OK.`;
     await sendAndWait(page, firstPrompt);
     await expect(page.getByText(firstPrompt).first()).toBeVisible();
     await expectNoSessionError(page);
@@ -49,13 +50,15 @@ test.describe('electron model switch conversation context smoke', () => {
     await expectMindModel(page, mind.mindId, nextModel.id);
     await expect.poll(() => history.getByLabel(/Rename /).count(), { timeout: 30_000 }).toBe(rowsAfterFirstTurn);
 
-    const secondPrompt = 'Tell it to me again';
+    const secondPrompt = 'Repeat the secret token I gave you a moment ago, exactly.';
     await sendAndWait(page, secondPrompt);
 
     await expect(page.getByText(secondPrompt).first()).toBeVisible();
     await expectNoSessionError(page);
     await expect.poll(() => history.getByLabel(/Rename /).count(), { timeout: 30_000 }).toBe(rowsAfterFirstTurn);
     await expect(history.getByText(firstPrompt)).toBeVisible();
+    // Conversation context must survive an in-place model switch — the model should recall the sentinel.
+    await expect(page.getByText(new RegExp(sentinelToken)).first()).toBeVisible({ timeout: 60_000 });
   });
 });
 

@@ -100,40 +100,26 @@ export class MindManager extends EventEmitter {
     const selectedModel = knownRecord?.selectedModel;
     const activeSessionId = knownRecord?.activeSessionId ?? this.createConversationRecord(id).sessionId;
     const conversationRecord = this.ensureConversationRecord(id, activeSessionId, knownRecord?.conversations);
-
     const session = knownRecord?.activeSessionId
-      ? await this.resumeSessionForMind(
-        client,
-        activeSessionId,
-        resolvedMindPath,
-        identity.systemMessage,
-        sessionTools,
-        undefined,
-        approveAllCompat,
-        true,
-        selectedModel,
-      ).catch(() => this.createSessionForMind(
+      ? await this.loadConversationSession(
         client,
         resolvedMindPath,
         identity.systemMessage,
         sessionTools,
-        undefined,
-        approveAllCompat,
-        true,
+        conversationRecord.sessionId,
         selectedModel,
-        activeSessionId,
-      ))
+      )
       : await this.createSessionForMind(
-      client,
-      resolvedMindPath,
-      identity.systemMessage,
-      sessionTools,
-      undefined,
-      approveAllCompat,
-      true,
-      selectedModel,
-      activeSessionId,
-    );
+        client,
+        resolvedMindPath,
+        identity.systemMessage,
+        sessionTools,
+        undefined,
+        approveAllCompat,
+        true,
+        selectedModel,
+        activeSessionId,
+      );
 
     const context: InternalMindContext = {
       mindId: id,
@@ -265,43 +251,23 @@ export class MindManager extends EventEmitter {
     if (!context.activeSessionId) {
       return this.createNewConversationSession(mindId, context);
     }
+    if (!activeConversation) {
+      this.upsertConversationRecord(mindId, this.ensureConversationRecord(mindId, context.activeSessionId));
+    }
 
     const previousSession = context.session;
     const sessionTools = this.getSessionTools(mindId, context.mindPath);
-    const recoveredSession = await this.resumeOrCreateSessionForMind(
-      context,
-      context.activeSessionId,
+    const recoveredSession = await this.loadConversationSession(
+      context.client,
+      context.mindPath,
+      context.identity.systemMessage,
       sessionTools,
+      context.activeSessionId,
       context.selectedModel,
     );
     context.session = recoveredSession;
     await previousSession?.disconnect().catch(() => { /* session already disconnected */ });
     return recoveredSession;
-  }
-
-  async replaceActiveConversationRuntimeSession(mindId: string): Promise<CopilotSession> {
-    const context = this.minds.get(mindId);
-    if (!context) throw new Error(`Mind ${mindId} not found`);
-    if (!context.activeSessionId) {
-      return this.createNewConversationSession(mindId, context);
-    }
-
-    const previousSession = context.session;
-    const sessionTools = this.getSessionTools(mindId, context.mindPath);
-    const replacementSession = await this.createSessionForMind(
-      context.client,
-      context.mindPath,
-      context.identity.systemMessage,
-      sessionTools,
-      undefined,
-      approveAllCompat,
-      true,
-      context.selectedModel,
-      context.activeSessionId,
-    );
-    context.session = replacementSession;
-    await previousSession?.disconnect().catch(() => { /* session already disconnected */ });
-    return replacementSession;
   }
 
   async startNewConversation(mindId: string): Promise<CopilotSession> {
@@ -386,15 +352,14 @@ export class MindManager extends EventEmitter {
 
     const previousSession = context.session;
     const sessionTools = this.getSessionTools(mindId, context.mindPath);
-    const nextSession = await this.resumeSessionForMind(
+    const conversation = record.conversations.find((candidate) => candidate.sessionId === sessionId);
+    if (!conversation) throw new Error(`Conversation ${sessionId} not found for mind ${mindId}`);
+    const nextSession = await this.loadConversationSession(
       context.client,
-      sessionId,
       context.mindPath,
       context.identity.systemMessage,
       sessionTools,
-      undefined,
-      approveAllCompat,
-      true,
+      conversation.sessionId,
       context.selectedModel,
     );
     context.session = nextSession;
@@ -423,6 +388,7 @@ export class MindManager extends EventEmitter {
         updatedAt: conversation.updatedAt,
         kind: conversation.kind,
         active: conversation.sessionId === activeSessionId,
+        hasMessages: conversation.hasMessages,
       }));
   }
 
@@ -442,6 +408,75 @@ export class MindManager extends EventEmitter {
     });
     this.persistConfig();
     return this.listConversationHistory(mindId);
+  }
+
+  async deleteConversation(mindId: string, sessionId: string): Promise<ConversationResumeResult> {
+    const context = this.minds.get(mindId);
+    if (!context) throw new Error(`Mind ${mindId} not found`);
+    const record = this.knownMindRecords.get(mindId);
+    if (!record) throw new Error(`Mind ${mindId} not found`);
+    const conversations = record.conversations ?? [];
+    const deletingConversation = conversations.find((conversation) => conversation.sessionId === sessionId);
+    if (!deletingConversation) {
+      throw new Error(`Conversation ${sessionId} not found for mind ${mindId}`);
+    }
+
+    const remainingConversations = conversations.filter((conversation) => conversation.sessionId !== sessionId);
+    if (context.activeSessionId !== sessionId) {
+      this.knownMindRecords.set(mindId, {
+        ...record,
+        conversations: remainingConversations,
+      });
+      this.persistConfig();
+      await this.deleteSdkSession(context, deletingConversation.sessionId);
+      return {
+        sessionId: context.activeSessionId ?? '',
+        messages: context.session ? await this.getMessagesForSession(context.session) : [],
+        conversations: this.listConversationHistory(mindId),
+      };
+    }
+
+    const { activeSessionId: _deletedActiveSessionId, ...recordWithoutActiveSession } = record;
+    void _deletedActiveSessionId;
+    this.knownMindRecords.set(mindId, {
+      ...recordWithoutActiveSession,
+      conversations: remainingConversations,
+    });
+
+    if (remainingConversations.length === 0) {
+      await this.createNewConversationSession(mindId, context);
+      await this.deleteSdkSession(context, deletingConversation.sessionId);
+      return {
+        sessionId: context.activeSessionId ?? '',
+        messages: [],
+        conversations: this.listConversationHistory(mindId),
+      };
+    }
+
+    const nextConversation = [...remainingConversations]
+      .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))[0];
+    const previousSession = context.session;
+    const sessionTools = this.getSessionTools(mindId, context.mindPath);
+    const nextSession = await this.loadConversationSession(
+      context.client,
+      context.mindPath,
+      context.identity.systemMessage,
+      sessionTools,
+      nextConversation.sessionId,
+      context.selectedModel,
+    );
+    context.session = nextSession;
+    context.activeSessionId = nextConversation.sessionId;
+    this.touchConversationRecord(mindId, nextConversation.sessionId);
+    this.persistConfig();
+    await previousSession?.disconnect().catch(() => { /* session already disconnected */ });
+    await this.deleteSdkSession(context, deletingConversation.sessionId);
+
+    return {
+      sessionId: nextConversation.sessionId,
+      messages: await this.getMessagesForSession(nextSession),
+      conversations: this.listConversationHistory(mindId),
+    };
   }
 
   async setMindModel(mindId: string, model: string | null): Promise<MindContext | null> {
@@ -484,48 +519,21 @@ export class MindManager extends EventEmitter {
 
     if (context.selectedModel === selectedModel) return this.toExternalContext(context);
 
-    const previousSession = context.session;
-    const sessionTools = this.getSessionTools(mindId, context.mindPath);
-    const activeConversation = this.getActiveConversationRecord(mindId);
-    const existingActiveSessionId = context.activeSessionId;
-    let activeSessionId = existingActiveSessionId;
-    if (!activeSessionId) {
-      const conversation = this.createConversationRecord(mindId);
-      activeSessionId = conversation.sessionId;
-      context.activeSessionId = activeSessionId;
-      this.upsertConversationRecord(mindId, conversation);
+    // SDK preserves conversation history across in-place model switches; no resume/recreate needed.
+    if (context.session && selectedModel) {
+      await context.session.setModel(selectedModel);
     }
-    const shouldResumeActiveSession = Boolean(existingActiveSessionId) && activeConversation?.hasMessages !== false;
-    const nextSession = shouldResumeActiveSession
-      ? await this.resumeOrCreateSessionForMind(
-        context,
-        activeSessionId,
-        sessionTools,
-        selectedModel,
-      )
-      : await this.createSessionForMind(
-        context.client,
-        context.mindPath,
-        context.identity.systemMessage,
-        sessionTools,
-        undefined,
-        approveAllCompat,
-        true,
-        selectedModel,
-        activeSessionId,
-      );
 
     context.selectedModel = selectedModel;
-    context.session = nextSession;
+    const existingRecord = this.knownMindRecords.get(mindId);
     this.knownMindRecords.set(mindId, {
       id: mindId,
       path: context.mindPath,
       ...(selectedModel ? { selectedModel } : {}),
       ...(context.activeSessionId ? { activeSessionId: context.activeSessionId } : {}),
-      ...(this.knownMindRecords.get(mindId)?.conversations ? { conversations: this.knownMindRecords.get(mindId)?.conversations } : {}),
+      ...(existingRecord?.conversations ? { conversations: existingRecord.conversations } : {}),
     });
     this.persistConfig();
-    await previousSession?.disconnect().catch(() => { /* session already disconnected */ });
 
     const external = this.toExternalContext(context);
     this.emit('mind:loaded', external);
@@ -765,18 +773,20 @@ export class MindManager extends EventEmitter {
     return session;
   }
 
-  private async resumeOrCreateSessionForMind(
-    context: InternalMindContext,
-    sessionId: string,
+  private async loadConversationSession(
+    client: CopilotClient,
+    mindPath: string,
+    systemMessage: string,
     tools: Tool[],
+    conversationSessionId: string,
     model?: string,
   ): Promise<CopilotSession> {
     try {
       return await this.resumeSessionForMind(
-        context.client,
-        sessionId,
-        context.mindPath,
-        context.identity.systemMessage,
+        client,
+        conversationSessionId,
+        mindPath,
+        systemMessage,
         tools,
         undefined,
         approveAllCompat,
@@ -785,18 +795,27 @@ export class MindManager extends EventEmitter {
       );
     } catch (error) {
       if (!isStaleSessionError(error)) throw error;
-      log.warn(`Session ${sessionId} was not found during resume; recreating it with the same Chamber session id.`);
+      log.warn(`SDK session ${conversationSessionId} was not found; reattaching by recreating the session under the same id.`);
       return this.createSessionForMind(
-        context.client,
-        context.mindPath,
-        context.identity.systemMessage,
+        client,
+        mindPath,
+        systemMessage,
         tools,
         undefined,
         approveAllCompat,
         true,
         model,
-        sessionId,
+        conversationSessionId,
       );
+    }
+  }
+
+  private async deleteSdkSession(context: InternalMindContext, sessionId: string): Promise<void> {
+    try {
+      await context.client.deleteSession(sessionId);
+    } catch (error) {
+      if (isStaleSessionError(error)) return;
+      log.warn(`Failed to delete SDK session ${sessionId}; Chamber history was already updated.`, error);
     }
   }
 

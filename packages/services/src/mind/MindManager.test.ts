@@ -27,26 +27,30 @@ import { bootstrapMindCapabilities } from '../lens/MindBootstrap';
 
 const mockStart = vi.fn();
 const mockStop = vi.fn();
-function createSessionStub() {
+let sessionCounter = 0;
+function createSessionStub(sessionId = `sdk-session-${sessionCounter += 1}`) {
   return {
+  sessionId,
   send: vi.fn(),
   sendAndWait: vi.fn(),
   getMessages: vi.fn(async (): Promise<unknown[]> => []),
   on: vi.fn(),
   off: vi.fn(),
   disconnect: vi.fn(async () => undefined),
+  setModel: vi.fn(async () => undefined),
   rpc: { permissions: { setApproveAll: vi.fn(async () => ({ success: true })) } },
   };
 }
 
 const mockCreateSession = vi.fn((config: Record<string, unknown>) => {
-  void config;
-  return createSessionStub();
+  return createSessionStub(typeof config.sessionId === 'string' ? config.sessionId : undefined);
 });
 const mockResumeSession = vi.fn((sessionId: string, config: Record<string, unknown>) => {
-  void sessionId;
   void config;
-  return createSessionStub();
+  return createSessionStub(sessionId);
+});
+const mockDeleteSession = vi.fn(async (sessionId: string) => {
+  void sessionId;
 });
 
 function makeMockClient() {
@@ -55,6 +59,7 @@ function makeMockClient() {
     stop: mockStop,
     createSession: mockCreateSession,
     resumeSession: mockResumeSession,
+    deleteSession: mockDeleteSession,
   };
 }
 
@@ -140,13 +145,14 @@ describe('MindManager', () => {
       theme: 'dark',
     };
     mockCreateSession.mockImplementation((config: Record<string, unknown>) => {
-      void config;
-      return createSessionStub();
+      return createSessionStub(typeof config.sessionId === 'string' ? config.sessionId : undefined);
     });
     mockResumeSession.mockImplementation((sessionId: string, config: Record<string, unknown>) => {
-      void sessionId;
       void config;
-      return createSessionStub();
+      return createSessionStub(sessionId);
+    });
+    mockDeleteSession.mockImplementation(async (sessionId: string) => {
+      void sessionId;
     });
     vi.mocked(fs.existsSync).mockReturnValue(true);
     vi.mocked(fs.readFileSync).mockReturnValue('# TestAgent\nSome content');
@@ -249,112 +255,76 @@ describe('MindManager', () => {
       expect(manager.listMinds()[0].selectedModel).toBe('gpt-5.4');
     });
 
-    it('persists a per-mind model and resumes the active session with it', async () => {
+    it('persists a per-mind model and updates the live session in place via setModel', async () => {
       const mind = await manager.loadMind('/tmp/agents/q');
       manager.markActiveConversationHasMessages(mind.mindId, 'Existing context');
       mockCreateSession.mockClear();
       mockResumeSession.mockClear();
+      const liveSession = manager.getMind(mind.mindId)?.session as unknown as ReturnType<typeof createSessionStub>;
 
       const updated = await manager.setMindModel(mind.mindId, 'claude-opus');
 
       expect(updated?.selectedModel).toBe('claude-opus');
       expect(lastSavedConfig().minds[0].selectedModel).toBe('claude-opus');
       expect(mockCreateSession).not.toHaveBeenCalled();
-      expect(mockResumeSession).toHaveBeenCalledWith(
-        mind.activeSessionId,
-        expect.objectContaining({ model: 'claude-opus' }),
-      );
+      expect(mockResumeSession).not.toHaveBeenCalled();
+      expect(liveSession.setModel).toHaveBeenCalledWith('claude-opus');
+      expect(liveSession.disconnect).not.toHaveBeenCalled();
+      expect(manager.getMind(mind.mindId)?.session).toBe(liveSession);
       expect(manager.listConversationHistory(mind.mindId)).toHaveLength(1);
       expect(manager.listConversationHistory(mind.mindId)[0].title).toBe('Existing context');
     });
 
-    it('persists a per-mind model by recreating the same empty draft session instead of resuming it', async () => {
+    it('persists a per-mind model on an empty draft via setModel without recreating the session', async () => {
       const mind = await manager.loadMind('/tmp/agents/q');
       mockCreateSession.mockClear();
       mockResumeSession.mockClear();
+      const liveSession = manager.getMind(mind.mindId)?.session as unknown as ReturnType<typeof createSessionStub>;
 
       const updated = await manager.setMindModel(mind.mindId, 'claude-opus');
 
       expect(updated?.selectedModel).toBe('claude-opus');
       expect(mockResumeSession).not.toHaveBeenCalled();
-      expect(mockCreateSession).toHaveBeenCalledWith(expect.objectContaining({
-        model: 'claude-opus',
-        sessionId: mind.activeSessionId,
-      }));
+      expect(mockCreateSession).not.toHaveBeenCalled();
+      expect(liveSession.setModel).toHaveBeenCalledWith('claude-opus');
       expect(manager.getMind(mind.mindId)?.activeSessionId).toBe(mind.activeSessionId);
       expect(manager.listConversationHistory(mind.mindId)).toHaveLength(1);
     });
 
-    it('falls back to creating the same real conversation session when model-switch resume is stale', async () => {
-      const fallbackSession = createSessionStub();
-      const mind = await manager.loadMind('/tmp/agents/q');
+    it('serializes concurrent per-mind model changes against the live session', async () => {
+      const liveSession = manager.getMind((await manager.loadMind('/tmp/agents/q')).mindId)?.session as unknown as ReturnType<typeof createSessionStub>;
+      const mind = manager.listMinds()[0];
       manager.markActiveConversationHasMessages(mind.mindId, 'Existing context');
       mockCreateSession.mockClear();
-      mockResumeSession.mockRejectedValueOnce(new Error('Session not found: stale-session'));
-      mockCreateSession.mockResolvedValueOnce(fallbackSession);
+      mockResumeSession.mockClear();
+      liveSession.setModel.mockClear();
 
-      const updated = await manager.setMindModel(mind.mindId, 'claude-opus');
-
-      expect(updated?.selectedModel).toBe('claude-opus');
-      expect(mockResumeSession).toHaveBeenCalledWith(mind.activeSessionId, expect.objectContaining({ model: 'claude-opus' }));
-      expect(mockCreateSession).toHaveBeenCalledWith(expect.objectContaining({
-        model: 'claude-opus',
-        sessionId: mind.activeSessionId,
-      }));
-      expect(manager.getMind(mind.mindId)?.activeSessionId).toBe(mind.activeSessionId);
-      expect(manager.getMind(mind.mindId)?.session).toBe(fallbackSession);
-      expect(manager.listConversationHistory(mind.mindId)).toHaveLength(1);
-    });
-
-    it('serializes concurrent per-mind model changes', async () => {
-      const originalSession = createSessionStub();
-      const firstModelSession = createSessionStub();
-      const secondModelSession = createSessionStub();
-      let resolveFirstModelSession: (() => void) | undefined;
-      const createSession = vi.fn(() => Promise.resolve(originalSession));
-      const resumeSession = vi.fn((_sessionId: string, config: Record<string, unknown>) => {
-        if (config.model === 'model-a') {
-          return new Promise((resolve) => {
-            resolveFirstModelSession = () => resolve(firstModelSession);
-          });
-        }
-        if (config.model === 'model-b') return Promise.resolve(secondModelSession);
-        return Promise.resolve(originalSession);
+      let resolveFirst: (() => void) | undefined;
+      liveSession.setModel.mockImplementationOnce(async () => {
+        await new Promise<void>((resolve) => {
+          resolveFirst = () => resolve();
+        });
       });
-      const clientFactory = {
-        createClient: vi.fn(async () => ({ start: vi.fn(), stop: vi.fn(), createSession, resumeSession })),
-        destroyClient: vi.fn(),
-      };
-      const localManager = new MindManager(
-        clientFactory as unknown as CopilotClientFactory,
-        mockIdentityLoader as unknown as IdentityLoader,
-        mockConfigService as unknown as ConfigService,
-        mockViewDiscovery as unknown as ViewDiscovery,
-      );
+      liveSession.setModel.mockResolvedValueOnce(undefined);
 
-      const mind = await localManager.loadMind('/tmp/agents/q');
-      localManager.markActiveConversationHasMessages(mind.mindId, 'Existing context');
-      createSession.mockClear();
-      resumeSession.mockClear();
-
-      const firstChange = localManager.setMindModel(mind.mindId, 'model-a');
-      const secondChange = localManager.setMindModel(mind.mindId, 'model-b');
+      const firstChange = manager.setMindModel(mind.mindId, 'model-a');
+      const secondChange = manager.setMindModel(mind.mindId, 'model-b');
       await Promise.resolve();
       await Promise.resolve();
 
-      expect(resumeSession).toHaveBeenCalledTimes(1);
-      expect(resumeSession).toHaveBeenCalledWith(mind.activeSessionId, expect.objectContaining({ model: 'model-a' }));
+      expect(liveSession.setModel).toHaveBeenCalledTimes(1);
+      expect(liveSession.setModel).toHaveBeenCalledWith('model-a');
 
-      resolveFirstModelSession?.();
+      resolveFirst?.();
       await Promise.all([firstChange, secondChange]);
 
-      expect(createSession).not.toHaveBeenCalled();
-      expect(resumeSession).toHaveBeenCalledTimes(2);
-      expect(resumeSession).toHaveBeenLastCalledWith(mind.activeSessionId, expect.objectContaining({ model: 'model-b' }));
-      expect(localManager.getMind(mind.mindId)?.selectedModel).toBe('model-b');
-      expect(localManager.getMind(mind.mindId)?.session).toBe(secondModelSession);
-      expect(originalSession.disconnect).toHaveBeenCalledTimes(1);
-      expect(firstModelSession.disconnect).toHaveBeenCalledTimes(1);
+      expect(mockCreateSession).not.toHaveBeenCalled();
+      expect(mockResumeSession).not.toHaveBeenCalled();
+      expect(liveSession.setModel).toHaveBeenCalledTimes(2);
+      expect(liveSession.setModel).toHaveBeenLastCalledWith('model-b');
+      expect(liveSession.disconnect).not.toHaveBeenCalled();
+      expect(manager.getMind(mind.mindId)?.selectedModel).toBe('model-b');
+      expect(manager.getMind(mind.mindId)?.session).toBe(liveSession);
     });
 
     it('bootstraps managed mind capabilities before creating the SDK session', async () => {
@@ -600,17 +570,17 @@ describe('MindManager', () => {
       expect(history[0].active).toBe(true);
     });
 
-    it('falls back to creating the same real conversation session when recovery resume is stale', async () => {
-      const fallbackSession = createSessionStub();
+    it('recovery resume re-attaches under the same Chamber session id when the SDK forgot the runtime', async () => {
+      const reattachedSession = createSessionStub();
       const mind = await manager.loadMind('/tmp/agents/q');
       manager.markActiveConversationHasMessages(mind.mindId, 'Hello Q');
       mockCreateSession.mockClear();
       mockResumeSession.mockRejectedValueOnce(new Error('failed to resume session: Session not found: stale-session'));
-      mockCreateSession.mockResolvedValueOnce(fallbackSession);
+      mockCreateSession.mockResolvedValueOnce(reattachedSession);
 
       const recovered = await manager.recoverActiveConversationSession(mind.mindId);
 
-      expect(recovered).toBe(fallbackSession);
+      expect(recovered).toBe(reattachedSession);
       expect(mockResumeSession).toHaveBeenCalledWith(
         mind.activeSessionId,
         expect.objectContaining({ workingDirectory: '/tmp/agents/q' }),
@@ -628,27 +598,15 @@ describe('MindManager', () => {
       });
     });
 
-    it('replaces only the runtime session for a real active conversation', async () => {
-      const replacementSession = createSessionStub();
+    it('recovery surfaces stale errors when reattach also fails', async () => {
       const mind = await manager.loadMind('/tmp/agents/q');
       manager.markActiveConversationHasMessages(mind.mindId, 'Hello Q');
       mockCreateSession.mockClear();
-      mockCreateSession.mockResolvedValueOnce(replacementSession);
+      mockResumeSession.mockRejectedValueOnce(new Error('Session not found: stale-1'));
+      mockCreateSession.mockRejectedValueOnce(new Error('Session not found: stale-2'));
 
-      const result = await manager.replaceActiveConversationRuntimeSession(mind.mindId);
-
-      expect(result).toBe(replacementSession);
-      expect(mockCreateSession).toHaveBeenCalledWith(expect.objectContaining({
-        sessionId: mind.activeSessionId,
-      }));
+      await expect(manager.recoverActiveConversationSession(mind.mindId)).rejects.toThrow(/Session not found/);
       expect(manager.getMind(mind.mindId)?.activeSessionId).toBe(mind.activeSessionId);
-      const history = manager.listConversationHistory(mind.mindId);
-      expect(history).toHaveLength(1);
-      expect(history[0]).toMatchObject({
-        sessionId: mind.activeSessionId,
-        title: 'Hello Q',
-        active: true,
-      });
     });
 
     it('recovers an empty active draft by replacing it with a new session id', async () => {
@@ -773,6 +731,80 @@ describe('MindManager', () => {
         },
       ]);
       expect(result.conversations.find((conversation) => conversation.sessionId === activeSessionId)?.active).toBe(true);
+    });
+
+    it('deletes an inactive conversation without changing the active conversation', async () => {
+      const mind = await manager.loadMind('/tmp/agents/q');
+      manager.markActiveConversationHasMessages(mind.mindId, 'First chat');
+      await manager.startNewConversation(mind.mindId);
+      const activeSessionId = manager.getMind(mind.mindId)?.activeSessionId;
+      const inactive = manager.listConversationHistory(mind.mindId).find((conversation) => !conversation.active);
+      expect(inactive).toBeDefined();
+
+      const result = await manager.deleteConversation(mind.mindId, inactive!.sessionId);
+
+      expect(result.sessionId).toBe(activeSessionId);
+      expect(mockDeleteSession).toHaveBeenCalledWith(inactive!.sessionId);
+      expect(manager.getMind(mind.mindId)?.activeSessionId).toBe(activeSessionId);
+      expect(result.conversations).toHaveLength(1);
+      expect(result.conversations[0]).toMatchObject({
+        sessionId: activeSessionId,
+        active: true,
+      });
+    });
+
+    it('deletes the active conversation and hydrates the next most recent conversation', async () => {
+      const resumedSession = createSessionStub();
+      resumedSession.getMessages.mockResolvedValue([
+        {
+          type: 'user.message',
+          timestamp: '2026-05-05T22:00:00.000Z',
+          data: { messageId: 'u1', content: 'first chat' },
+        },
+      ]);
+      const mind = await manager.loadMind('/tmp/agents/q');
+      const firstSessionId = mind.activeSessionId;
+      manager.markActiveConversationHasMessages(mind.mindId, 'First chat');
+      await manager.startNewConversation(mind.mindId);
+      const activeDraftId = manager.getMind(mind.mindId)?.activeSessionId;
+      mockResumeSession.mockResolvedValueOnce(resumedSession);
+
+      const result = await manager.deleteConversation(mind.mindId, activeDraftId!);
+
+      expect(mockResumeSession).toHaveBeenCalledWith(firstSessionId, expect.objectContaining({ workingDirectory: '/tmp/agents/q' }));
+      expect(mockDeleteSession).toHaveBeenCalledWith(activeDraftId);
+      expect(result.sessionId).toBe(firstSessionId);
+      expect(result.messages).toEqual([
+        {
+          id: 'u1',
+          role: 'user',
+          blocks: [{ type: 'text', content: 'first chat' }],
+          timestamp: Date.parse('2026-05-05T22:00:00.000Z'),
+        },
+      ]);
+      expect(result.conversations).toHaveLength(1);
+      expect(result.conversations[0]).toMatchObject({
+        sessionId: firstSessionId,
+        title: 'First chat',
+        active: true,
+      });
+    });
+
+    it('deletes the last conversation and creates exactly one empty draft', async () => {
+      const mind = await manager.loadMind('/tmp/agents/q');
+      const originalSessionId = mind.activeSessionId;
+
+      const result = await manager.deleteConversation(mind.mindId, originalSessionId!);
+
+      expect(result.messages).toEqual([]);
+      expect(mockDeleteSession).toHaveBeenCalledWith(originalSessionId);
+      expect(result.conversations).toHaveLength(1);
+      expect(result.conversations[0].sessionId).not.toBe(originalSessionId);
+      expect(result.conversations[0]).toMatchObject({
+        active: true,
+        hasMessages: false,
+      });
+      expect(manager.getMind(mind.mindId)?.activeSessionId).toBe(result.conversations[0].sessionId);
     });
 
     it('strips Chamber-injected datetime context from hydrated user messages', async () => {

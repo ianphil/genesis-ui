@@ -117,6 +117,43 @@ test.describe('electron conversation history smoke', () => {
     await expect(restartedPage.getByText(prompt).first()).toBeVisible();
   });
 
+  test('trash deletes the active empty draft and returns to the previous conversation', async () => {
+    const paths = await launchWithMinds(9356, ['Monica']);
+    const page = await findRendererPage(app?.browser, app?.logs ?? []);
+    const mind = await addMind(page, paths.Monica);
+    await installChatSendProbe(page);
+
+    const prompt = 'History smoke keep this chat';
+    const input = page.getByPlaceholder('Message your agent… (paste an image to attach)');
+    await input.fill(prompt);
+    await input.press('Enter');
+    await page.evaluate(() => (window as typeof window & { __chamberLastChatSend?: Promise<void> }).__chamberLastChatSend);
+    await expect.poll(
+      () => page.evaluate(
+        async ({ mindId }) => {
+          const conversations = await window.electronAPI.conversationHistory.list(mindId);
+          return conversations.find((conversation) => conversation.active)?.title;
+        },
+        { mindId: mind.mindId },
+      ),
+      { timeout: 60_000 },
+    ).toBe(prompt);
+
+    const history = page.getByLabel('Conversation history');
+    await expect(history.getByRole('button', { name: 'New conversation' })).toBeEnabled({ timeout: 60_000 });
+    await history.getByRole('button', { name: 'New conversation' }).click();
+    await expect.poll(() => history.getByLabel(/Rename /).count(), { timeout: 60_000 }).toBe(2);
+    await expect(history.getByText(prompt)).toBeVisible();
+    await expect(history.getByText(/^New chat ·/)).toBeVisible();
+
+    await history.getByRole('button', { name: /^Delete New chat ·/ }).click();
+
+    await expect.poll(() => history.getByLabel(/Rename /).count(), { timeout: 60_000 }).toBe(1);
+    await expect(history.getByText(/^New chat ·/)).toHaveCount(0);
+    await expect(history.getByText(prompt)).toBeVisible();
+    await expect(page.getByText(prompt).first()).toBeVisible();
+  });
+
   async function launchWithMinds(cdpPort: number, names: string[]): Promise<Record<string, string>> {
     root = fs.mkdtempSync(path.join(os.tmpdir(), 'chamber-history-smoke-'));
     userDataPath = path.join(root, 'user-data');

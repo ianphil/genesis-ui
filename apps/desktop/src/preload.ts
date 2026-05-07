@@ -18,6 +18,7 @@ const electronAPI: ElectronAPI = {
     list: (mindId) => ipcRenderer.invoke('conversationHistory:list', mindId),
     resume: (mindId, sessionId) => ipcRenderer.invoke('conversationHistory:resume', mindId, sessionId),
     rename: (mindId, sessionId, title) => ipcRenderer.invoke('conversationHistory:rename', mindId, sessionId, title),
+    delete: (mindId, sessionId) => ipcRenderer.invoke('conversationHistory:delete', mindId, sessionId),
   },
   mind: {
     add: (mindPath) => ipcRenderer.invoke('mind:add', mindPath),

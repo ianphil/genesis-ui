@@ -10,4 +10,7 @@ export function setupConversationHistoryIPC(chatService: ChatService): void {
 
   ipcMain.handle('conversationHistory:rename', async (_event, mindId: string, sessionId: string, title: string) =>
     chatService.renameConversation(mindId, sessionId, title));
+
+  ipcMain.handle('conversationHistory:delete', async (_event, mindId: string, sessionId: string) =>
+    chatService.deleteConversation(mindId, sessionId));
 }

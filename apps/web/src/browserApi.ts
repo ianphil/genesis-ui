@@ -147,6 +147,7 @@ export function installBrowserApi(): void {
       list: async () => [],
       resume: async () => ({ sessionId: '', messages: [], conversations: [] }),
       rename: async () => [],
+      delete: async () => ({ sessionId: '', messages: [], conversations: [] }),
     },
     mind: {
       add: (mindPath): Promise<MindContext> => client.addMind(mindPath) as Promise<MindContext>,
