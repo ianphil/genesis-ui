@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.43.1 (2026-05-06)
+
+### Security
+
+- **Validate `chatroom:send` IPC arguments** - The `chatroom:send` handler now rejects non-string `message` and non-string-or-undefined `model` payloads with a `TypeError` before reaching `ChatroomService.broadcast`, closing the IPC contract against renderer-side type drift. (#51)
+
 ## v0.43.0 (2026-05-05)
 
 ### Chat
