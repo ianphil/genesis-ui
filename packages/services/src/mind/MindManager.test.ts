@@ -559,6 +559,39 @@ describe('MindManager', () => {
       expect(history[1].title).toBe('Hello Q');
     });
 
+    it('recovers a real active conversation by resuming the same session id', async () => {
+      const mind = await manager.loadMind('/tmp/agents/q');
+      manager.markActiveConversationHasMessages(mind.mindId, 'Hello Q');
+      mockCreateSession.mockClear();
+      mockResumeSession.mockClear();
+
+      await manager.recoverActiveConversationSession(mind.mindId);
+
+      expect(mockCreateSession).not.toHaveBeenCalled();
+      expect(mockResumeSession).toHaveBeenCalledWith(
+        mind.activeSessionId,
+        expect.objectContaining({ workingDirectory: '/tmp/agents/q' }),
+      );
+      expect(manager.getMind(mind.mindId)?.activeSessionId).toBe(mind.activeSessionId);
+      const history = manager.listConversationHistory(mind.mindId);
+      expect(history).toHaveLength(1);
+      expect(history[0].title).toBe('Hello Q');
+      expect(history[0].active).toBe(true);
+    });
+
+    it('recovers an empty active draft by replacing it with a new session id', async () => {
+      const mind = await manager.loadMind('/tmp/agents/q');
+      const originalSessionId = mind.activeSessionId;
+
+      await manager.recoverActiveConversationSession(mind.mindId);
+
+      const history = manager.listConversationHistory(mind.mindId);
+      expect(history).toHaveLength(1);
+      expect(history[0].sessionId).not.toBe(originalSessionId);
+      expect(history[0].title).toMatch(/^New chat · /);
+      expect(history[0].active).toBe(true);
+    });
+
     it('startNewConversation reuses the active empty conversation', async () => {
       const mind = await manager.loadMind('/tmp/agents/q');
       const activeSessionId = mind.activeSessionId;

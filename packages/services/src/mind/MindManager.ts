@@ -254,6 +254,35 @@ export class MindManager extends EventEmitter {
     return this.createNewConversationSession(mindId, context, replaceSessionId);
   }
 
+  async recoverActiveConversationSession(mindId: string): Promise<CopilotSession> {
+    const context = this.minds.get(mindId);
+    if (!context) throw new Error(`Mind ${mindId} not found`);
+    const activeConversation = this.getActiveConversationRecord(mindId);
+    if (activeConversation?.hasMessages === false) {
+      return this.recreateSession(mindId);
+    }
+    if (!context.activeSessionId) {
+      return this.createNewConversationSession(mindId, context);
+    }
+
+    const previousSession = context.session;
+    const sessionTools = this.getSessionTools(mindId, context.mindPath);
+    const recoveredSession = await this.resumeSessionForMind(
+      context.client,
+      context.activeSessionId,
+      context.mindPath,
+      context.identity.systemMessage,
+      sessionTools,
+      undefined,
+      approveAllCompat,
+      true,
+      context.selectedModel,
+    );
+    context.session = recoveredSession;
+    await previousSession?.disconnect().catch(() => { /* session already disconnected */ });
+    return recoveredSession;
+  }
+
   async startNewConversation(mindId: string): Promise<CopilotSession> {
     const context = this.minds.get(mindId);
     if (!context) throw new Error(`Mind ${mindId} not found`);
