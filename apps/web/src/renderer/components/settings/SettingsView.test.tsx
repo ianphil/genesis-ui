@@ -147,9 +147,15 @@ describe('SettingsView', () => {
     fireEvent.keyDown(trigger, { key: 'ArrowDown' });
     fireEvent.click(await screen.findByRole('option', { name: '+ Add Account' }));
 
+    // Add Account opens the modal which subscribes BEFORE calling startLogin —
+    // assert via the modal's dialog role and the eventual startLogin invocation.
+    await waitFor(() => {
+      expect(screen.getByRole('dialog', { name: /add a github account/i })).toBeTruthy();
+    });
     await waitFor(() => {
       expect(api.auth.startLogin).toHaveBeenCalled();
     });
+    expect(api.auth.onProgress).toHaveBeenCalled();
   });
 
   it('refreshes account state after auth:accountSwitched', async () => {
@@ -172,6 +178,31 @@ describe('SettingsView', () => {
 
     await waitFor(() => {
       expect(screen.getByRole('combobox').textContent).toContain('bob');
+    });
+  });
+
+  it('refreshes account state after a freshly added login broadcasts auth:accountSwitched', async () => {
+    let onAccountSwitched: (() => void) | undefined;
+    (api.auth.getStatus as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ authenticated: true, login: 'alice' })
+      .mockResolvedValueOnce({ authenticated: true, login: 'newuser' });
+    (api.auth.listAccounts as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce([{ login: 'alice' }])
+      .mockResolvedValueOnce([{ login: 'alice' }, { login: 'newuser' }]);
+    (api.auth.onAccountSwitched as ReturnType<typeof vi.fn>).mockImplementation((callback: () => void) => {
+      onAccountSwitched = callback;
+      return vi.fn();
+    });
+
+    render(<SettingsView />);
+
+    await screen.findByText('alice');
+    // Simulate the IPC broadcast that fires after AuthService stores credentials
+    // for the new account — the dropdown must reflect the new account without a restart.
+    onAccountSwitched!();
+
+    await waitFor(() => {
+      expect(screen.getByRole('combobox').textContent).toContain('newuser');
     });
   });
 

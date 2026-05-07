@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.43.5 (2026-05-07)
+
+### Fixes
+
+- **Display device code when adding an account from Settings** - The Settings "+ Add Account" flow now opens a modal that subscribes to `auth:progress` before invoking `auth:startLogin`, so the GitHub device code is rendered alongside the static `github.com/login/device` instruction (mirrors the first-run `AuthScreen` UX). The modal auto-dismisses on `step:'authenticated'`, surfaces actionable errors with a Try Again affordance, and the Cancel button calls a new `auth:cancelLogin` IPC that aborts the in-flight polling loop via `AuthService.abort()`. Users can complete the second-account flow without logging out and restarting Chamber. (#214)
+
+### Testing
+
+- **E2E hooks for the device-code modal** - `apps/desktop/src/main/ipc/auth.ts` registers `e2e:auth:emit-progress` and `e2e:auth:complete-login` handlers when `CHAMBER_E2E=1`, and the auth:startLogin path short-circuits to a deterministic stub in that mode. The new Playwright spec `tests/e2e/electron/settings-add-account.spec.ts` drives the full Settings → Add Account → injected device-code → completion / cancel lifecycle without touching real GitHub network or external browser launch. Triple-gated (env var + preload sync IPC + optional chaining) so the hooks remain absent in production builds. (#214)
+
 ## v0.43.4 (2026-05-07)
 
 ### Chatroom
