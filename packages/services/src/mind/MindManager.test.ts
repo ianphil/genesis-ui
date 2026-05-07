@@ -291,6 +291,21 @@ describe('MindManager', () => {
       expect(manager.listConversationHistory(mind.mindId)).toHaveLength(1);
     });
 
+    it('persists the new selectedModel before invoking setModel so stale recovery uses the requested model', async () => {
+      const mind = await manager.loadMind('/tmp/agents/q');
+      manager.markActiveConversationHasMessages(mind.mindId, 'Existing context');
+      const liveSession = manager.getMind(mind.mindId)?.session as unknown as ReturnType<typeof createSessionStub>;
+      let observedDuringFailure: string | undefined;
+      liveSession.setModel.mockImplementationOnce(async () => {
+        observedDuringFailure = manager.getMind(mind.mindId)?.selectedModel;
+        throw new Error('Session not found: stale-runtime');
+      });
+
+      await expect(manager.setMindModel(mind.mindId, 'claude-opus')).rejects.toThrow(/Session not found/);
+      expect(observedDuringFailure).toBe('claude-opus');
+      expect(manager.getMind(mind.mindId)?.selectedModel).toBe('claude-opus');
+    });
+
     it('serializes concurrent per-mind model changes against the live session', async () => {
       const liveSession = manager.getMind((await manager.loadMind('/tmp/agents/q')).mindId)?.session as unknown as ReturnType<typeof createSessionStub>;
       const mind = manager.listMinds()[0];

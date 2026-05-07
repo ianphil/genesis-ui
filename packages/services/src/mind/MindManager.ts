@@ -519,12 +519,14 @@ export class MindManager extends EventEmitter {
 
     if (context.selectedModel === selectedModel) return this.toExternalContext(context);
 
+    // Persist intent before applying so stale-recovery on send uses the new model.
+    context.selectedModel = selectedModel;
+
     // SDK preserves conversation history across in-place model switches; no resume/recreate needed.
     if (context.session && selectedModel) {
       await context.session.setModel(selectedModel);
     }
 
-    context.selectedModel = selectedModel;
     const existingRecord = this.knownMindRecords.get(mindId);
     this.knownMindRecords.set(mindId, {
       id: mindId,

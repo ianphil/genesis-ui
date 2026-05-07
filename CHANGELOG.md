@@ -5,8 +5,15 @@
 ### Chat
 
 - **Harden conversation history lifecycle** - Resumed chats strip Chamber-injected datetime metadata, empty drafts are reused instead of duplicated, first prompts title persisted conversations, and model switching is serialized through the backend-confirmed session path. (#216)
-- **Expand lifecycle smoke coverage** - SDK smoke now verifies repeated named-session resume and cross-model context preservation, while Electron smokes cover empty-draft reuse, first-prompt title persistence, and pending model-switch disabled states. (#216)
+- **Switch models in place via the SDK** - Model changes now call `session.setModel()` on the live SDK session, preserving conversation history. Removes the resume/recreate cycle that produced silent context loss after a mid-conversation model switch. (#216)
+- **Bound stale-session recovery** - `ChatService` reattaches once via `recoverActiveConversationSession` and surfaces the error if the SDK still cannot find the session, instead of silently minting an empty replacement runtime. `MindManager.recoverActiveConversationSession` resumes by Chamber sessionId and falls back to `createSession({ sessionId })` under the same id. (#216)
+- **Delete conversations from history** - History rows now expose a trash icon next to the rename pencil. Deleting an inactive conversation leaves the active chat untouched; deleting the active conversation hydrates the next most recent; deleting the last creates one empty draft. Confirmation only triggers for conversations with messages. (#216)
+- **Expand lifecycle smoke coverage** - SDK smoke verifies repeated named-session resume and cross-model context preservation; Electron smokes cover empty-draft reuse, first-prompt title persistence, pending model-switch disabled states, model-switch context recall via a sentinel token, and the trash-delete flow. (#216)
 - **Align packaged Copilot runtime** - Chamber now pins the packaged Copilot CLI runtime to `1.0.44-0`, matching the binary version validated by the packaging sandbox. (#216)
+
+### Tooling
+
+- **Add canvas extension scaffolding** - New `.github/extensions/canvas/` extension exposes a local canvas server and tools for rich visual output during agent sessions. (#216)
 
 ## v0.43.4 (2026-05-07)
 

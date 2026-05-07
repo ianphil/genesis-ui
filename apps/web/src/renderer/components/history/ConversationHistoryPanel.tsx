@@ -157,8 +157,17 @@ export function ConversationHistoryPanel() {
     setRenamingId(null);
     try {
       const result = await window.electronAPI.conversationHistory.delete(activeMindId, conversation.sessionId);
-      applyResumeResult(activeMindId, result);
-      dispatch({ type: 'SET_ACTIVE_VIEW', payload: 'chat' });
+      if (conversation.active) {
+        applyResumeResult(activeMindId, result);
+        dispatch({ type: 'SET_ACTIVE_VIEW', payload: 'chat' });
+      } else {
+        // Inactive delete: don't replace the active conversation's messages — the SDK→ChatMessage
+        // mapping is text-only and would drop tool-calls/reasoning/images from the live chat UI.
+        dispatch({
+          type: 'SET_CONVERSATION_HISTORY',
+          payload: { mindId: activeMindId, conversations: result.conversations },
+        });
+      }
     } catch (error) {
       log.error('Failed to delete conversation:', error);
     } finally {
