@@ -1,9 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAppState, useAppDispatch } from '../../lib/store';
 import { useChatStreaming } from '../../hooks/useChatStreaming';
 import { MessageList } from './MessageList';
 import { ChatInput } from './ChatInput';
 import { WelcomeScreen } from './WelcomeScreen';
+import { Logger } from '../../lib/logger';
+
+const log = Logger.create('ChatPanel');
 
 export function ChatPanel() {
   const { messagesByMind, activeMindId, minds, availableModels, selectedModel } = useAppState();
@@ -11,6 +14,23 @@ export function ChatPanel() {
   const connected = minds.length > 0;
   const dispatch = useAppDispatch();
   const { sendMessage, stopStreaming, isStreaming } = useChatStreaming();
+  const [isModelSwitching, setIsModelSwitching] = useState(false);
+
+  const handleModelChange = (model: string) => {
+    if (!activeMindId || isModelSwitching) return;
+    setIsModelSwitching(true);
+    window.electronAPI.mind.setModel(activeMindId, model)
+      .then((updatedMind) => {
+        if (updatedMind) dispatch({ type: 'SET_MINDS', payload: minds.map((mind) => mind.mindId === updatedMind.mindId ? updatedMind : mind) });
+        dispatch({ type: 'SET_SELECTED_MODEL', payload: model });
+      })
+      .catch((error: unknown) => {
+        log.error('Failed to switch model:', error);
+      })
+      .finally(() => {
+        setIsModelSwitching(false);
+      });
+  };
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
@@ -27,13 +47,11 @@ export function ChatPanel() {
         onSend={sendMessage}
         onStop={stopStreaming}
         isStreaming={isStreaming}
-        disabled={!connected}
+        disabled={!connected || isModelSwitching}
         availableModels={availableModels}
         selectedModel={selectedModel}
-        onModelChange={(model) => {
-          if (activeMindId) void window.electronAPI.mind.setModel(activeMindId, model);
-          dispatch({ type: 'SET_SELECTED_MODEL', payload: model });
-        }}
+        onModelChange={handleModelChange}
+        placeholder={isModelSwitching ? 'Switching model…' : undefined}
       />
     </div>
   );

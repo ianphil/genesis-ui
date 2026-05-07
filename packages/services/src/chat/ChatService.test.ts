@@ -27,6 +27,8 @@ const mockMindManager = {
     return undefined;
   }),
   recreateSession: vi.fn(),
+  startNewConversation: vi.fn(),
+  markActiveConversationHasMessages: vi.fn(),
   listConversationHistory: vi.fn(() => []),
   resumeConversation: vi.fn(async () => ({ sessionId: 'session-1', messages: [], conversations: [] })),
   renameConversation: vi.fn(() => []),
@@ -64,6 +66,7 @@ describe('ChatService', () => {
       expect(mockSession.send).toHaveBeenCalledWith({
         prompt: '<current_datetime>\n2026-05-05T15:37:12.065Z\n</current_datetime>\n<timezone>\nAmerica/New_York\n</timezone>\n\nhello',
       });
+      expect(mockMindManager.markActiveConversationHasMessages).toHaveBeenCalledWith('valid-mind', 'hello');
       expect(emit).toHaveBeenCalledWith({ type: 'done' });
     });
 
@@ -130,9 +133,9 @@ describe('ChatService', () => {
   });
 
   describe('newConversation', () => {
-    it('delegates to mindManager.recreateSession', async () => {
+    it('delegates to mindManager.startNewConversation', async () => {
       await svc.newConversation('valid-mind');
-      expect(mockMindManager.recreateSession).toHaveBeenCalledWith('valid-mind');
+      expect(mockMindManager.startNewConversation).toHaveBeenCalledWith('valid-mind');
     });
 
     it('rejects conversation switches while a message is streaming', async () => {

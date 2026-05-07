@@ -54,6 +54,7 @@ export class ChatService {
           const session = model ? await this.mindManager.setMindModel(mindId, model) : null;
           const currentSession = session ? this.mindManager.getMind(mindId)?.session : context.session;
           if (!currentSession) throw new Error(`Mind ${mindId} not found or has no session`);
+          this.mindManager.markActiveConversationHasMessages(mindId, prompt);
           await this.streamTurn(currentSession, prompt, abortController, emit, attachments);
         } catch (err) {
           if (abortController.signal.aborted) return;
@@ -212,7 +213,7 @@ export class ChatService {
 
   async newConversation(mindId: string): Promise<ConversationResumeResult> {
     this.assertCanSwitchConversation(mindId);
-    await this.mindManager.recreateSession(mindId);
+    await this.mindManager.startNewConversation(mindId);
     return {
       sessionId: this.mindManager.getMind(mindId)?.activeSessionId ?? '',
       messages: [],

@@ -23,6 +23,13 @@ export function injectCurrentDateTimeContext(prompt: string, context: CurrentDat
   return `<current_datetime>\n${context.currentDateTime}\n</current_datetime>\n<timezone>\n${context.timezone}\n</timezone>\n\n${prompt}`;
 }
 
+export function stripInjectedCurrentDateTimeContext(prompt: string): string {
+  return prompt.replace(
+    /^<current_datetime>\r?\n[\s\S]*?\r?\n<\/current_datetime>\r?\n<timezone>\r?\n[\s\S]*?\r?\n<\/timezone>\r?\n(?:\r?\n){1,2}/,
+    '',
+  );
+}
+
 function escapeXml(value: string): string {
   return value
     .replace(/&/g, '&amp;')

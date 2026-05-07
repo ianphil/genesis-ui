@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getCurrentDateTimeContext, injectCurrentDateTimeContext } from './currentDateTimeContext';
+import { getCurrentDateTimeContext, injectCurrentDateTimeContext, stripInjectedCurrentDateTimeContext } from './currentDateTimeContext';
 
 describe('currentDateTimeContext', () => {
   it('formats the current datetime as ISO with the local timezone name', () => {
@@ -21,5 +21,15 @@ describe('currentDateTimeContext', () => {
       currentDateTime: '2026-05-05T15:37:12.065Z',
       timezone: 'America/New_York',
     })).toBe('<agent-message role="user">\n  <current_datetime>2026-05-05T15:37:12.065Z</current_datetime>\n  <timezone>America/New_York</timezone>\n  <content>hello</content>\n</agent-message>');
+  });
+
+  it('strips injected datetime context from persisted user prompts', () => {
+    const hydrated = '<current_datetime>\n2026-05-07T03:19:51.220Z\n</current_datetime>\n<timezone>\nAmerica/New_York\n</timezone>\n\nyou should add another comment to the gh issue 125';
+
+    expect(stripInjectedCurrentDateTimeContext(hydrated)).toBe('you should add another comment to the gh issue 125');
+  });
+
+  it('leaves ordinary prompts untouched when no injected datetime prefix exists', () => {
+    expect(stripInjectedCurrentDateTimeContext('hello Q')).toBe('hello Q');
   });
 });

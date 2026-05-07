@@ -15,7 +15,7 @@ import { generateMindId } from './generateMindId';
 import type { CopilotClientFactory } from '../sdk/CopilotClientFactory';
 import { approveAllCompat } from '../sdk/approveAllCompat';
 import type { IdentityLoader } from '../chat/IdentityLoader';
-import { getCurrentDateTimeContext, injectCurrentDateTimeContext } from '../chat/currentDateTimeContext';
+import { getCurrentDateTimeContext, injectCurrentDateTimeContext, stripInjectedCurrentDateTimeContext } from '../chat/currentDateTimeContext';
 import type { ChamberToolProvider } from '../chamberTools';
 import type { ConfigService } from '../config/ConfigService';
 import type { ViewDiscovery } from '../lens/ViewDiscovery';
@@ -247,6 +247,45 @@ export class MindManager extends EventEmitter {
     const context = this.minds.get(mindId);
     if (!context) throw new Error(`Mind ${mindId} not found`);
 
+    return this.createNewConversationSession(mindId, context);
+  }
+
+  async startNewConversation(mindId: string): Promise<CopilotSession> {
+    const context = this.minds.get(mindId);
+    if (!context) throw new Error(`Mind ${mindId} not found`);
+    const activeConversation = this.getActiveConversationRecord(mindId);
+    if (activeConversation?.hasMessages === false && context.session) {
+      return context.session;
+    }
+
+    return this.createNewConversationSession(mindId, context);
+  }
+
+  markActiveConversationHasMessages(mindId: string, prompt: string): void {
+    const context = this.minds.get(mindId);
+    if (!context?.activeSessionId) return;
+    const record = this.knownMindRecords.get(mindId);
+    if (!record?.conversations) return;
+    const updatedAt = new Date().toISOString();
+    const title = this.conversationTitleFromPrompt(prompt);
+    this.knownMindRecords.set(mindId, {
+      ...record,
+      activeSessionId: context.activeSessionId,
+      conversations: record.conversations.map((conversation) => {
+        if (conversation.sessionId !== context.activeSessionId) return conversation;
+        const shouldReplaceTitle = !conversation.title || conversation.title.startsWith('New chat · ');
+        return {
+          ...conversation,
+          ...(shouldReplaceTitle ? { title } : {}),
+          hasMessages: true,
+          updatedAt,
+        };
+      }),
+    });
+    this.persistConfig();
+  }
+
+  private async createNewConversationSession(mindId: string, context: InternalMindContext): Promise<CopilotSession> {
     const conversation = this.createConversationRecord(mindId);
     const previousSession = context.session;
     const sessionTools = this.getSessionTools(mindId, context.mindPath);
@@ -663,7 +702,10 @@ export class MindManager extends EventEmitter {
     const data = typeof record.data === 'object' && record.data !== null
       ? record.data as Record<string, unknown>
       : {};
-    const content = this.extractMessageContent(data);
+    const rawContent = this.extractMessageContent(data);
+    const content = record.type === 'user.message' && rawContent
+      ? stripInjectedCurrentDateTimeContext(rawContent)
+      : rawContent;
     if (!content) return [];
     const timestamp = typeof record.timestamp === 'number'
       ? record.timestamp
@@ -751,6 +793,7 @@ export class MindManager extends EventEmitter {
       createdAt: now,
       updatedAt: now,
       kind: 'chat',
+      hasMessages: false,
     };
   }
 
@@ -766,6 +809,7 @@ export class MindManager extends EventEmitter {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         kind: 'chat',
+        hasMessages: false,
       };
   }
 
@@ -798,6 +842,17 @@ export class MindManager extends EventEmitter {
 
   private defaultConversationTitle(conversation: ChamberConversationRecord): string {
     return `Chat · ${new Date(conversation.createdAt).toLocaleString()}`;
+  }
+
+  private getActiveConversationRecord(mindId: string): ChamberConversationRecord | undefined {
+    const context = this.minds.get(mindId);
+    const activeSessionId = context?.activeSessionId ?? this.knownMindRecords.get(mindId)?.activeSessionId;
+    return this.knownMindRecords.get(mindId)?.conversations?.find((conversation) => conversation.sessionId === activeSessionId);
+  }
+
+  private conversationTitleFromPrompt(prompt: string): string {
+    const firstLine = prompt.trim().split(/\r?\n/).find((line) => line.trim().length > 0)?.trim() ?? 'New chat';
+    return firstLine.length > 80 ? `${firstLine.slice(0, 77)}...` : firstLine;
   }
 
   private getPersistedActiveMindId(): string | null {

@@ -86,8 +86,20 @@ async function assertNamedSessionResume({ sdk, cliPath, mindPath, logDir }) {
       '--allow-all-urls',
     ],
   });
+  const thirdClient = new sdk.CopilotClient({
+    cliPath,
+    cwd: mindPath,
+    logLevel: 'all',
+    cliArgs: [
+      '--log-dir', logDir,
+      '--allow-all-tools',
+      '--allow-all-paths',
+      '--allow-all-urls',
+    ],
+  });
   let firstSession;
   let resumedSession;
+  let resumedAgainSession;
   try {
     await firstClient.start();
     firstSession = await firstClient.createSession({
@@ -119,12 +131,64 @@ async function assertNamedSessionResume({ sdk, cliPath, mindPath, logDir }) {
     if (!response.includes('chamber-resume-smoke')) {
       throw new Error(`Named SDK session did not continue prior context: ${response}`);
     }
+    await resumedSession.disconnect();
+    resumedSession = undefined;
+    await secondClient.stop();
+
+    await thirdClient.start();
+    resumedAgainSession = await thirdClient.resumeSession(sessionId, {
+      streaming: true,
+      workingDirectory: mindPath,
+      onPermissionRequest: async () => ({ kind: 'allow' }),
+      onUserInputRequest: async () => ({ answer: 'Proceed.', wasFreeform: true }),
+    });
+    await resumedAgainSession.rpc.permissions.setApproveAll({ enabled: true });
+    const secondResumeMessages = await resumedAgainSession.getMessages();
+    if (!secondResumeMessages.some((event) => JSON.stringify(event).includes('chamber-resume-smoke'))) {
+      throw new Error('Named SDK session second resume did not restore prior messages.');
+    }
+    await resumedAgainSession.disconnect();
+    resumedAgainSession = undefined;
+
+    await assertModelResumePreservesContext({ client: thirdClient, sessionId, mindPath });
   } finally {
+    await resumedAgainSession?.disconnect().catch(() => undefined);
     await resumedSession?.disconnect().catch(() => undefined);
     await firstSession?.disconnect().catch(() => undefined);
-    await secondClient.deleteSession?.(sessionId).catch(() => undefined);
+    await thirdClient.deleteSession?.(sessionId).catch(() => undefined);
+    await thirdClient.stop().catch(() => undefined);
     await secondClient.stop().catch(() => undefined);
     await firstClient.stop().catch(() => undefined);
+  }
+}
+
+async function assertModelResumePreservesContext({ client, sessionId, mindPath }) {
+  const models = await client.listModels();
+  if (!Array.isArray(models) || models.length < 2) {
+    console.warn('SDK smoke skipped cross-model resume check: fewer than two models available.');
+    return;
+  }
+  const model = models[1].id;
+  let modelSession;
+  try {
+    modelSession = await client.resumeSession(sessionId, {
+      streaming: true,
+      workingDirectory: mindPath,
+      model,
+      onPermissionRequest: async () => ({ kind: 'allow' }),
+      onUserInputRequest: async () => ({ answer: 'Proceed.', wasFreeform: true }),
+    });
+    await modelSession.rpc.permissions.setApproveAll({ enabled: true });
+    const messages = await modelSession.getMessages();
+    if (!messages.some((event) => JSON.stringify(event).includes('chamber-resume-smoke'))) {
+      throw new Error(`Named SDK session resumed with model ${model} did not restore prior messages.`);
+    }
+    const response = await sendAndWaitForResponse(modelSession, 'What exact token did I ask you to remember?');
+    if (!response.includes('chamber-resume-smoke')) {
+      throw new Error(`Named SDK session resumed with model ${model} did not continue prior context: ${response}`);
+    }
+  } finally {
+    await modelSession?.disconnect().catch(() => undefined);
   }
 }
 

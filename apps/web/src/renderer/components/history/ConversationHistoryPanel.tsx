@@ -12,7 +12,9 @@ export function ConversationHistoryPanel() {
   const dispatch = useAppDispatch();
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  const [isCreatingConversation, setIsCreatingConversation] = useState(false);
   const renameInputRef = useRef<HTMLInputElement>(null);
+  const creatingConversationRef = useRef(false);
 
   const conversations = useMemo(() => {
     if (!activeMindId) return [];
@@ -36,6 +38,7 @@ export function ConversationHistoryPanel() {
 
   useEffect(() => {
     if (!activeMindId) return;
+    if (creatingConversationRef.current) return;
     let cancelled = false;
     window.electronAPI.conversationHistory.list(activeMindId).then((history) => {
       if (cancelled) return;
@@ -93,12 +96,21 @@ export function ConversationHistoryPanel() {
   };
 
   const startNewConversation = async () => {
-    if (!activeMindId || isActiveMindStreaming) return;
-    const result = await window.electronAPI.chat.newConversation(activeMindId);
-    await window.electronAPI.chatroom.clear();
-    dispatch({ type: 'NEW_CONVERSATION' });
-    applyResumeResult(activeMindId, result);
-    dispatch({ type: 'SET_ACTIVE_VIEW', payload: 'chat' });
+    if (!activeMindId || isActiveMindStreaming || isCreatingConversation) return;
+    creatingConversationRef.current = true;
+    setIsCreatingConversation(true);
+    try {
+      const result = await window.electronAPI.chat.newConversation(activeMindId);
+      await window.electronAPI.chatroom.clear();
+      dispatch({ type: 'NEW_CONVERSATION' });
+      applyResumeResult(activeMindId, result);
+      dispatch({ type: 'SET_ACTIVE_VIEW', payload: 'chat' });
+    } catch (error) {
+      log.error('Failed to start new conversation:', error);
+    } finally {
+      creatingConversationRef.current = false;
+      setIsCreatingConversation(false);
+    }
   };
 
   return (
@@ -109,7 +121,7 @@ export function ConversationHistoryPanel() {
         </span>
         <button
           type="button"
-          disabled={!activeMindId || isActiveMindStreaming}
+          disabled={!activeMindId || isActiveMindStreaming || isCreatingConversation}
           onClick={() => { void startNewConversation(); }}
           className="h-7 w-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent/50 flex items-center justify-center disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
           aria-label="New conversation"

@@ -466,7 +466,7 @@ export function ChatInput({ onSend, onStop, isStreaming, disabled, availableMode
                 <Select
                   value={selectedModel ?? undefined}
                   onValueChange={onModelChange}
-                  disabled={isStreaming}
+                  disabled={isStreaming || disabled}
                 >
                   <SelectTrigger className="h-6 w-auto gap-1.5 border-none bg-transparent px-0 text-xs text-muted-foreground shadow-none hover:text-foreground focus:ring-0">
                     <SelectValue placeholder="Select model" />

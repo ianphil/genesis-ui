@@ -111,6 +111,7 @@ export interface ChamberConversationRecord {
   createdAt: string;
   updatedAt: string;
   kind: ChamberConversationKind;
+  hasMessages?: boolean;
 }
 
 export interface ConversationSummary {

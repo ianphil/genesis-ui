@@ -185,6 +185,7 @@ describe('MindManager', () => {
         conversations: [expect.objectContaining({
           sessionId: sessionConfig.sessionId,
           kind: 'chat',
+          hasMessages: false,
         })],
       });
     });
@@ -522,6 +523,31 @@ describe('MindManager', () => {
       expect(manager.listConversationHistory(mind.mindId)[0].active).toBe(true);
     });
 
+    it('startNewConversation reuses the active empty conversation', async () => {
+      const mind = await manager.loadMind('/tmp/agents/q');
+      const activeSessionId = mind.activeSessionId;
+
+      await manager.startNewConversation(mind.mindId);
+
+      expect(mockCreateSession).toHaveBeenCalledTimes(1);
+      expect(manager.getMind(mind.mindId)?.activeSessionId).toBe(activeSessionId);
+      expect(manager.listConversationHistory(mind.mindId)).toHaveLength(1);
+    });
+
+    it('startNewConversation creates one new active conversation after the current conversation has messages', async () => {
+      const mind = await manager.loadMind('/tmp/agents/q');
+      manager.markActiveConversationHasMessages(mind.mindId, 'Hello Q');
+
+      await manager.startNewConversation(mind.mindId);
+
+      expect(mockCreateSession).toHaveBeenCalledTimes(2);
+      const history = manager.listConversationHistory(mind.mindId);
+      expect(history).toHaveLength(2);
+      expect(history[0].active).toBe(true);
+      expect(history[0].title).toMatch(/^New chat · /);
+      expect(history[1].title).toBe('Hello Q');
+    });
+
     it('throws for non-existent mind', async () => {
       await expect(manager.recreateSession('nonexistent')).rejects.toThrow();
     });
@@ -569,6 +595,32 @@ describe('MindManager', () => {
         },
       ]);
       expect(result.conversations.find((conversation) => conversation.sessionId === target.sessionId)?.active).toBe(true);
+    });
+
+    it('strips Chamber-injected datetime context from hydrated user messages', async () => {
+      const resumedSession = createSessionStub();
+      resumedSession.getMessages.mockResolvedValue([
+        {
+          type: 'user.message',
+          timestamp: '2026-05-05T22:00:00.000Z',
+          data: {
+            messageId: 'u1',
+            content: '<current_datetime>\n2026-05-07T03:19:51.220Z\n</current_datetime>\n<timezone>\nAmerica/New_York\n</timezone>\n\nyou should add another comment to the gh issue 125',
+          },
+        },
+      ]);
+      mockResumeSession.mockResolvedValueOnce(resumedSession);
+      const mind = await manager.loadMind('/tmp/agents/q');
+      manager.markActiveConversationHasMessages(mind.mindId, 'Existing chat');
+      await manager.startNewConversation(mind.mindId);
+      const target = manager.listConversationHistory(mind.mindId)[1];
+
+      const result = await manager.resumeConversation(mind.mindId, target.sessionId);
+
+      expect(result.messages[0]).toMatchObject({
+        role: 'user',
+        blocks: [{ type: 'text', content: 'you should add another comment to the gh issue 125' }],
+      });
     });
 
     it('renames only Chamber-owned conversation metadata', async () => {
