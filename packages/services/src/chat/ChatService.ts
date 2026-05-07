@@ -54,8 +54,9 @@ export class ChatService {
           const session = model ? await this.mindManager.setMindModel(mindId, model) : null;
           const currentSession = session ? this.mindManager.getMind(mindId)?.session : context.session;
           if (!currentSession) throw new Error(`Mind ${mindId} not found or has no session`);
-          this.mindManager.markActiveConversationHasMessages(mindId, prompt);
-          await this.streamTurn(currentSession, prompt, abortController, emit, attachments);
+          await this.streamTurn(currentSession, prompt, abortController, emit, attachments, () => {
+            this.mindManager.markActiveConversationHasMessages(mindId, prompt);
+          });
         } catch (err) {
           if (abortController.signal.aborted) return;
           if (!isStaleSessionError(err)) throw err;
@@ -63,8 +64,9 @@ export class ChatService {
           // Stale session — recreate and retry once
           emit({ type: 'reconnecting' });
           const freshSession = await this.mindManager.recreateSession(mindId);
-          this.mindManager.markActiveConversationHasMessages(mindId, prompt);
-          await this.streamTurn(freshSession, prompt, abortController, emit, attachments);
+          await this.streamTurn(freshSession, prompt, abortController, emit, attachments, () => {
+            this.mindManager.markActiveConversationHasMessages(mindId, prompt);
+          });
         }
       } catch (err) {
         if (abortController.signal.aborted) return;
@@ -82,6 +84,7 @@ export class ChatService {
     abortController: AbortController,
     emit: (event: ChatEvent) => void,
     attachments?: ChatImageAttachment[],
+    onSendAccepted?: () => void,
   ): Promise<void>{
     const unsubs: (() => void)[] = [];
     const guard = (fn: () => void) => { if (!abortController.signal.aborted) fn(); };
@@ -185,6 +188,7 @@ export class ChatService {
         }));
         const promptWithDateTime = injectCurrentDateTimeContext(prompt, this.dateTimeContextProvider());
         await Promise.race([session.send(sdkAttachments ? { prompt: promptWithDateTime, attachments: sdkAttachments } : { prompt: promptWithDateTime }), sendTimeout]);
+        guard(() => onSendAccepted?.());
       } finally {
         if (sendTimerId) clearTimeout(sendTimerId);
       }
@@ -210,6 +214,10 @@ export class ChatService {
     if (context?.session) {
       await context.session.abort().catch(() => { /* noop */ });
     }
+  }
+
+  async setMindModel(mindId: string, model: string | null): Promise<Awaited<ReturnType<MindManager['setMindModel']>>> {
+    return this.turnQueue.enqueue(mindId, () => this.mindManager.setMindModel(mindId, model));
   }
 
   async newConversation(mindId: string): Promise<ConversationResumeResult> {

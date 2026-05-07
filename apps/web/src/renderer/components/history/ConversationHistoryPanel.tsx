@@ -102,7 +102,7 @@ export function ConversationHistoryPanel() {
     try {
       const result = await window.electronAPI.chat.newConversation(activeMindId);
       await window.electronAPI.chatroom.clear();
-      dispatch({ type: 'NEW_CONVERSATION' });
+      dispatch({ type: 'NEW_CONVERSATION', payload: { mindId: activeMindId } });
       applyResumeResult(activeMindId, result);
       dispatch({ type: 'SET_ACTIVE_VIEW', payload: 'chat' });
     } catch (error) {

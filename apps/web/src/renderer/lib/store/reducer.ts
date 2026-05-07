@@ -360,15 +360,16 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           : state.messagesByMind,
       };
 
-    case 'NEW_CONVERSATION':
+    case 'NEW_CONVERSATION': {
+      const conversationMindId = action.payload?.mindId ?? state.activeMindId;
       return {
         ...state,
-        messagesByMind: state.activeMindId
-          ? { ...state.messagesByMind, [state.activeMindId]: [] }
+        messagesByMind: conversationMindId
+          ? { ...state.messagesByMind, [conversationMindId]: [] }
           : state.messagesByMind,
-        isStreaming: false,
-        streamingByMind: state.activeMindId
-          ? { ...state.streamingByMind, [state.activeMindId]: false }
+        isStreaming: conversationMindId === state.activeMindId ? false : state.isStreaming,
+        streamingByMind: conversationMindId
+          ? { ...state.streamingByMind, [conversationMindId]: false }
           : state.streamingByMind,
         chatroomMessages: [],
         chatroomStreamingByMind: {},
@@ -376,6 +377,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         chatroomTaskLedger: [],
         chatroomMetrics: null,
       };
+    }
 
     case 'A2A_INCOMING': {
       const { targetMindId, message, replyMessageId } = action.payload;

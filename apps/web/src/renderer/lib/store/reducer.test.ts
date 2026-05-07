@@ -443,6 +443,27 @@ describe('appReducer', () => {
     expect(state.isStreaming).toBe(false);
   });
 
+  it('NEW_CONVERSATION can reset a specific mind without clearing the active mind', () => {
+    const prev = {
+      ...withActiveMind,
+      activeMindId: 'other-mind',
+      messagesByMind: {
+        [mindId]: [makeMessage([makeTextBlock('target')])],
+        'other-mind': [makeMessage([makeTextBlock('active')])],
+      },
+      streamingByMind: { [mindId]: true, 'other-mind': true },
+      isStreaming: true,
+    };
+
+    const state = appReducer(prev, { type: 'NEW_CONVERSATION', payload: { mindId } });
+
+    expect(state.messagesByMind[mindId]).toEqual([]);
+    expect(state.messagesByMind['other-mind']).toEqual(prev.messagesByMind['other-mind']);
+    expect(state.streamingByMind[mindId]).toBe(false);
+    expect(state.streamingByMind['other-mind']).toBe(true);
+    expect(state.isStreaming).toBe(true);
+  });
+
   it('unknown action returns state unchanged', () => {
     const state = appReducer(initialState, { type: 'BOGUS' } as unknown as AppAction);
     expect(state).toBe(initialState);

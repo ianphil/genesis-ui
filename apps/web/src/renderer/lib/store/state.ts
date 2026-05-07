@@ -57,7 +57,7 @@ export type AppAction =
   | { type: 'LOGGED_OUT' }
   | { type: 'MINDS_CHECKED' }
   | { type: 'CLEAR_MESSAGES' }
-  | { type: 'NEW_CONVERSATION' }
+  | { type: 'NEW_CONVERSATION'; payload?: { mindId: string } }
   | { type: 'A2A_INCOMING'; payload: { targetMindId: string; message: Message; replyMessageId: string } }
   | { type: 'TASK_STATUS_UPDATE'; payload: TaskStatusUpdateEvent & { targetMindId: string } }
   | { type: 'TASK_ARTIFACT_UPDATE'; payload: TaskArtifactUpdateEvent & { targetMindId: string } }

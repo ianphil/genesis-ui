@@ -264,6 +264,8 @@ describe('MindManager', () => {
         mind.activeSessionId,
         expect.objectContaining({ model: 'claude-opus' }),
       );
+      expect(manager.listConversationHistory(mind.mindId)).toHaveLength(1);
+      expect(manager.listConversationHistory(mind.mindId)[0].title).toBe('Existing context');
     });
 
     it('persists a per-mind model by recreating the same empty draft session instead of resuming it', async () => {
@@ -280,6 +282,7 @@ describe('MindManager', () => {
         sessionId: mind.activeSessionId,
       }));
       expect(manager.getMind(mind.mindId)?.activeSessionId).toBe(mind.activeSessionId);
+      expect(manager.listConversationHistory(mind.mindId)).toHaveLength(1);
     });
 
     it('serializes concurrent per-mind model changes', async () => {
@@ -526,9 +529,9 @@ describe('MindManager', () => {
   });
 
   describe('recreateSession', () => {
-    it('destroys old session and creates new one', async () => {
+    it('replaces an empty active draft when recreating the session', async () => {
       const mind = await manager.loadMind('/tmp/agents/q');
-      manager.getMind(mind.mindId); // side-effect: verify it exists
+      const originalSessionId = mind.activeSessionId;
 
       await manager.recreateSession(mind.mindId);
 
@@ -537,8 +540,23 @@ describe('MindManager', () => {
       const newSession = newCtx.session;
       expect(newSession).toBeDefined();
       expect(mockCreateSession).toHaveBeenCalledTimes(2);
-      expect(manager.listConversationHistory(mind.mindId)).toHaveLength(2);
-      expect(manager.listConversationHistory(mind.mindId)[0].active).toBe(true);
+      const history = manager.listConversationHistory(mind.mindId);
+      expect(history).toHaveLength(1);
+      expect(history[0].active).toBe(true);
+      expect(history[0].sessionId).not.toBe(originalSessionId);
+    });
+
+    it('keeps real conversation history when recreating after messages exist', async () => {
+      const mind = await manager.loadMind('/tmp/agents/q');
+      manager.markActiveConversationHasMessages(mind.mindId, 'Hello Q');
+
+      await manager.recreateSession(mind.mindId);
+
+      const history = manager.listConversationHistory(mind.mindId);
+      expect(history).toHaveLength(2);
+      expect(history[0].active).toBe(true);
+      expect(history[0].title).toMatch(/^New chat · /);
+      expect(history[1].title).toBe('Hello Q');
     });
 
     it('startNewConversation reuses the active empty conversation', async () => {
@@ -588,6 +606,7 @@ describe('MindManager', () => {
       ]);
       mockResumeSession.mockResolvedValueOnce(resumedSession);
       const mind = await manager.loadMind('/tmp/agents/q');
+      manager.markActiveConversationHasMessages(mind.mindId, 'Existing chat');
       await manager.recreateSession(mind.mindId);
       const target = manager.listConversationHistory(mind.mindId)[1];
 

@@ -246,8 +246,12 @@ export class MindManager extends EventEmitter {
   async recreateSession(mindId: string): Promise<CopilotSession> {
     const context = this.minds.get(mindId);
     if (!context) throw new Error(`Mind ${mindId} not found`);
+    const activeConversation = this.getActiveConversationRecord(mindId);
+    const replaceSessionId = activeConversation?.hasMessages === false
+      ? activeConversation.sessionId
+      : undefined;
 
-    return this.createNewConversationSession(mindId, context);
+    return this.createNewConversationSession(mindId, context, replaceSessionId);
   }
 
   async startNewConversation(mindId: string): Promise<CopilotSession> {
@@ -285,7 +289,11 @@ export class MindManager extends EventEmitter {
     this.persistConfig();
   }
 
-  private async createNewConversationSession(mindId: string, context: InternalMindContext): Promise<CopilotSession> {
+  private async createNewConversationSession(
+    mindId: string,
+    context: InternalMindContext,
+    replaceSessionId?: string,
+  ): Promise<CopilotSession> {
     const conversation = this.createConversationRecord(mindId);
     const previousSession = context.session;
     const sessionTools = this.getSessionTools(mindId, context.mindPath);
@@ -302,7 +310,7 @@ export class MindManager extends EventEmitter {
     );
     context.session = nextSession;
     context.activeSessionId = conversation.sessionId;
-    this.upsertConversationRecord(mindId, conversation);
+    this.upsertConversationRecord(mindId, conversation, replaceSessionId);
     this.persistConfig();
     await previousSession?.disconnect().catch(() => { /* session already disconnected */ });
     return context.session;
@@ -824,7 +832,7 @@ export class MindManager extends EventEmitter {
       };
   }
 
-  private upsertConversationRecord(mindId: string, conversation: ChamberConversationRecord): void {
+  private upsertConversationRecord(mindId: string, conversation: ChamberConversationRecord, replaceSessionId?: string): void {
     const record = this.knownMindRecords.get(mindId);
     if (!record) return;
     const conversations = record.conversations ?? [];
@@ -833,7 +841,7 @@ export class MindManager extends EventEmitter {
       activeSessionId: conversation.sessionId,
       conversations: [
         conversation,
-        ...conversations.filter((existing) => existing.sessionId !== conversation.sessionId),
+        ...conversations.filter((existing) => existing.sessionId !== conversation.sessionId && existing.sessionId !== replaceSessionId),
       ],
     });
   }

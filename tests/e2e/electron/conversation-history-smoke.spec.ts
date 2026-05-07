@@ -98,7 +98,10 @@ test.describe('electron conversation history smoke', () => {
       ),
       { timeout: 60_000 },
     ).toBe(prompt);
-    await expect(page.getByLabel('Conversation history').getByText(prompt)).toBeVisible();
+    const history = page.getByLabel('Conversation history');
+    await expect(history.getByText(prompt)).toBeVisible();
+    await expect(history.getByText(/^New chat ·/)).toHaveCount(0);
+    await expect(history.getByLabel(/Rename /)).toHaveCount(1);
 
     await app?.close();
     app = await launchElectronApp({
@@ -106,10 +109,12 @@ test.describe('electron conversation history smoke', () => {
       env: { CHAMBER_E2E_USER_DATA: userDataPath },
     });
     const restartedPage = await findRendererPage(app.browser, app.logs);
-    const history = restartedPage.getByLabel('Conversation history');
+    const restartedHistory = restartedPage.getByLabel('Conversation history');
     await expect(restartedPage.getByRole('button', { name: 'Monica' }).first()).toBeVisible();
-    await expect(history.getByText(prompt)).toBeVisible();
-    await history.getByRole('button', { name: `Resume ${prompt}` }).click();
+    await expect(restartedHistory.getByText(prompt)).toBeVisible();
+    await expect(restartedHistory.getByText(/^New chat ·/)).toHaveCount(0);
+    await expect(restartedHistory.getByLabel(/Rename /)).toHaveCount(1);
+    await restartedHistory.getByRole('button', { name: `Resume ${prompt}` }).click();
     await expect(restartedPage.getByText(prompt).first()).toBeVisible();
   });
 
