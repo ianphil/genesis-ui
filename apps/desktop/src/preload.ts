@@ -41,6 +41,7 @@ const electronAPI: ElectronAPI = {
     getStatus: () => ipcRenderer.invoke('auth:getStatus'),
     listAccounts: () => ipcRenderer.invoke('auth:listAccounts'),
     startLogin: () => ipcRenderer.invoke('auth:startLogin'),
+    cancelLogin: () => ipcRenderer.invoke('auth:cancelLogin'),
     switchAccount: (login) => ipcRenderer.invoke('auth:switchAccount', login),
     logout: () => ipcRenderer.invoke('auth:logout'),
     onProgress: (callback) => createIpcListener(ipcRenderer, 'auth:progress', callback),
@@ -100,6 +101,12 @@ if (ipcRenderer.sendSync('e2e:is-enabled') === true) {
   electronAPI.e2e = {
     emitA2AIncoming: async (payload: A2AIncomingPayload) => {
       await ipcRenderer.invoke('e2e:a2a:incoming', payload);
+    },
+    emitAuthProgress: async (payload: Record<string, unknown>) => {
+      await ipcRenderer.invoke('e2e:auth:emit-progress', payload);
+    },
+    completeLoginStub: async (payload: { success?: boolean; login?: string }) => {
+      await ipcRenderer.invoke('e2e:auth:complete-login', payload);
     },
   };
 }

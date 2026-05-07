@@ -9,6 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../ui/select';
+import { AddAccountModal } from './AddAccountModal';
 
 const ADD_ACCOUNT_VALUE = '__add-account__';
 
@@ -20,6 +21,8 @@ export function SettingsView() {
   const [marketplaces, setMarketplaces] = useState<MarketplaceRegistry[]>([]);
   const [marketplaceUrl, setMarketplaceUrl] = useState('');
   const [marketplaceMessage, setMarketplaceMessage] = useState<string | null>(null);
+  const [addAccountOpen, setAddAccountOpen] = useState(false);
+  const [addAccountIntent, setAddAccountIntent] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -68,7 +71,8 @@ export function SettingsView() {
 
   const handleAccountChange = async (value: string) => {
     if (value === ADD_ACCOUNT_VALUE) {
-      await window.electronAPI.auth.startLogin();
+      setAddAccountIntent((prev) => prev + 1);
+      setAddAccountOpen(true);
       return;
     }
 
@@ -81,6 +85,11 @@ export function SettingsView() {
     } catch {
       setLogin(previousLogin);
     }
+  };
+
+  const handleRetryAddAccount = () => {
+    void window.electronAPI.auth.cancelLogin?.().catch(() => {});
+    setAddAccountIntent((prev) => prev + 1);
   };
 
   const handleAddMarketplace = async (event: React.FormEvent) => {
@@ -215,6 +224,13 @@ export function SettingsView() {
           </div>
         </div>
       </section>
+
+      <AddAccountModal
+        open={addAccountOpen}
+        openId={addAccountIntent}
+        onClose={() => setAddAccountOpen(false)}
+        onRetry={handleRetryAddAccount}
+      />
     </div>
   );
 }

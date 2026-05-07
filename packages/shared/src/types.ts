@@ -260,6 +260,7 @@ export interface ElectronAPI {
     getStatus: () => Promise<{ authenticated: boolean; login?: string }>;
     listAccounts: () => Promise<Array<{ login: string }>>;
     startLogin: () => Promise<{ success: boolean; login?: string; error?: string }>;
+    cancelLogin?: () => Promise<void>;
     switchAccount: (login: string) => Promise<void>;
     logout: () => Promise<void>;
     onProgress: (callback: (progress: { step: string; userCode?: string; verificationUri?: string; login?: string; error?: string }) => void) => () => void;
@@ -301,6 +302,8 @@ export interface ElectronAPI {
   };
   e2e?: {
     emitA2AIncoming: (payload: A2AIncomingPayload) => Promise<void>;
+    emitAuthProgress: (payload: { step: string; userCode?: string; verificationUri?: string; login?: string; error?: string }) => Promise<void>;
+    completeLoginStub: (payload: { success?: boolean; login?: string }) => Promise<void>;
   };
   window: {
     minimize: () => void;
